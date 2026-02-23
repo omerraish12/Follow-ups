@@ -1,0 +1,8 @@
+vital-lead-clinic_frontend/node_modules/
+vital-lead-clinic_backend/node_modules/
+vital-lead-clinic_frontend/.env
+vital-lead-clinic_backend/.env
+
+
+vital-lead-clinic_frontend/build/
+vital-lead-clinic_backend/dist/
