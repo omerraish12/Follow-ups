@@ -1,0 +1,49 @@
+# Node modules for both frontend and backend
+vital-lead-clinic_frontend/node_modules/
+vital-lead-clinic_backend/node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+vital-lead-clinic_frontend/build/
+vital-lead-clinic_backend/dist/
+dist/
+dist-ssr/
+
+# Frontend-specific build outputs (adjust if necessary)
+vital-lead-clinic_frontend/public/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment files
+.env
+.vscode/
+*.env.local
+
+# Tailwind and other config files
+tailwind.config.js
+postcss.config.js
+
+# Test config files
+vite.config.js
+vite.config.ts
+vitest.config.ts
+
+# Other ignored files
+*.local
