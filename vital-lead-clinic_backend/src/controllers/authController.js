@@ -12,11 +12,6 @@ const generateToken = (id) => {
     });
 };
 
-// Generate OTP
-const generateOTP = () => {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
 // @desc    Register user
 // @route   POST /api/auth/signup
 const signup = async (req, res) => {
@@ -45,10 +40,6 @@ const signup = async (req, res) => {
         );
         const clinicId = clinicResult.rows[0].id;
 
-        // Generate OTP
-        const otp = generateOTP();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
         // Create user
         const user = await User.create({
             email,
@@ -58,12 +49,6 @@ const signup = async (req, res) => {
             clinicId,
             role: 'ADMIN'
         });
-
-        // Set OTP
-        await User.setOTP(user.id, otp, otpExpires);
-
-        // Send OTP email
-        await emailService.sendOTP(email, otp, name);
 
         res.status(201).json({
             message: 'User created successfully. Please verify your email.',
@@ -96,22 +81,6 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
-        // Check if email verified
-        if (!user.email_verified) {
-            // Generate new OTP
-            const otp = generateOTP();
-            const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-            await User.setOTP(user.id, otp, otpExpires);
-            await emailService.sendOTP(email, otp, user.name);
-
-            return res.status(401).json({
-                message: 'Please verify your email first',
-                requireVerification: true,
-                email: user.email
-            });
-        }
-
         // Generate token
         const token = generateToken(user.id);
 
@@ -133,74 +102,6 @@ const login = async (req, res) => {
                 clinicName: user.clinic_name
             }
         });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-// @desc    Verify OTP
-// @route   POST /api/auth/verify-otp
-const verifyOTP = async (req, res) => {
-    try {
-        const { email, otp } = req.body;
-
-        const user = await User.findByEmail(email);
-
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        if (user.otp_code !== otp) {
-            return res.status(400).json({ message: 'Invalid OTP code' });
-        }
-
-        if (new Date(user.otp_expires) < new Date()) {
-            return res.status(400).json({ message: 'OTP code expired' });
-        }
-
-        // Verify user
-        await User.verifyOTP(user.id);
-
-        // Generate token
-        const token = generateToken(user.id);
-
-        res.json({
-            message: 'Email verified successfully',
-            token,
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role
-            }
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
-    }
-};
-
-// @desc    Resend OTP
-// @route   POST /api/auth/resend-otp
-const resendOTP = async (req, res) => {
-    try {
-        const { email } = req.body;
-
-        const user = await User.findByEmail(email);
-
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        // Generate new OTP
-        const otp = generateOTP();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-        await User.setOTP(user.id, otp, otpExpires);
-        await emailService.sendOTP(email, otp, user.name);
-
-        res.json({ message: 'OTP resent successfully' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -286,8 +187,6 @@ const getMe = async (req, res) => {
 module.exports = {
     signup,
     login,
-    verifyOTP,
-    resendOTP,
     forgotPassword,
     resetPassword,
     getMe

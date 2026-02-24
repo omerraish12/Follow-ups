@@ -1,3 +1,4 @@
+// src/models/User.js
 const { query } = require('../config/database');
 
 class User {
@@ -58,20 +59,6 @@ class User {
         return result.rows[0];
     }
 
-    static async setOTP(userId, otp, expires) {
-        await query(
-            `UPDATE users SET otp_code = $1, otp_expires = $2 WHERE id = $3`,
-            [otp, expires, userId]
-        );
-    }
-
-    static async verifyOTP(userId) {
-        await query(
-            `UPDATE users SET email_verified = true, otp_code = NULL, otp_expires = NULL WHERE id = $1`,
-            [userId]
-        );
-    }
-
     static async setResetToken(userId, token, expires) {
         await query(
             `UPDATE users SET reset_token = $1, reset_token_exp = $2 WHERE id = $3`,
@@ -96,7 +83,7 @@ class User {
 
     static async getClinicUsers(clinicId) {
         const result = await query(
-            `SELECT id, name, email, phone, role, email_verified, created_at 
+            `SELECT id, name, email, phone, role, created_at 
        FROM users WHERE clinic_id = $1 ORDER BY created_at DESC`,
             [clinicId]
         );

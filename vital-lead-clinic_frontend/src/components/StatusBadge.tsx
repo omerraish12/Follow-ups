@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { LeadStatus } from "@/data/sampleData";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
   new: { label: "חדש", className: "bg-info/10 text-info border-info/20" },
@@ -9,6 +10,7 @@ const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
 };
 
 export default function StatusBadge({ status }: { status: LeadStatus }) {
+  const { t } = useLanguage();
   const config = statusConfig[status];
   return (
     <span

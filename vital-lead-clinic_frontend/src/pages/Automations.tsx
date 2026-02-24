@@ -1,12 +1,8 @@
 // src/pages/Automations.tsx
-import {
-  Zap, Clock, MessageSquare, ToggleLeft, ToggleRight, Trash2,
-  Info, Users, AlertCircle, CheckCircle, TrendingUp, Bell,
-  BarChart3, Target, Award, Activity
-} from "lucide-react";
+import { Zap, Clock, MessageSquare, ToggleLeft, ToggleRight, Trash2, Info, Users, AlertCircle, CheckCircle, TrendingUp, Bell } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import StatusBadge from "@/components/StatusBadge";
 import AutomationRuleDialog from "@/components/AutomationRuleDialog";
 import { sampleAutomationRules, type AutomationRule } from "@/data/sampleData";
@@ -39,10 +35,11 @@ interface ExtendedAutomationRule extends AutomationRule {
 }
 
 export default function Automations() {
+  const { t, language } = useLanguage();
   const [rules, setRules] = useState<ExtendedAutomationRule[]>(
     sampleAutomationRules.map(rule => ({
       ...rule,
-      triggerDays: [3, 7, 14], // ימי ברירת מחדל
+      triggerDays: [3, 7, 14], // Default days
       notifyOnReply: true,
       personalizationFields: ['name', 'service'],
       totalExecutions: Math.floor(Math.random() * 100) + 50,
@@ -51,8 +48,8 @@ export default function Automations() {
       abTesting: {
         enabled: rule.id === '1',
         variants: [
-          { id: 'a', message: 'היי {name}, רצינו לבדוק אם הגעת לטיפול? 😊', sentCount: 45, replyCount: 28 },
-          { id: 'b', message: 'שלום {name}, מזכירים לך שאצלנו תמיד אפשר לקבוע תור חוזר! 🦷', sentCount: 42, replyCount: 31 }
+          { id: 'a', message: t('hi_name_check_treatment'), sentCount: 45, replyCount: 28 },
+          { id: 'b', message: t('hello_name_reminder'), sentCount: 42, replyCount: 31 }
         ]
       }
     }))
@@ -61,9 +58,8 @@ export default function Automations() {
   const [followupNeeded, setFollowupNeeded] = useState<{ leadId: string; leadName: string; days: number }[]>([]);
   const [recentReplies, setRecentReplies] = useState<{ leadName: string; ruleName: string; time: string }[]>([]);
 
-  // סימולציה של מעקב אחר תגובות
+  // Simulate follow-up tracking
   useEffect(() => {
-    // מייצר התראות על לידים שצריכים מעקב
     const mockFollowups = [
       { leadId: '1', leadName: 'דנה כהן', days: 5 },
       { leadId: '2', leadName: 'יוסי לוי', days: 8 },
@@ -71,20 +67,19 @@ export default function Automations() {
     ];
     setFollowupNeeded(mockFollowups);
 
-    // מייצר התראות על תגובות שהתקבלו
     const mockReplies = [
-      { leadName: 'משה גולן', ruleName: 'מעקב אחרי שבוע', time: 'לפני 10 דקות' },
-      { leadName: 'שרה כהן', ruleName: 'מעקב אחרי 3 ימים', time: 'לפני 25 דקות' },
+      { leadName: 'משה גולן', ruleName: t('follow_up_1_week'), time: t('minutes_ago') + ' 10' },
+      { leadName: 'שרה כהן', ruleName: t('follow_up_3_days'), time: t('minutes_ago') + ' 25' },
     ];
     setRecentReplies(mockReplies);
-  }, []);
+  }, [t]);
 
   const toggleRule = (id: string) => {
     setRules((prev) => prev.map((r) => (r.id === id ? { ...r, active: !r.active } : r)));
     const rule = rules.find(r => r.id === id);
     toast({
-      title: rule?.active ? "חוק הושבת" : "חוק הופעל",
-      description: `החוק "${rule?.name}" ${rule?.active ? 'הושבת' : 'הופעל'} בהצלחה`
+      title: rule?.active ? t("rule_disabled") : t("rule_enabled"),
+      description: t("rule") + " \"" + rule?.name + "\" " + (rule?.active ? t("rule_disabled") : t("rule_enabled")) + " " + t("success")
     });
   };
 
@@ -92,17 +87,17 @@ export default function Automations() {
     setRules((prev) => {
       const exists = prev.find((r) => r.id === rule.id);
       if (exists) {
-        toast({ title: "חוק עודכן", description: "החוק עודכן בהצלחה" });
+        toast({ title: t("rule_updated"), description: t("rule_updated_successfully") });
         return prev.map((r) => (r.id === rule.id ? rule : r));
       }
-      toast({ title: "חוק נוסף", description: "חוק חדש נוסף בהצלחה" });
+      toast({ title: t("rule_created"), description: t("rule_created_successfully") });
       return [...prev, { ...rule, totalExecutions: 0, replyCount: 0, successRate: 0 }];
     });
   };
 
   const deleteRule = (id: string) => {
     setRules((prev) => prev.filter((r) => r.id !== id));
-    toast({ title: "חוק נמחק", description: "החוק הוסר בהצלחה" });
+    toast({ title: t("rule_deleted"), description: t("rule_removed_successfully") });
   };
 
   const activeCount = rules.filter((r) => r.active).length;
@@ -111,14 +106,14 @@ export default function Automations() {
   const avgSuccessRate = totalExecutions > 0 ? Math.round((totalReplies / totalExecutions) * 100) : 0;
 
   return (
-    <div className="space-y-5 lg:space-y-6">
+    <div className="space-y-5 lg:space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">אוטומציות</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">חוקי מעקב אוטומטיים בוואטסאפ ללידים שלך</p>
+          <h1 className="text-2xl font-extrabold text-foreground">{t("automations")}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t("automations_subtitle")}</p>
         </div>
-        <AutomationRuleDialog onSave={saveRule} />
+        <AutomationRuleDialog onSuccess={() => { /* Refresh automations */ }} />
       </div>
 
       {/* Stats Cards */}
@@ -126,14 +121,14 @@ export default function Automations() {
         <Card className="rounded-2xl border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              הודעות שנשלחו (חודש)
+              {t("messages_sent_month")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{totalExecutions}</div>
             <div className="flex items-center gap-1 mt-1 text-xs text-success">
               <TrendingUp className="h-3 w-3" />
-              <span>+23% מהחודש שעבר</span>
+              <span>{t("plus_percent_last_month").replace('%s', '23')}</span>
             </div>
           </CardContent>
         </Card>
@@ -141,14 +136,14 @@ export default function Automations() {
         <Card className="rounded-2xl border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              תגובות התקבלו
+              {t("responses_received")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{totalReplies}</div>
             <div className="flex items-center gap-1 mt-1 text-xs text-success">
               <MessageSquare className="h-3 w-3" />
-              <span>שיעור תגובה {avgSuccessRate}%</span>
+              <span>{t("response_rate")} {avgSuccessRate}%</span>
             </div>
           </CardContent>
         </Card>
@@ -156,14 +151,14 @@ export default function Automations() {
         <Card className="rounded-2xl border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              לידים שחזרו
+              {t("returned_leads")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">18</div>
             <div className="flex items-center gap-1 mt-1 text-xs text-success">
               <CheckCircle className="h-3 w-3" />
-              <span>הכנסה: ₪27,000</span>
+              <span>{t("recovery_revenue")}: ₪27,000</span>
             </div>
           </CardContent>
         </Card>
@@ -171,14 +166,14 @@ export default function Automations() {
         <Card className="rounded-2xl border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              ממתינים למעקב
+              {t("leads_pending_followup")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-foreground">{followupNeeded.length}</div>
             <div className="flex items-center gap-1 mt-1 text-xs text-warning">
               <Clock className="h-3 w-3" />
-              <span>דורשים התייחסות</span>
+              <span>{t("requires_attention")}</span>
             </div>
           </CardContent>
         </Card>
@@ -190,14 +185,14 @@ export default function Automations() {
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-semibold text-foreground">לידים שדורשים מעקב</p>
+              <p className="font-semibold text-foreground">{t("leads_requiring_followup")}</p>
               <div className="mt-2 space-y-2">
                 {followupNeeded.map((item, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
                     <span>{item.leadName}</span>
-                    <span className="text-muted-foreground">לא הגיב {item.days} ימים</span>
+                    <span className="text-muted-foreground">{t("days_without_response")} {item.days} {t("days")}</span>
                     <Button size="sm" variant="outline" className="rounded-lg h-7 text-xs">
-                      שלח תזכורת
+                      {t("send_reminder")}
                     </Button>
                   </div>
                 ))}
@@ -213,13 +208,13 @@ export default function Automations() {
           <div className="flex items-start gap-3">
             <MessageSquare className="h-5 w-5 text-success shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-semibold text-foreground">תגובות שהתקבלו</p>
+              <p className="font-semibold text-foreground">{t("responses_received")}</p>
               <div className="mt-2 space-y-2">
                 {recentReplies.map((reply, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
-                    <span>{reply.leadName} הגיב ל-"{reply.ruleName}"</span>
+                    <span>{reply.leadName} {t("responded_to")} "{reply.ruleName}"</span>
                     <span className="text-muted-foreground">{reply.time}</span>
-                    <Badge variant="outline" className="bg-success/10 text-success">הפך לחם</Badge>
+                    <Badge variant="outline" className="bg-success/10 text-success">{t("became_hot")}</Badge>
                   </div>
                 ))}
               </div>
@@ -231,9 +226,9 @@ export default function Automations() {
       {/* Rules Tabs */}
       <Tabs defaultValue="active" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 rounded-xl">
-          <TabsTrigger value="active">פעילים ({activeCount})</TabsTrigger>
-          <TabsTrigger value="scheduled">מתוזמנים</TabsTrigger>
-          <TabsTrigger value="performance">ביצועים</TabsTrigger>
+          <TabsTrigger value="active">{t("active_rules")} ({activeCount})</TabsTrigger>
+          <TabsTrigger value="scheduled">{t("times_scheduled")}</TabsTrigger>
+          <TabsTrigger value="performance">{t("times_performance")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="space-y-4">
@@ -250,7 +245,7 @@ export default function Automations() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 lg:gap-4 flex-1 min-w-0">
-                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-primary to-primary/70 shadow-sm">
+                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl gradient-primary shadow-sm">
                       <Zap className="h-4 w-4 text-primary-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -258,7 +253,7 @@ export default function Automations() {
                         <h3 className="font-bold text-foreground">{rule.name}</h3>
                         <StatusBadge status={rule.targetStatus} />
                         <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                          {rule.triggerDays.length} מועדים
+                          {rule.triggerDays.length} {t("occasions")}
                         </Badge>
                       </div>
 
@@ -267,7 +262,7 @@ export default function Automations() {
                         {rule.triggerDays.map(day => (
                           <Badge key={day} variant="secondary" className="text-xs">
                             <Clock className="h-3 w-3 ml-1" />
-                            {day === 0 ? 'מיידי' : `אחרי ${day} ימים`}
+                            {day === 0 ? t("immediate") : t("after_days_count").replace('{count}', day.toString())}
                           </Badge>
                         ))}
                       </div>
@@ -279,7 +274,7 @@ export default function Automations() {
                         </p>
                         {rule.personalizationFields.length > 0 && (
                           <div className="mt-2 flex gap-2 text-xs">
-                            <span className="text-muted-foreground">שדות מותאמים:</span>
+                            <span className="text-muted-foreground">{t("custom_fields")}</span>
                             {rule.personalizationFields.map(field => (
                               <Badge key={field} variant="outline" className="bg-primary/5">
                                 {'{'}{field}{'}'}
@@ -292,13 +287,13 @@ export default function Automations() {
                       {/* A/B Testing Info */}
                       {rule.abTesting?.enabled && (
                         <div className="mt-3 p-3 bg-primary/5 rounded-xl">
-                          <p className="text-xs font-semibold mb-2">בדיקות A/B - גרסה ב' מובילה</p>
+                          <p className="text-xs font-semibold mb-2">{t("a_b_testing")}</p>
                           <div className="space-y-2">
                             {rule.abTesting.variants.map(v => (
                               <div key={v.id} className="flex items-center gap-2 text-xs">
-                                <span className="w-6">גרסה {v.id}:</span>
-                                <Progress value={v.sentCount ? (v.replyCount / v.sentCount) * 100 : 0} className="h-1.5 flex-1" />
-                                <span className="text-muted-foreground">{v.sentCount ? Math.round((v.replyCount / v.sentCount) * 100) : 0}%</span>
+                                <span className="w-6">{t("variant")} {v.id}:</span>
+                                <Progress value={(v.replyCount / v.sentCount) * 100} className="h-1.5 flex-1" />
+                                <span className="text-muted-foreground">{Math.round((v.replyCount / v.sentCount) * 100)}%</span>
                               </div>
                             ))}
                           </div>
@@ -309,7 +304,7 @@ export default function Automations() {
                       {rule.notifyOnReply && (
                         <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                           <Bell className="h-3 w-3" />
-                          <span>קבל התראה בתגובה ראשונה</span>
+                          <span>{t("get_notification_on_first_reply")}</span>
                         </div>
                       )}
                     </div>
@@ -319,26 +314,30 @@ export default function Automations() {
                     <button
                       onClick={() => toggleRule(rule.id)}
                       className="hover:scale-110 transition-transform"
-                      title="כבה"
+                      title={t("delete")}
                     >
                       <ToggleRight className="h-8 w-8 text-primary" />
                     </button>
                     <div className="flex gap-1">
-                      <AutomationRuleDialog rule={rule} onSave={saveRule} />
+                      <AutomationRuleDialog rule={rule} onSuccess={() => { /* Refresh automations */ }} />
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="ghost" size="sm" className="rounded-xl text-destructive hover:text-destructive h-8 w-8 p-0">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent dir="rtl">
+                        <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>מחיקת חוק</AlertDialogTitle>
-                            <AlertDialogDescription>האם אתה בטוח שברצונך למחוק את "{rule.name}"?</AlertDialogDescription>
+                            <AlertDialogTitle>{t("delete_rule")}</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {t("delete_rule_confirmation").replace('{name}', rule.name)}
+                            </AlertDialogDescription>
                           </AlertDialogHeader>
-                          <AlertDialogFooter className="flex-row-reverse gap-2">
-                            <AlertDialogCancel className="rounded-xl">ביטול</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteRule(rule.id)} className="bg-destructive text-destructive-foreground rounded-xl">מחק</AlertDialogAction>
+                          <AlertDialogFooter className={language === 'he' ? 'flex-row-reverse gap-2' : 'gap-2'}>
+                            <AlertDialogCancel className="rounded-xl">{t("cancel")}</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteRule(rule.id)} className="bg-destructive text-destructive-foreground rounded-xl">
+                              {t("delete")}
+                            </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
@@ -352,20 +351,20 @@ export default function Automations() {
 
         <TabsContent value="scheduled" className="space-y-4">
           <div className="rounded-2xl border border-border bg-card p-6">
-            <h3 className="font-bold mb-4">לוח זמנים - הפעלות קרובות</h3>
+            <h3 className="font-bold mb-4">{t("scheduled_times")}</h3>
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
                   <div className="flex items-center gap-3">
                     <Clock className="h-4 w-4 text-primary" />
                     <div>
-                      <p className="font-medium">מעקב אחרי 7 ימים</p>
-                      <p className="text-xs text-muted-foreground">5 לידים ממתינים</p>
+                      <p className="font-medium">{t("follow_up_1_week")}</p>
+                      <p className="text-xs text-muted-foreground">5 {t("leads_waiting")}</p>
                     </div>
                   </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold">מחר, 10:00</p>
-                    <p className="text-xs text-muted-foreground">בעוד 14 שעות</p>
+                  <div className={language === 'he' ? 'text-left' : 'text-right'}>
+                    <p className="text-sm font-bold">{t("tomorrow")}, 10:00</p>
+                    <p className="text-xs text-muted-foreground">{t("in_hours").replace('{count}', '14')}</p>
                   </div>
                 </div>
               ))}
@@ -375,19 +374,19 @@ export default function Automations() {
 
         <TabsContent value="performance" className="space-y-4">
           <div className="rounded-2xl border border-border bg-card p-6">
-            <h3 className="font-bold mb-4">ביצועי חוקים</h3>
+            <h3 className="font-bold mb-4">{t("rule_performance")}</h3>
             <div className="space-y-4">
               {rules.map(rule => (
                 <div key={rule.id} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>{rule.name}</span>
-                    <span className="text-success">{rule.successRate}% הצלחה</span>
+                    <span className="text-success">{rule.successRate}% {t("success_rate")}</span>
                   </div>
-                  <Progress value={rule.successRate || 0} className="h-2" />
+                  <Progress value={rule.successRate} className="h-2" />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>נשלח: {rule.totalExecutions}</span>
-                    <span>תגובות: {rule.replyCount}</span>
-                    <span>המרות: {Math.round((rule.replyCount || 0) * 0.7)}</span>
+                    <span>{t("sent")} {rule.totalExecutions}</span>
+                    <span>{t("responses_received")}: {rule.replyCount}</span>
+                    <span>{t("conversions")}: {Math.round((rule.replyCount || 0) * 0.7)}</span>
                   </div>
                 </div>
               ))}
@@ -399,8 +398,8 @@ export default function Automations() {
       {rules.filter(r => r.active).length === 0 && (
         <div className="rounded-2xl border border-border bg-card p-12 text-center shadow-card">
           <Zap className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <p className="mt-4 font-bold text-foreground">אין חוקים פעילים</p>
-          <p className="mt-1 text-sm text-muted-foreground">צור חוק אוטומציה ראשון או הפעל חוק קיים</p>
+          <p className="mt-4 font-bold text-foreground">{t("no_active_rules")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("create_first_automation")}</p>
         </div>
       )}
 
@@ -408,10 +407,9 @@ export default function Automations() {
       <div className="flex items-start gap-3 rounded-2xl border border-info/20 bg-info/5 p-4 text-sm">
         <Info className="h-5 w-5 text-info shrink-0 mt-0.5" />
         <div>
-          <p className="font-semibold text-foreground">טיפ</p>
+          <p className="font-semibold text-foreground">{t("tip")}</p>
           <p className="text-muted-foreground mt-0.5">
-            אוטומציות פעילות ישלחו הודעות מעקב אוטומטיות בימים 3,7,14 לאחר ההודעה האחרונה.
-            תגובות של לידים יהפכו אותם אוטומטית ל"חם" וישלחו התראה למנהל המערכת.
+            {t("automation_info")}
           </p>
         </div>
       </div>

@@ -1,19 +1,8 @@
-// src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, AuthState, LoginCredentials, SignupCredentials } from '@/types/auth';
-import { toast } from '@/hooks/use-toast';
 import { authService } from '@/services/authService';
+import { toast } from '@/hooks/use-toast';
 
-interface AuthContextType extends AuthState {
-    login: (credentials: LoginCredentials) => Promise<void>;
-    signup: (credentials: SignupCredentials) => Promise<void>;
-    verifyOTP: (email: string, otp: string) => Promise<void>;
-    resendOTP: (email: string) => Promise<void>;
-    logout: () => void;
-    clearError: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext(undefined);
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -23,123 +12,71 @@ export const useAuth = () => {
     return context;
 };
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [state, setState] = useState<AuthState>({
-        user: null,
-        isLoading: true,
-        error: null,
-    });
+export const AuthProvider = ({ children }) => {
+    const [user, setUser] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Check for stored session on mount
-        const checkAuth = async () => {
-            try {
-                const token = localStorage.getItem('auth_token');
-                if (token) {
-                    const user = await authService.getCurrentUser();
-                    setState({ user, isLoading: false, error: null });
-                } else {
-                    setState({ user: null, isLoading: false, error: null });
-                }
-            } catch (error) {
-                setState({ user: null, isLoading: false, error: 'Session expired' });
-                localStorage.removeItem('auth_token');
-            }
-        };
-
-        checkAuth();
+        checkUser();
     }, []);
 
-    const login = async (credentials: LoginCredentials) => {
-        setState(prev => ({ ...prev, isLoading: true, error: null }));
+    const checkUser = async () => {
         try {
-            const response = await authService.login(credentials);
-            localStorage.setItem('auth_token', response.token);
-            setState({ user: response.user, isLoading: false, error: null });
-            toast({
-                title: "התחברות successful",
-                description: "ברוך הבא kembali!",
-            });
-        } catch (error: any) {
-            setState(prev => ({
-                ...prev,
-                isLoading: false,
-                error: error.message || 'התחברות נכשלה'
-            }));
-            toast({
-                title: "שגיאה",
-                description: error.message || 'התחברות נכשלה',
-                variant: "destructive",
-            });
+            const token = localStorage.getItem('auth_token');
+            const storedUser = localStorage.getItem('user');
+
+            if (token && storedUser) {
+                setUser(JSON.parse(storedUser));
+            }
+        } catch (error) {
+            console.error('Error checking user:', error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const signup = async (credentials: SignupCredentials) => {
-        setState(prev => ({ ...prev, isLoading: true, error: null }));
+    const login = async (credentials) => {
+        setIsLoading(true);
+        setError(null);
         try {
-            await authService.signup(credentials);
-            setState({ user: null, isLoading: false, error: null });
+            const data = await authService.login(credentials);
+            setUser(data.user);
+            toast({
+                title: "התחברת בהצלחה",
+                description: `ברוך הבא, ${data.user.name}!`,
+            });
+            return data;
+        } catch (error) {
+            setError(error.response?.data?.message || 'התחברות נכשלה');
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const signup = async (userData) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await authService.signup(userData);
+            setUser(data.user);
             toast({
                 title: "נרשמת בהצלחה!",
-                description: "נשלח קוד אימות למייל שלך",
+                description: "חשבונך נוצר. כעת תוכל להתחבר.",
             });
-        } catch (error: any) {
-            setState(prev => ({
-                ...prev,
-                isLoading: false,
-                error: error.message || 'הרשמה נכשלה'
-            }));
-            toast({
-                title: "שגיאה",
-                description: error.message || 'הרשמה נכשלה',
-                variant: "destructive",
-            });
-        }
-    };
-
-    const verifyOTP = async (email: string, otp: string) => {
-        setState(prev => ({ ...prev, isLoading: true, error: null }));
-        try {
-            const response = await authService.verifyOTP({ email, otp });
-            localStorage.setItem('auth_token', response.token);
-            setState({ user: response.user, isLoading: false, error: null });
-            toast({
-                title: "אימות successful",
-                description: "החשבון שלך אומת בהצלחה!",
-            });
-        } catch (error: any) {
-            setState(prev => ({
-                ...prev,
-                isLoading: false,
-                error: error.message || 'אימות נכשל'
-            }));
-            toast({
-                title: "שגיאה",
-                description: error.message || 'קוד אימות לא תקין',
-                variant: "destructive",
-            });
-        }
-    };
-
-    const resendOTP = async (email: string) => {
-        try {
-            await authService.resendOTP(email);
-            toast({
-                title: "קוד נשלח",
-                description: "קוד אימות חדש נשלח למייל שלך",
-            });
-        } catch (error: any) {
-            toast({
-                title: "שגיאה",
-                description: error.message || 'שליחת קוד נכשלה',
-                variant: "destructive",
-            });
+            return data;
+        } catch (error) {
+            setError(error.response?.data?.message || 'הרשמה נכשלה');
+            throw error;
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const logout = () => {
-        localStorage.removeItem('auth_token');
-        setState({ user: null, isLoading: false, error: null });
+        authService.logout();
+        setUser(null);
         toast({
             title: "התנתקת",
             description: "להתראות, נתראה בקרוב!",
@@ -147,18 +84,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const clearError = () => {
-        setState(prev => ({ ...prev, error: null }));
+        setError(null);
     };
 
     return (
         <AuthContext.Provider value={{
-            ...state,
+            user,
+            isLoading,
+            error,
             login,
             signup,
-            verifyOTP,
-            resendOTP,
             logout,
-            clearError,
+            clearError
         }}>
             {children}
         </AuthContext.Provider>

@@ -28,8 +28,3 @@ export interface SignupCredentials {
     clinicName?: string;
     phone?: string;
 }
-
-export interface OTPVerification {
-    email: string;
-    otp: string;
-}

@@ -1,8 +1,8 @@
-// src/pages/auth/Login.tsx
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, LogIn, Phone, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login, user, isLoading, error, clearError } = useAuth();
+    const { t } = useLanguage();
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         email: '',
@@ -38,11 +39,10 @@ export default function Login() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await login(formData);
-        // Navigation will happen automatically via useEffect when user is set
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4" dir="rtl">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
             <Card className="w-full max-w-md rounded-2xl border-border shadow-card">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
@@ -50,9 +50,9 @@ export default function Login() {
                             <Phone className="h-8 w-8 text-primary-foreground" />
                         </div>
                     </div>
-                    <CardTitle className="text-2xl font-bold">התחברות למערכת</CardTitle>
+                    <CardTitle className="text-2xl font-bold">{t('login_to_system')}</CardTitle>
                     <CardDescription>
-                        ניהול לידים ומעקב אוטומטי למרפאות
+                        {t('app_subtitle')}
                     </CardDescription>
                 </CardHeader>
 
@@ -65,7 +65,7 @@ export default function Login() {
                         )}
 
                         <div className="space-y-2">
-                            <Label htmlFor="email">אימייל</Label>
+                            <Label htmlFor="email">{t('email')}</Label>
                             <div className="relative">
                                 <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -83,7 +83,7 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="password">סיסמה</Label>
+                            <Label htmlFor="password">{t('password')}</Label>
                             <div className="relative">
                                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -112,7 +112,7 @@ export default function Login() {
                                 to="/forgot-password"
                                 className="text-sm text-primary hover:underline"
                             >
-                                שכחת סיסמה?
+                                {t('forgot_password')}
                             </Link>
                         </div>
                     </CardContent>
@@ -130,16 +130,16 @@ export default function Login() {
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2">
-                                    <LogIn className="h-4 w-4" />
-                                    <span>התחבר</span>
+                                    <LogIn className="h-4 w-4 ml-2" />
+                                    <span>{t('login')}</span>
                                 </div>
                             )}
                         </Button>
 
                         <p className="text-sm text-muted-foreground">
-                            אין לך חשבון?{' '}
+                            {t('no_account')}{' '}
                             <Link to="/signup" className="text-primary font-semibold hover:underline">
-                                הרשם עכשיו
+                                {t('signup')}
                             </Link>
                         </p>
 
@@ -148,7 +148,7 @@ export default function Login() {
                                 <span className="w-full border-t border-border" />
                             </div>
                             <div className="relative flex justify-center text-xs">
-                                <span className="bg-card px-2 text-muted-foreground">או</span>
+                                <span className="bg-card px-2 text-muted-foreground">{t('or')}</span>
                             </div>
                         </div>
 
@@ -158,13 +158,13 @@ export default function Login() {
                             className="w-full rounded-xl h-11"
                             onClick={() => {
                                 setFormData({
-                                    email: 'admin@clinic.co.il',
-                                    password: 'password123',
+                                    email: 'demo@clinic.co.il',
+                                    password: 'demo123',
                                 });
                             }}
                         >
                             <div className="flex items-center gap-2">
-                                <span>התחבר כאורח (דמו)</span>
+                                <span>{t('guest_login')}</span>
                             </div>
                         </Button>
                     </CardFooter>

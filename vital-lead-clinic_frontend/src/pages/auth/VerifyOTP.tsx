@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, CheckCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -13,6 +14,7 @@ export default function VerifyOTP() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const { verifyOTP, resendOTP, user, isLoading, error, clearError } = useAuth();
+    const { t } = useLanguage();
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [timer, setTimer] = useState(60);
     const [canResend, setCanResend] = useState(false);
@@ -86,7 +88,7 @@ export default function VerifyOTP() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4" dir="rtl">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
             <Card className="w-full max-w-md rounded-2xl border-border shadow-card">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">

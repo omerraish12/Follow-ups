@@ -1,8 +1,8 @@
-// src/pages/auth/Signup.tsx
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Phone as PhoneIcon, Building, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 export default function Signup() {
     const navigate = useNavigate();
     const { signup, user, isLoading, error, clearError } = useAuth();
+    const { t } = useLanguage();
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [formData, setFormData] = useState({
@@ -45,12 +46,12 @@ export default function Signup() {
         e.preventDefault();
 
         if (formData.password !== formData.confirmPassword) {
-            alert('הסיסמאות אינן תואמות');
+            alert(t('passwords_dont_match'));
             return;
         }
 
         if (!formData.agreeTerms) {
-            alert('יש לאשר את תנאי השימוש');
+            alert(t('agree_terms_required'));
             return;
         }
 
@@ -61,13 +62,10 @@ export default function Signup() {
             clinicName: formData.clinicName,
             phone: formData.phone,
         });
-
-        // Navigate to OTP verification after successful signup
-        navigate(`/verify-otp?email=${encodeURIComponent(formData.email)}`);
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4" dir="rtl">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
             <Card className="w-full max-w-2xl rounded-2xl border-border shadow-card">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
@@ -75,9 +73,9 @@ export default function Signup() {
                             <Building className="h-8 w-8 text-primary-foreground" />
                         </div>
                     </div>
-                    <CardTitle className="text-2xl font-bold">הרשמה למערכת</CardTitle>
+                    <CardTitle className="text-2xl font-bold">{t('signup_title')}</CardTitle>
                     <CardDescription>
-                        הצטרפו ל-1,200+ מרפאות שכבר מגדילות הכנסות אוטומטית
+                        {t('signup_subtitle')}
                     </CardDescription>
                 </CardHeader>
 
@@ -91,7 +89,7 @@ export default function Signup() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="name">שם מלא</Label>
+                                <Label htmlFor="name">{t('full_name')}</Label>
                                 <div className="relative">
                                     <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -107,7 +105,7 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="email">אימייל</Label>
+                                <Label htmlFor="email">{t('email')}</Label>
                                 <div className="relative">
                                     <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -125,7 +123,7 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="phone">טלפון</Label>
+                                <Label htmlFor="phone">{t('phone_number')}</Label>
                                 <div className="relative">
                                     <PhoneIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -141,7 +139,7 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="clinicName">שם המרפאה</Label>
+                                <Label htmlFor="clinicName">{t('clinic_name')}</Label>
                                 <div className="relative">
                                     <Building className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -156,7 +154,7 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="password">סיסמה</Label>
+                                <Label htmlFor="password">{t('password')}</Label>
                                 <div className="relative">
                                     <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -181,7 +179,7 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="confirmPassword">אימות סיסמה</Label>
+                                <Label htmlFor="confirmPassword">{t('confirm_password')}</Label>
                                 <div className="relative">
                                     <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -216,13 +214,13 @@ export default function Signup() {
                                 }
                             />
                             <Label htmlFor="agreeTerms" className="text-sm">
-                                אני מאשר/ת את{' '}
+                                {t('agree_terms')}{' '}
                                 <Link to="/terms" className="text-primary hover:underline">
-                                    תנאי השימוש
+                                    {t('terms_of_service')}
                                 </Link>{' '}
-                                ו{' '}
+                                {t('and')}{' '}
                                 <Link to="/privacy" className="text-primary hover:underline">
-                                    מדיניות הפרטיות
+                                    {t('privacy_policy')}
                                 </Link>
                             </Label>
                         </div>
@@ -237,17 +235,17 @@ export default function Signup() {
                             {isLoading ? (
                                 <div className="flex items-center gap-2">
                                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                    <span>נרשם...</span>
+                                    <span>{t('registering')}</span>
                                 </div>
                             ) : (
-                                <span>הרשמה</span>
+                                <span>{t('signup')}</span>
                             )}
                         </Button>
 
                         <p className="text-sm text-muted-foreground">
-                            כבר יש לך חשבון?{' '}
+                            {t('already_have_account')}{' '}
                             <Link to="/login" className="text-primary font-semibold hover:underline">
-                                התחבר
+                                {t('login')}
                             </Link>
                         </p>
                     </CardFooter>

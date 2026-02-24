@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import LanguageSwitcher from "./LanguageSwitcher";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,15 +33,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "לוח בקרה" },
-  { to: "/leads", icon: Users, label: "לידים" },
-  { to: "/automations", icon: Zap, label: "אוטומציות" },
-  { to: "/analytics", icon: BarChart3, label: "אנליטיקס" },
-  { to: "/whatsapp", icon: Globe, label: "וואטסאפ" },
-  { to: "/team", icon: UserCog, label: "ניהול צוות" },
-  { to: "/notifications", icon: AlertCircle, label: "התראות" },
-  { to: "/settings", icon: Settings, label: "הגדרות" },
+const navItemsConfig = [
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard" },
+  { to: "/leads", icon: Users, labelKey: "leads" },
+  { to: "/automations", icon: Zap, labelKey: "automations" },
+  { to: "/analytics", icon: BarChart3, labelKey: "analytics" },
+  { to: "/whatsapp", icon: Globe, labelKey: "whatsapp" },
+  { to: "/team", icon: UserCog, labelKey: "team" },
+  { to: "/notifications", icon: AlertCircle, labelKey: "notifications" },
+  { to: "/settings", icon: Settings, labelKey: "settings" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -47,6 +49,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { t, language } = useLanguage();
 
   // Mock data for badges
   const notificationCount = 3;
@@ -58,12 +61,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   const getUserInitials = () => {
-    if (!user?.name) return 'משתמש';
+    if (!user?.name) return 'U';
     return user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background" dir="rtl">
+    <div className="flex h-screen overflow-hidden bg-background">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -86,8 +89,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Phone className="h-5 w-5 text-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-base font-bold text-foreground truncate">מערכת ניהול לידים</h1>
-              <p className="text-[11px] text-muted-foreground">ניהול לקוחות חכם</p>
+              <h1 className="text-base font-bold text-foreground truncate">{t("app_title")}</h1>
+              <p className="text-[11px] text-muted-foreground">{t("app_subtitle")}</p>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -106,7 +109,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground truncate">{user?.name || 'משתמש'}</p>
+                <p className="font-semibold text-foreground truncate">{user?.name || t("user")}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
             </div>
@@ -120,11 +123,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setSidebarOpen(false)}
             >
               <Home className="h-4 w-4" />
-              דף הבית
+              {t("dashboard")}
             </Link>
             <div className="h-px bg-border my-2" />
 
-            {navItems.map((item) => {
+            {navItemsConfig.map((item) => {
               const isActive = location.pathname === item.to;
               return (
                 <NavLink
@@ -139,7 +142,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   )}
                 >
                   <item.icon className={cn("h-[18px] w-[18px]", isActive && "text-primary")} />
-                  <span className="flex-1">{item.label}</span>
+                  <span className="flex-1">{t(item.labelKey)}</span>
 
                   {/* Badges for specific items */}
                   {item.to === "/leads" && leadsNeedingFollowup > 0 && (
@@ -207,13 +210,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
 
           <div className="flex-1">
-            <h2 className="text-sm font-semibold text-foreground lg:hidden">מערכת ניהול לידים</h2>
+            <h2 className="text-sm font-semibold text-foreground lg:hidden">{t("app_title")}</h2>
             {/* Breadcrumb */}
             <div className="hidden lg:flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">מערכת ניהול לידים</span>
+              <span className="text-muted-foreground">{t("app_title")}</span>
               <span className="text-muted-foreground">/</span>
               <span className="font-semibold text-foreground">
-                {navItems.find(item => item.to === location.pathname)?.label || "דף הבית"}
+                {navItemsConfig.find(item => item.to === location.pathname)
+                  ? t(navItemsConfig.find(item => item.to === location.pathname)?.labelKey || "dashboard")
+                  : t("dashboard")}
               </span>
             </div>
           </div>
@@ -222,10 +227,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="hidden md:block relative">
             <input
               type="text"
-              placeholder="חיפוש מהיר..."
+              placeholder={t("quick_search")}
               className="w-64 h-9 rounded-xl border border-border bg-card px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
+
+          {/* Language Switcher */}
+          <LanguageSwitcher />
 
           {/* Notifications button */}
           <Link
@@ -251,24 +259,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </Avatar>
                 <div className="hidden sm:block text-right">
                   <p className="text-sm font-semibold text-foreground leading-tight">
-                    {user?.name || 'משתמש'}
+                    {user?.name || t("user")}
                   </p>
                   <p className="text-[11px] text-muted-foreground leading-tight">
-                    {user?.clinicName || 'מרפאת שיניים'}
+                    {user?.clinicName || t("clinic_name")}
                   </p>
                 </div>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56 rounded-xl">
-              <DropdownMenuLabel>החשבון שלי</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("my_account")}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/profile')}>
                 <User className="h-4 w-4 ml-2" />
-                פרופיל
+                {t("profile")}
               </DropdownMenuItem>
               <DropdownMenuItem className="cursor-pointer" onClick={() => navigate('/settings')}>
                 <Settings className="h-4 w-4 ml-2" />
-                הגדרות
+                {t("settings")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -276,7 +284,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={handleLogout}
               >
                 <LogOut className="h-4 w-4 ml-2" />
-                התנתק
+                {t("logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

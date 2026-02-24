@@ -3,8 +3,6 @@ const { body } = require('express-validator');
 const {
     signup,
     login,
-    verifyOTP,
-    resendOTP,
     forgotPassword,
     resetPassword,
     getMe
@@ -24,8 +22,6 @@ router.post(
 );
 
 router.post('/login', login);
-router.post('/verify-otp', verifyOTP);
-router.post('/resend-otp', resendOTP);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 router.get('/me', protect, getMe);

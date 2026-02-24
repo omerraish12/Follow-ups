@@ -1,12 +1,7 @@
-// src/components/ProtectedRoute.tsx
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
-interface ProtectedRouteProps {
-    children: React.ReactNode;
-}
-
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children }) {
     const { user, isLoading } = useAuth();
     const location = useLocation();
 
@@ -24,10 +19,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (!user) {
         // Save the attempted location for redirect after login
         return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-
-    if (!user.emailVerified) {
-        return <Navigate to={`/verify-otp?email=${encodeURIComponent(user.email)}`} replace />;
     }
 
     return <>{children}</>;

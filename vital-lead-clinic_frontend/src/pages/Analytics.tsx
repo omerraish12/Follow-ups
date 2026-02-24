@@ -5,7 +5,8 @@ import {
   Download, Filter, ArrowUpRight, ArrowDownRight,
   BarChart3, PieChart, Target, Award, MessageSquare,
   Smartphone, Mail, ChevronLeft, ChevronRight, Bell,
-  AlertCircle, CheckCircle, XCircle, Activity
+  AlertCircle, CheckCircle, XCircle, Activity, RefreshCw,
+  Loader2
 } from "lucide-react";
 import {
   LineChart, Line, BarChart, Bar, PieChart as RePieChart,
@@ -13,6 +14,7 @@ import {
   Legend, ResponsiveContainer, Area, AreaChart
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -25,103 +27,252 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { sampleLeads, sampleAutomationRules } from "@/data/sampleData";
-
-// Helper function to safely get message content
-const getMessageContent = (message: any): string => {
-  if (!message) return '';
-  if (typeof message === 'string') return message;
-  if (typeof message === 'object') {
-    return message.content || message.text || message.message || '';
-  }
-  return '';
-};
-
-// Helper function to check if message contains return keywords
-const containsReturnKeywords = (message: any): boolean => {
-  const content = getMessageContent(message);
-  return content.includes('חוזר') || content.includes('שוב') || content.includes('חזרתי');
-};
-
-// Mock data for analytics
-const conversionData = [
-  { month: 'ינו', leads: 45, converted: 12, revenue: 18000 },
-  { month: 'פבר', leads: 52, converted: 18, revenue: 27000 },
-  { month: 'מרץ', leads: 48, converted: 15, revenue: 22500 },
-  { month: 'אפר', leads: 60, converted: 22, revenue: 33000 },
-  { month: 'מאי', leads: 55, converted: 20, revenue: 30000 },
-  { month: 'יונ', leads: 68, converted: 28, revenue: 42000 },
-];
-
-const sourceData = [
-  { name: 'וואטסאפ', value: 45, color: '#25D366' },
-  { name: 'אינסטגרם', value: 25, color: '#E4405F' },
-  { name: 'פייסבוק', value: 20, color: '#1877F2' },
-  { name: 'המלצות', value: 10, color: '#8B5CF6' },
-];
-
-const recoveryData = [
-  { day: 'יום 1', recovered: 5, lost: 20 },
-  { day: 'יום 3', recovered: 12, lost: 15 },
-  { day: 'יום 7', recovered: 18, lost: 10 },
-  { day: 'יום 14', recovered: 22, lost: 6 },
-  { day: 'יום 21', recovered: 24, lost: 4 },
-  { day: 'יום 30', recovered: 25, lost: 3 },
-];
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAnalytics } from "@/hooks/useAnalytics";
+import { useLeads } from "@/hooks/useLeads";
+import { useAutomations } from "@/hooks/useAutomations";
 
 const statusColors = {
-  new: '#3B82F6',
-  hot: '#EF4444',
-  closed: '#10B981',
-  lost: '#6B7280'
+  NEW: "hsl(210, 80%, 55%)",
+  HOT: "hsl(0, 72%, 55%)",
+  CLOSED: "hsl(152, 60%, 42%)",
+  LOST: "hsl(240, 15%, 75%)"
 };
+
+const sourceColors: Record<string, string> = {
+  'וואטסאפ': '#25D366',
+  'פייסבוק': '#1877F2',
+  'אינסטגרם': '#E4405F',
+  'המלצות': '#8B5CF6',
+  'אחר': '#6B7280'
+};
+
+interface StatusDataItem {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface SourceDataItem {
+  name: string;
+  value: number;
+  conversion: number;
+  color: string;
+}
+
+interface WeeklyDataItem {
+  day: string;
+  leads: number;
+  returned: number;
+}
+
+interface MonthlyDataItem {
+  month: string;
+  leads: number;
+  returned: number;
+  revenue: number;
+  recovered: number;
+}
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState('month');
-  const [selectedMetric, setSelectedMetric] = useState('all');
+  const { t, language } = useLanguage();
 
-  // Calculate KPIs with safe message checking
-  const totalLeads = sampleLeads.length;
-  const convertedLeads = sampleLeads.filter(l => l.status === 'closed').length;
-  const conversionRate = totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(1) : '0';
-  const totalRevenue = sampleLeads.reduce((sum, l) => sum + l.value, 0);
-  const avgLeadValue = totalLeads > 0 ? (totalRevenue / totalLeads).toFixed(0) : '0';
-  const hotLeads = sampleLeads.filter(l => l.status === 'hot').length;
+  // Hooks
+  const {
+    kpi,
+    statusDistribution,
+    sourcePerformance,
+    weeklyActivity,
+    isLoading: analyticsLoading,
+    error: analyticsError,
+    refresh,
+    period,
+    setPeriod
+  } = useAnalytics(dateRange);
 
-  // Safe check for returned clients
-  const returnedClients = sampleLeads.filter(l =>
-    (l.messages || []).some(containsReturnKeywords)
-  ).length;
+  const { leads } = useLeads();
+  const { stats: automationStats, isLoading: automationsLoading } = useAutomations();
 
-  const returnRate = totalLeads > 0 ? ((returnedClients / totalLeads) * 100).toFixed(1) : '0';
+  // Prepare chart data
+  const prepareStatusData = (): StatusDataItem[] => {
+    if (!statusDistribution || statusDistribution.length === 0) {
+      return [];
+    }
+
+    return statusDistribution.map(item => ({
+      name: item.status === 'NEW' ? t("new_status") :
+        item.status === 'HOT' ? t("hot_status") :
+          item.status === 'CLOSED' ? t("closed_status") : t("lost_status"),
+      value: parseInt(item.count) || 0,
+      color: statusColors[item.status as keyof typeof statusColors] || '#6B7280'
+    }));
+  };
+
+  const prepareWeeklyData = (): WeeklyDataItem[] => {
+    if (!weeklyActivity || weeklyActivity.length === 0) {
+      return [
+        { day: t("sunday"), leads: 0, returned: 0 },
+        { day: t("monday"), leads: 0, returned: 0 },
+        { day: t("tuesday"), leads: 0, returned: 0 },
+        { day: t("wednesday"), leads: 0, returned: 0 },
+        { day: t("thursday"), leads: 0, returned: 0 },
+        { day: t("friday"), leads: 0, returned: 0 },
+        { day: t("saturday"), leads: 0, returned: 0 }
+      ];
+    }
+
+    const daysMap: Record<string, number> = {
+      [t("sunday")]: 0, [t("monday")]: 1, [t("tuesday")]: 2,
+      [t("wednesday")]: 3, [t("thursday")]: 4, [t("friday")]: 5, [t("saturday")]: 6
+    };
+
+    const fullWeek: WeeklyDataItem[] = [
+      t("sunday"), t("monday"), t("tuesday"), t("wednesday"),
+      t("thursday"), t("friday"), t("saturday")
+    ].map(day => ({
+      day,
+      leads: 0,
+      returned: 0
+    }));
+
+    weeklyActivity.forEach(item => {
+      const index = daysMap[item.day];
+      if (index !== undefined) {
+        fullWeek[index].leads = item.leads || 0;
+        fullWeek[index].returned = Math.floor((item.leads || 0) * 0.3);
+      }
+    });
+
+    return fullWeek;
+  };
+
+  const prepareSourceData = (): SourceDataItem[] => {
+    if (!sourcePerformance || sourcePerformance.length === 0) {
+      return [];
+    }
+
+    const totalLeads = sourcePerformance.reduce((sum, item) => sum + (item.count || 0), 0);
+
+    return sourcePerformance.map(item => ({
+      name: item.source || t("other"),
+      value: totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0,
+      conversion: Math.round((item.count / totalLeads) * 100) || 0,
+      color: sourceColors[item.source || t("other")] || sourceColors['אחר']
+    }));
+  };
+
+  const prepareMonthlyData = (): MonthlyDataItem[] => {
+    // Generate mock monthly data based on actual totals
+    const months = [t("jan"), t("feb"), t("mar"), t("apr"), t("may"), t("jun")];
+    const totalLeads = kpi?.totalLeads || 100;
+
+    return months.map((month, i) => ({
+      month,
+      leads: Math.floor(totalLeads * (0.1 + i * 0.03)),
+      returned: Math.floor(totalLeads * 0.1 * (1 + i * 0.1)),
+      revenue: Math.floor((totalLeads * 1500) * (0.8 + i * 0.1)),
+      recovered: Math.floor((totalLeads * 500) * (0.8 + i * 0.1))
+    }));
+  };
+
+  const statusChartData = prepareStatusData();
+  const weeklyChartData = prepareWeeklyData();
+  const sourceChartData = prepareSourceData();
+  const monthlyChartData = prepareMonthlyData();
+
+  // Handle refresh
+  const handleRefresh = () => {
+    refresh();
+  };
+
+  // Handle date range change
+  const handleDateRangeChange = (value: string) => {
+    setDateRange(value);
+    setPeriod(value);
+  };
+
+  const averageLeadValue = kpi?.totalLeads && kpi?.totalLeads > 0
+    ? Math.round((kpi.totalRevenue || 0) / kpi.totalLeads)
+    : 0;
+
+  // Loading state
+  if (analyticsLoading && !kpi) {
+    return (
+      <div className="space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-48" />
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-10" />
+            <Skeleton className="h-10 w-10" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-2xl" />
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Skeleton className="lg:col-span-2 h-80 rounded-2xl" />
+          <Skeleton className="h-80 rounded-2xl" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Skeleton className="h-64 rounded-2xl" />
+          <Skeleton className="h-64 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (analyticsError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh]" dir={language === 'he' ? 'rtl' : 'ltr'}>
+        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-bold mb-2">{t("error_loading_data")}</h2>
+        <p className="text-muted-foreground mb-4">{analyticsError}</p>
+        <Button onClick={handleRefresh}>{t("try_again")}</Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">אנליטיקס ודוחות</h1>
+          <h1 className="text-2xl font-extrabold text-foreground">{t("analytics_title")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            ניתוח ביצועים, המרות והחזרי השקעה
+            {t("analytics_subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={dateRange} onValueChange={setDateRange}>
+          <Select value={dateRange} onValueChange={handleDateRangeChange}>
             <SelectTrigger className="w-[140px] rounded-xl">
-              <SelectValue placeholder="טווח תאריכים" />
+              <SelectValue placeholder={t("date_range")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="week">שבוע אחרון</SelectItem>
-              <SelectItem value="month">חודש אחרון</SelectItem>
-              <SelectItem value="quarter">רבעון אחרון</SelectItem>
-              <SelectItem value="year">שנה אחרונה</SelectItem>
+              <SelectItem value="week">{t("last_week_option")}</SelectItem>
+              <SelectItem value="month">{t("last_month_option")}</SelectItem>
+              <SelectItem value="quarter">{t("last_quarter_option")}</SelectItem>
+              <SelectItem value="year">{t("last_year_option")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" className="rounded-xl">
-            <Download className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-xl"
+            onClick={handleRefresh}
+            disabled={analyticsLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${analyticsLoading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" size="icon" className="rounded-xl">
-            <Filter className="h-4 w-4" />
+            <Download className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -131,14 +282,14 @@ export default function Analytics() {
         <Card className="rounded-2xl border-border shadow-card hover:shadow-card-hover transition-all">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              שיעור החזרה
+              {t("return_rate")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{returnRate}%</div>
+            <div className="text-2xl font-bold text-foreground">{kpi?.returnRate || 0}%</div>
             <div className="flex items-center gap-1 mt-1 text-xs text-success">
               <ArrowUpRight className="h-3 w-3" />
-              <span>+12.5% מהחודש שעבר</span>
+              <span>{t("plus_percent_last_month").replace('%s', '12.5')}</span>
             </div>
           </CardContent>
         </Card>
@@ -146,14 +297,16 @@ export default function Analytics() {
         <Card className="rounded-2xl border-border shadow-card hover:shadow-card-hover transition-all">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              הכנסות מחוזרות
+              {t("recovery_revenue")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">₪45,280</div>
+            <div className="text-2xl font-bold text-foreground">
+              ₪{(kpi?.totalRevenue || 0).toLocaleString()}
+            </div>
             <div className="flex items-center gap-1 mt-1 text-xs text-success">
               <ArrowUpRight className="h-3 w-3" />
-              <span>+23% מהחודש שעבר</span>
+              <span>{t("plus_percent_last_month").replace('%s', '23')}</span>
             </div>
           </CardContent>
         </Card>
@@ -161,14 +314,14 @@ export default function Analytics() {
         <Card className="rounded-2xl border-border shadow-card hover:shadow-card-hover transition-all">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              לידים חמים
+              {t("hot_leads")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">{hotLeads}</div>
+            <div className="text-2xl font-bold text-foreground">{kpi?.hotLeads || 0}</div>
             <div className="flex items-center gap-1 mt-1 text-xs text-destructive">
               <ArrowDownRight className="h-3 w-3" />
-              <span>5 פחות מהשבוע שעבר</span>
+              <span>{t("performance")}</span>
             </div>
           </CardContent>
         </Card>
@@ -176,14 +329,16 @@ export default function Analytics() {
         <Card className="rounded-2xl border-border shadow-card hover:shadow-card-hover transition-all">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              שווי ממוצע לליד
+              {t("avg_value_per_lead")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">₪{avgLeadValue}</div>
+            <div className="text-2xl font-bold text-foreground">
+              ₪{averageLeadValue}
+            </div>
             <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
               <Target className="h-3 w-3" />
-              <span>יעד: ₪2,500</span>
+              <span>{t("target")}: ₪2,500</span>
             </div>
           </CardContent>
         </Card>
@@ -192,23 +347,23 @@ export default function Analytics() {
       {/* Tabs for different views */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 rounded-xl">
-          <TabsTrigger value="overview">סקירה כללית</TabsTrigger>
-          <TabsTrigger value="recovery">החזרת לקוחות</TabsTrigger>
-          <TabsTrigger value="sources">מקורות לידים</TabsTrigger>
-          <TabsTrigger value="automation">ביצועי אוטומציה</TabsTrigger>
+          <TabsTrigger value="overview">{t("overview")}</TabsTrigger>
+          <TabsTrigger value="recovery">{t("customer_recovery")}</TabsTrigger>
+          <TabsTrigger value="sources">{t("lead_sources")}</TabsTrigger>
+          <TabsTrigger value="automation">{t("automation_performance")}</TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
           <Card className="rounded-2xl border-border">
             <CardHeader>
-              <CardTitle className="text-lg">מגמות המרה לאורך זמן</CardTitle>
-              <CardDescription>השוואה בין לידים להמרות לפי חודש</CardDescription>
+              <CardTitle className="text-lg">{t("conversion_trends")}</CardTitle>
+              <CardDescription>{t("comparison_leads_conversions")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={conversionData}>
+                  <LineChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(240, 12%, 90%)" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
@@ -218,7 +373,7 @@ export default function Analytics() {
                         background: "hsl(0, 0%, 100%)",
                         border: "1px solid hsl(240, 12%, 90%)",
                         borderRadius: "10px",
-                        direction: "rtl"
+                        direction: language === 'he' ? 'rtl' : 'ltr'
                       }}
                     />
                     <Legend />
@@ -226,7 +381,7 @@ export default function Analytics() {
                       yAxisId="left"
                       type="monotone"
                       dataKey="leads"
-                      name="לידים"
+                      name={t("leads")}
                       stroke="#3B82F6"
                       strokeWidth={2}
                       dot={{ r: 4 }}
@@ -234,8 +389,8 @@ export default function Analytics() {
                     <Line
                       yAxisId="left"
                       type="monotone"
-                      dataKey="converted"
-                      name="המרות"
+                      dataKey="returned"
+                      name={t("returned_leads")}
                       stroke="#10B981"
                       strokeWidth={2}
                       dot={{ r: 4 }}
@@ -244,7 +399,7 @@ export default function Analytics() {
                       yAxisId="right"
                       type="monotone"
                       dataKey="revenue"
-                      name="הכנסות (₪)"
+                      name={t("revenue") || "הכנסות (₪)"}
                       stroke="#8B5CF6"
                       strokeWidth={2}
                       dot={{ r: 4 }}
@@ -258,26 +413,15 @@ export default function Analytics() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="rounded-2xl border-border">
               <CardHeader>
-                <CardTitle className="text-lg">התפלגות סטטוסים</CardTitle>
-                <CardDescription>פילוח לידים לפי מצב נוכחי</CardDescription>
+                <CardTitle className="text-lg">{t("status_distribution")}</CardTitle>
+                <CardDescription>{t("segmentation_by_status")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <RePieChart>
                       <Pie
-                        data={Object.entries(
-                          sampleLeads.reduce((acc, lead) => {
-                            acc[lead.status] = (acc[lead.status] || 0) + 1;
-                            return acc;
-                          }, {} as Record<string, number>)
-                        ).map(([name, value]) => ({
-                          name: name === 'new' ? 'חדש' :
-                            name === 'hot' ? 'חם' :
-                              name === 'closed' ? 'נסגר' : 'אבוד',
-                          value,
-                          color: statusColors[name as keyof typeof statusColors] || '#6B7280'
-                        }))}
+                        data={statusChartData}
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
@@ -285,8 +429,8 @@ export default function Analytics() {
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {Object.entries(statusColors).map(([key, color]) => (
-                          <Cell key={key} fill={color} />
+                        {statusChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip />
@@ -294,16 +438,12 @@ export default function Analytics() {
                   </ResponsiveContainer>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-4">
-                  {Object.entries(statusColors).map(([key, color]) => (
-                    <div key={key} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-                      <span className="text-sm text-muted-foreground">
-                        {key === 'new' ? 'חדש' :
-                          key === 'hot' ? 'חם' :
-                            key === 'closed' ? 'נסגר' : 'אבוד'}
-                      </span>
+                  {statusChartData.map((item) => (
+                    <div key={item.name} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-sm text-muted-foreground">{item.name}</span>
                       <span className="text-sm font-bold text-foreground mr-auto">
-                        {sampleLeads.filter(l => l.status === key).length}
+                        {item.value}
                       </span>
                     </div>
                   ))}
@@ -313,12 +453,12 @@ export default function Analytics() {
 
             <Card className="rounded-2xl border-border">
               <CardHeader>
-                <CardTitle className="text-lg">ביצועים לפי מקור</CardTitle>
-                <CardDescription>איכות לידים לפי מקור הגעה</CardDescription>
+                <CardTitle className="text-lg">{t("performance_by_source")}</CardTitle>
+                <CardDescription>{t("quality_by_source")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {sourceData.map((source) => (
+                  {sourceChartData.length > 0 ? sourceChartData.map((source) => (
                     <div key={source.name} className="space-y-1">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{source.name}</span>
@@ -331,11 +471,13 @@ export default function Analytics() {
                         />
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>המרה: {Math.round(source.value * 0.4)}%</span>
-                        <span>ערך ממוצע: ₪{(source.value * 100).toFixed(0)}</span>
+                        <span>{t("conversion")}: {Math.round(source.value * 0.4)}%</span>
+                        <span>{t("avg_value")}: ₪{(source.value * 100).toFixed(0)}</span>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-center text-muted-foreground py-4">{t("no_data")}</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -346,41 +488,32 @@ export default function Analytics() {
         <TabsContent value="recovery" className="space-y-4">
           <Card className="rounded-2xl border-border">
             <CardHeader>
-              <CardTitle className="text-lg">החזרת לקוחות אבודים</CardTitle>
-              <CardDescription>מעקב אחר לקוחות שחזרו לאחר מעקב אוטומטי</CardDescription>
+              <CardTitle className="text-lg">{t("customer_recovery")}</CardTitle>
+              <CardDescription>{t("track_recovered_customers")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={recoveryData}>
+                  <AreaChart data={monthlyChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(240, 12%, 90%)" />
-                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip
                       contentStyle={{
                         background: "hsl(0, 0%, 100%)",
                         border: "1px solid hsl(240, 12%, 90%)",
                         borderRadius: "10px",
-                        direction: "rtl"
+                        direction: language === 'he' ? 'rtl' : 'ltr'
                       }}
                     />
                     <Legend />
                     <Area
                       type="monotone"
-                      dataKey="recovered"
-                      name="לקוחות שחזרו"
+                      dataKey="returned"
+                      name={t("returned_leads")}
                       stackId="1"
                       stroke="#10B981"
                       fill="#10B981"
-                      fillOpacity={0.3}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="lost"
-                      name="לקוחות אבודים"
-                      stackId="1"
-                      stroke="#6B7280"
-                      fill="#6B7280"
                       fillOpacity={0.3}
                     />
                   </AreaChart>
@@ -392,47 +525,52 @@ export default function Analytics() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card className="rounded-2xl border-border">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">שיעור הצלחה כולל</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("success_rate")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-foreground">78%</div>
+                <div className="text-3xl font-bold text-foreground">{kpi?.returnRate || 0}%</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  מלקוחות שקיבלו מעקב אוטומטי חזרו
+                  {t("returned_leads")}
                 </p>
                 <div className="mt-4 h-2 bg-muted rounded-full">
-                  <div className="w-[78%] h-2 bg-success rounded-full" />
+                  <div
+                    className="h-2 bg-success rounded-full"
+                    style={{ width: `${kpi?.returnRate || 0}%` }}
+                  />
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl border-border">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">זמן ממוצע לחזרה</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("avg_value")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-foreground">5.2 ימים</div>
+                <div className="text-3xl font-bold text-foreground">5.2 {t("days")}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  מרגע שליחת ההודעה הראשונה
+                  {t("days_since_last_message")}
                 </p>
                 <div className="flex items-center gap-2 mt-4 text-xs">
                   <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span>מהיר ב-30% ממעקב ידני</span>
+                  <span>{t("performance")}</span>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl border-border">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">הכנסות מלידים חוזרים</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("recovery_revenue")}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-foreground">₪32,450</div>
+                <div className="text-3xl font-bold text-foreground">
+                  ₪{(kpi?.totalRevenue || 0).toLocaleString()}
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  החודש הנוכחי
+                  {t("this_month")}
                 </p>
                 <div className="flex items-center gap-2 mt-4 text-xs text-success">
                   <TrendingUp className="h-3 w-3" />
-                  <span>צמיחה של 45% מהחודש שעבר</span>
+                  <span>{t("performance")}</span>
                 </div>
               </CardContent>
             </Card>
@@ -441,31 +579,31 @@ export default function Analytics() {
           {/* Recovery Table */}
           <Card className="rounded-2xl border-border">
             <CardHeader>
-              <CardTitle className="text-lg">לקוחות שחזרו - פירוט</CardTitle>
-              <CardDescription>רשימת הלקוחות האחרונים שחזרו בעקבות אוטומציה</CardDescription>
+              <CardTitle className="text-lg">{t("returned_leads")}</CardTitle>
+              <CardDescription>{t("track_recovered_customers")}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-right py-3 font-semibold">שם</th>
-                      <th className="text-right py-3 font-semibold">תאריך עזיבה</th>
-                      <th className="text-right py-3 font-semibold">תאריך חזרה</th>
-                      <th className="text-right py-3 font-semibold">ימים</th>
-                      <th className="text-right py-3 font-semibold">הודעות שנשלחו</th>
-                      <th className="text-right py-3 font-semibold">ערך עסקה</th>
+                      <th className="text-right py-3 font-semibold">{t("full_name")}</th>
+                      <th className="text-right py-3 font-semibold">{t("lost_status")}</th>
+                      <th className="text-right py-3 font-semibold">{t("returned_leads")}</th>
+                      <th className="text-right py-3 font-semibold">{t("days")}</th>
+                      <th className="text-right py-3 font-semibold">{t("messages_count").replace('{count}', '')}</th>
+                      <th className="text-right py-3 font-semibold">{t("value")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {sampleLeads.slice(0, 5).map((lead, i) => (
+                    {leads && leads.slice(0, 5).map((lead, i) => (
                       <tr key={i} className="border-b border-border last:border-0">
                         <td className="py-3 font-medium">{lead.name}</td>
                         <td className="py-3 text-muted-foreground">15/02/2025</td>
                         <td className="py-3 text-muted-foreground">22/02/2025</td>
                         <td className="py-3 text-muted-foreground">7</td>
                         <td className="py-3 text-muted-foreground">4</td>
-                        <td className="py-3 font-bold">₪{lead.value.toLocaleString()}</td>
+                        <td className="py-3 font-bold">₪{(lead.value || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -480,18 +618,18 @@ export default function Analytics() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card className="rounded-2xl border-border">
               <CardHeader>
-                <CardTitle className="text-lg">איכות לידים לפי מקור</CardTitle>
-                <CardDescription>השוואת שיעורי המרה בין מקורות שונים</CardDescription>
+                <CardTitle className="text-lg">{t("lead_sources")}</CardTitle>
+                <CardDescription>{t("quality_by_source")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={sourceData}>
+                    <BarChart data={sourceChartData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="name" />
                       <YAxis />
                       <Tooltip />
-                      <Bar dataKey="value" name="כמות לידים" fill="#3B82F6" />
+                      <Bar dataKey="value" name={t("leads")} fill="#3B82F6" radius={[8, 8, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -500,12 +638,12 @@ export default function Analytics() {
 
             <Card className="rounded-2xl border-border">
               <CardHeader>
-                <CardTitle className="text-lg">עלות מול תועלת</CardTitle>
-                <CardDescription>החזר השקעה (ROI) לפי מקור</CardDescription>
+                <CardTitle className="text-lg">{t("performance_by_source")}</CardTitle>
+                <CardDescription>{t("quality_by_source")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {sourceData.map((source) => (
+                  {sourceChartData.map((source) => (
                     <div key={source.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${source.color}20` }}>
@@ -513,10 +651,10 @@ export default function Analytics() {
                         </div>
                         <div>
                           <p className="font-medium">{source.name}</p>
-                          <p className="text-xs text-muted-foreground">עלות: ₪{(source.value * 50).toFixed(0)}</p>
+                          <p className="text-xs text-muted-foreground">{t("value")}: ₪{(source.value * 50).toFixed(0)}</p>
                         </div>
                       </div>
-                      <div className="text-left">
+                      <div className={language === 'he' ? 'text-left' : 'text-right'}>
                         <p className="font-bold text-success">₪{(source.value * 200).toFixed(0)}</p>
                         <p className="text-xs text-muted-foreground">ROI: {source.value * 4}%</p>
                       </div>
@@ -533,44 +671,55 @@ export default function Analytics() {
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <Card className="rounded-2xl border-border lg:col-span-1">
               <CardHeader>
-                <CardTitle className="text-lg">ביצועי אוטומציה</CardTitle>
+                <CardTitle className="text-lg">{t("automation_performance")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">הודעות שנשלחו</p>
-                  <p className="text-2xl font-bold">1,284</p>
-                  <p className="text-xs text-success mt-1">+23% מהחודש שעבר</p>
+                  <p className="text-sm text-muted-foreground">{t("messages_sent_month")}</p>
+                  <p className="text-2xl font-bold">{automationStats?.totals?.totalExecutions || 0}</p>
+                  <p className="text-xs text-success mt-1">{t("plus_percent_last_month").replace('%s', '23')}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">שיעור תגובה</p>
-                  <p className="text-2xl font-bold">42%</p>
+                  <p className="text-sm text-muted-foreground">{t("response_rate")}</p>
+                  <p className="text-2xl font-bold">
+                    {automationStats?.totals?.totalExecutions && automationStats?.totals?.totalExecutions > 0
+                      ? Math.round((automationStats.totals.totalReplies || 0) / automationStats.totals.totalExecutions * 100)
+                      : 0}%
+                  </p>
                   <div className="w-full bg-muted rounded-full h-2 mt-2">
-                    <div className="w-[42%] h-2 bg-primary rounded-full" />
+                    <div
+                      className="h-2 bg-primary rounded-full"
+                      style={{
+                        width: automationStats?.totals?.totalExecutions && automationStats?.totals?.totalExecutions > 0
+                          ? `${(automationStats.totals.totalReplies || 0) / automationStats.totals.totalExecutions * 100}%`
+                          : '0%'
+                      }}
+                    />
                   </div>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">חוקים פעילים</p>
-                  <p className="text-2xl font-bold">{sampleAutomationRules.filter(r => r.active).length}</p>
+                  <p className="text-sm text-muted-foreground">{t("active_rules")}</p>
+                  <p className="text-2xl font-bold">{automationStats?.totals?.activeCount || 0}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl border-border lg:col-span-3">
               <CardHeader>
-                <CardTitle className="text-lg">ביצועי חוקים לפי זמן</CardTitle>
-                <CardDescription>אפקטיביות האוטומציות לאורך זמן</CardDescription>
+                <CardTitle className="text-lg">{t("rule_performance")}</CardTitle>
+                <CardDescription>{t("performance_by_source")}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[250px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={recoveryData}>
+                    <LineChart data={monthlyChartData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="day" />
+                      <XAxis dataKey="month" />
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Line type="monotone" dataKey="recovered" name="חזרו" stroke="#10B981" />
-                      <Line type="monotone" dataKey="lost" name="אבודים" stroke="#EF4444" />
+                      <Line type="monotone" dataKey="returned" name={t("returned_leads")} stroke="#10B981" strokeWidth={2} />
+                      <Line type="monotone" dataKey="leads" name={t("leads")} stroke="#3B82F6" strokeWidth={2} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
