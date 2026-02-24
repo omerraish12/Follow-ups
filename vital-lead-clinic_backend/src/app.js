@@ -14,6 +14,7 @@ const app = express();
 // Middleware
 const allowedOrigins = [
     'http://localhost:8080',
+    'https://clinic-mwhu.vercel.app', // ✅ ADD THIS
     'https://clinic-mwhu-git-master-alpinists-projects-69c3f06f.vercel.app',
     'https://clinic-delta-blond.vercel.app'
 ];
