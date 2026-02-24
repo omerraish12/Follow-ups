@@ -12,8 +12,23 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+    'http://localhost:8080',
+    'https://clinic-mwhu-git-master-alpinists-projects-69c3f06f.vercel.app',
+    'https://clinic-delta-blond.vercel.app'
+];
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:8080',
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 app.use(express.json());
