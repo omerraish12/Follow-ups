@@ -16,12 +16,25 @@ const app = express();
 
 // Middleware
 const allowedOrigins = [
+    process.env.FRONTEND_URL,
     'http://localhost:8080',
     'https://follow-ups-vx12.vercel.app'
-].filter(Boolean);
+]
+    .filter(Boolean)
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => value.replace(/\/$/, ''));
 
 app.use(cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+        if (!origin) {
+            callback(null, true);
+            return;
+        }
+        const normalizedOrigin = origin.replace(/\/$/, '');
+        callback(null, allowedOrigins.includes(normalizedOrigin));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
