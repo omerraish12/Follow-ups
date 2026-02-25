@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 // Prefer IPv4 when both A/AAAA exist to avoid resolver issues on some Windows setups.
 if (dns.setDefaultResultOrder) {
     dns.setDefaultResultOrder('ipv4first');
@@ -79,9 +81,10 @@ try {
 const pool = new Pool({
     connectionString,
     ssl: { rejectUnauthorized: false },
-    max: parseInt(process.env.DB_POOL_MAX, 10) || 20,
+    max: parseInt(process.env.DB_POOL_MAX, 10) || (isServerless ? 1 : 20),
     idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT, 10) || 30000,
-    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 10000
+    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 20000,
+    keepAlive: true
 });
 
 console.log('Database client initialized using Supabase connection string');
@@ -90,15 +93,17 @@ pool.on('error', (err) => {
     console.error('Unexpected database pool error:', err);
 });
 
-// Test connection on startup
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error('Error connecting to database:', err.stack);
-    } else {
-        console.log('Database connected successfully');
-        release();
-    }
-});
+// Test connection on startup (skip in serverless to avoid cold-start failures).
+if (!isServerless) {
+    pool.connect((err, client, release) => {
+        if (err) {
+            console.error('Error connecting to database:', err.stack);
+        } else {
+            console.log('Database connected successfully');
+            release();
+        }
+    });
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
