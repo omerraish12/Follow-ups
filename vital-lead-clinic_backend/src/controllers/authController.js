@@ -18,7 +18,11 @@ const signup = async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            const details = errors.array();
+            return res.status(400).json({
+                message: details[0]?.msg || 'Invalid signup data',
+                errors: details
+            });
         }
 
         const { email, password, name, phone, clinicName } = req.body;

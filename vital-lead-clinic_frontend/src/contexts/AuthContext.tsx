@@ -48,7 +48,11 @@ export const AuthProvider = ({ children }) => {
             });
             return data;
         } catch (error) {
-            setError(error.response?.data?.message || 'Sign in failed');
+            const message =
+                error.response?.data?.message ||
+                error.response?.data?.errors?.[0]?.msg ||
+                'Sign in failed';
+            setError(message);
             throw error;
         } finally {
             setIsLoading(false);
@@ -67,7 +71,11 @@ export const AuthProvider = ({ children }) => {
             });
             return data;
         } catch (error) {
-            setError(error.response?.data?.message || 'Sign up failed');
+            const message =
+                error.response?.data?.message ||
+                error.response?.data?.errors?.[0]?.msg ||
+                'Sign up failed';
+            setError(message);
             throw error;
         } finally {
             setIsLoading(false);
