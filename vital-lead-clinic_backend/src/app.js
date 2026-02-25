@@ -43,6 +43,14 @@ app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root + favicon to avoid noisy 404s on Vercel
+app.get('/', (req, res) => {
+    res.status(200).send('Backend is running');
+});
+app.get(['/favicon.ico', '/favicon.png'], (req, res) => {
+    res.status(204).end();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/leads', leadRoutes);
