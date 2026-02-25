@@ -4,8 +4,10 @@ import {
   BarChart3, Shield, ChevronLeft, Star, CheckCircle,
   ArrowLeft, Sparkles, Rocket, Target, HeartHandshake,
   Activity, TrendingUp, Calendar, MessageCircle,
-  Award, Download, Play, Pause, RotateCcw, Bell
+  Award, Download, Play, Pause, RotateCcw, Bell,
+  PhoneCall, Video, MoreVertical, Send, Smile, Paperclip
 } from "lucide-react";
+import { Grid, Instagram, Linkedin, Mail, Slack } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import LogoMark from "@/assets/logo.png";
 
 export default function LandingPage() {
   const { t, language } = useLanguage();
@@ -26,7 +29,16 @@ export default function LandingPage() {
   });
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [isNavScrolled, setIsNavScrolled] = useState(false);
   const sectionRefs = useRef({});
+  const chatPreviewMessages = [
+    { time: "2m", name: "Yossi Cohen", text: "Hi, I wanted to ask about your prices.", avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#111827", color: "#ffffff" },
+    { time: "5m", name: "Michal Levi", text: "Thank you very much for the excellent service!", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80", icon: MessageCircle, bg: "#25D366", color: "#ffffff" },
+    { time: "8m", name: "Danny Abraham", text: "Is it possible to receive a detailed quote?", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80&sat=-30", icon: Mail, bg: "#EA4335", color: "#ffffff" },
+    { time: "12m", name: "Noa Shimon", text: "Interested in a consultation, when is it possible?", avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80&sat=-20", icon: Instagram, bg: "#F56040", color: "#ffffff" },
+    { time: "15m", name: "Alon Peretz", text: "...ed the message, I will get back to you as soon as possible.", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80", icon: Linkedin, bg: "#0A66C2", color: "#ffffff" },
+    { time: "18m", name: "Eden Tal", text: "Quick sync about the onboarding plan.", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80", icon: Slack, bg: "#4A154B", color: "#ffffff" },
+  ];
 
   // דמו מונפש - הודעות לדוגמה
   const demoScenarios = [
@@ -95,6 +107,13 @@ export default function LandingPage() {
     return () => {
       Object.values(observers).forEach(observer => observer.disconnect());
     };
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => setIsNavScrolled(window.scrollY > 40);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const startChatAnimation = () => {
@@ -170,52 +189,86 @@ export default function LandingPage() {
     </div>
   );
 
+  const navLinkClass = cn(
+    "text-sm font-semibold tracking-tight transition-all duration-300 hover:-translate-y-[1px] relative group",
+    isNavScrolled
+      ? "text-foreground/80 hover:text-foreground"
+      : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)]"
+  );
+
   return (
     <div className="min-h-screen bg-background font-sans">
       {/* Navbar */}
-      <nav className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur-md supports-[backdrop-filter]:bg-card/75">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-2 sm:py-3">
-          <div className="flex items-center gap-1 sm:gap-2">
-            <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 hover:scale-105 transition-transform duration-300">
-              <Phone className="h-3 w-3 sm:h-4 sm:w-4 text-primary-foreground" />
+      <nav
+        className={cn(
+          "sticky top-0 z-50 transition-all duration-300 backdrop-blur-md supports-[backdrop-filter]:backdrop-blur-md",
+          isNavScrolled
+            ? "bg-card/90 border-b border-border text-foreground shadow-sm"
+            : "bg-primary text-white border-b border-primary/40 shadow-none"
+        )}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2 sm:py-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className={cn(
+              "flex h-11 w-11 items-center justify-center transition-transform duration-300 overflow-hidden",
+              isNavScrolled ? "" : ""
+            )}>
+              <img src={LogoMark} alt="FollowUp Flow" className="h-11 w-11 object-contain" />
             </div>
-            <span className="text-sm sm:text-base md:text-lg font-bold text-foreground truncate max-w-[150px] sm:max-w-none">
-              {t("app_title")}
+            <span className={cn(
+              "hidden sm:block text-sm sm:text-base md:text-lg font-bold tracking-tight truncate max-w-[170px] drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
+              isNavScrolled ? "text-foreground" : "text-blue-50"
+            )}>
+              FollowUp
             </span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm">
-            <a href="#how" className="text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105 relative group">
+            <a href="#how" className={navLinkClass}>
               {t("landing_nav_how")}
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
-            <a href="#demo" className="text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105 relative group">
+            <a href="#demo" className={navLinkClass}>
               {t("landing_nav_demo")}
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
-            <a href="#results" className="text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105 relative group">
+            <a href="#pricing" className={navLinkClass}>
+              Pricing
+              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
+            </a>
+            <a href="#results" className={navLinkClass}>
               {t("landing_nav_results")}
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
-            <a href="#why" className="text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105 relative group">
+            <a href="#why" className={navLinkClass}>
               {t("landing_nav_why")}
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover:w-full"></span>
+              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:block">
-              <LanguageSwitcher />
+              <LanguageSwitcher tone={isNavScrolled ? "light" : "dark"} />
             </div>
             <Link
               to="/login"
-              className="hidden sm:block text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-300 hover:scale-105"
+              className={cn(
+                "hidden sm:block text-xs sm:text-sm font-medium transition-all duration-300 hover:scale-105",
+                isNavScrolled
+                  ? "text-muted-foreground hover:text-foreground"
+                  : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)] hover:text-white"
+              )}
             >
               {t("landing_nav_login")}
             </Link>
             <Link
               to="/signup"
-              className="rounded-full bg-gradient-to-r from-primary to-primary/80 px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold text-primary-foreground transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+              className={cn(
+                "rounded-full px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg",
+                isNavScrolled
+                  ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:shadow-primary/30"
+                  : "bg-white/20 text-white border border-white/30 hover:bg-white/25"
+              )}
             >
               {t("landing_nav_start_now")}
             </Link>
@@ -224,73 +277,134 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-16 sm:py-20 md:py-24" ref={el => sectionRefs.current['hero'] = el}>
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
+      <section
+        className="relative overflow-hidden min-h-screen flex items-center py-20 sm:py-24 md:py-28"
+        style={{ background: "linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(215 92% 62%) 55%, hsl(207 95% 60%) 100%)" }}
+        ref={el => sectionRefs.current['hero'] = el}
+      >
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,hsl(var(--primary)_/_0.18),hsl(var(--primary)_/_0.1),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsl(var(--primary)_/_0.18),transparent_38%),radial-gradient(circle_at_80%_15%,hsl(var(--primary)_/_0.12),transparent_32%)]" />
 
-        <div className={`relative mx-auto max-w-6xl px-4 text-center ${fadeInUpClass('hero')}`}>
-          <Badge variant="outline" className="mb-4 px-4 py-2 text-sm bg-primary/10 text-primary border-primary/20">
-            <Sparkles className="h-4 w-4 ml-2" />
-            {t("landing_hero_badge")}
-          </Badge>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight">
-            <span className="bg-gradient-to-r from-primary via-primary/80 to-secondary bg-clip-text text-transparent">
-              {t("landing_hero_title_line1")}
-            </span>
-            <br />
-            <span className="relative">
-              {t("landing_hero_title_line2")}
-              <span className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-24 h-1 bg-gradient-to-r from-transparent via-primary to-transparent"></span>
-            </span>
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-2xl text-lg sm:text-xl text-muted-foreground">
-            {t("landing_hero_subtitle")}
-          </p>
-
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              to="/signup"
-              className="group relative w-full sm:w-auto rounded-full bg-gradient-to-r from-primary to-primary/80 px-8 py-4 text-lg font-bold text-primary-foreground shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl overflow-hidden"
-            >
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                {t("landing_hero_cta_primary")}
-                <ArrowLeft className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
-              </span>
-            </Link>
-
-            <a
-              href="#demo"
-              className="group flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-border bg-card/50 backdrop-blur-sm px-8 py-4 text-lg font-semibold text-foreground shadow-sm transition-all duration-300 hover:scale-105 hover:bg-card hover:shadow-md"
-            >
-              <Play className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
-              <span>{t("landing_hero_cta_secondary")}</span>
-            </a>
-          </div>
-
-          {/* Social Proof */}
-          <div className="mt-12 flex flex-wrap justify-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="w-8 h-8 rounded-full bg-primary/10 border-2 border-background flex items-center justify-center">
-                    <Users className="h-4 w-4 text-primary" />
+        <div className={`relative mx-auto max-w-7xl px-8 lg:px-14 ${fadeInUpClass('hero')}`}>
+          <div className="grid lg:grid-cols-[1.05fr_1fr] items-center gap-14 lg:gap-24">
+            {/* Chat preview mock (desktop only) */}
+            <div className="hidden lg:block">
+              <div className="relative mx-auto w-full max-w-xl rounded-[30px] bg-white/95 shadow-[0_30px_120px_-40px_rgba(0,0,0,0.45)] border border-white/70 backdrop-blur">
+                <div className="flex items-center gap-2 px-6 py-4">
+                  {["#ff5f57", "#febc2e", "#28c840"].map((c, i) => (
+                    <span
+                      key={i}
+                      className="h-3 w-3 rounded-full"
+                      style={{ background: c }}
+                    />
+                  ))}
+                </div>
+                <div className="px-6 pb-8">
+                  <div className="flex items-center gap-3 rounded-full border border-gray-200/80 bg-white/70 px-5 py-3 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.35)]">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#8b8bff] via-[#7be1ff] to-[#5dc3ff] shadow-inner" />
+                    <p className="text-sm text-gray-500">Start typing to ask or search</p>
                   </div>
-                ))}
+
+                  <div className="mt-6 space-y-6">
+                    {chatPreviewMessages.map((msg, idx) => (
+                      <div key={idx} className="flex items-center gap-4 border-t border-gray-100 pt-5 first:border-t-0 first:pt-0">
+                        <div className="w-12 text-right text-xs font-medium text-gray-400">{msg.time}</div>
+                        <div className="flex-1 flex items-center gap-3">
+                          <img
+                            src={msg.avatar}
+                            alt={msg.name}
+                            className="h-10 w-10 rounded-full object-cover border border-white/60 shadow-sm"
+                            loading="lazy"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{msg.name}</p>
+                            <p className="text-sm text-gray-500 mt-0.5 leading-snug">{msg.text}</p>
+                          </div>
+                        </div>
+                        <div
+                          className="h-10 w-10 rounded-full flex items-center justify-center shadow-sm ring-1 ring-black/5"
+                          style={{ background: msg.bg, color: msg.color }}
+                        >
+                          <msg.icon className="h-5 w-5" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <span className="text-sm text-muted-foreground">
-                {t("landing_social_proof_clinics")}
-              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className="h-4 w-4 fill-warning text-warning" />
-                ))}
+
+            {/* Hero copy */}
+            <div className="text-center lg:text-left flex flex-col items-center lg:items-start">
+              <Badge
+                variant="outline"
+                className="mb-6 inline-flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/15 px-6 py-2 text-sm font-semibold text-white backdrop-blur"
+              >
+                <Sparkles className="h-4 w-4 ml-2" />
+                {t("landing_hero_badge")}
+              </Badge>
+
+              <h1
+                className="relative inline-block text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight text-white"
+              >
+                <span className="block text-white">
+                  {t("landing_hero_title_line1")}
+                </span>
+                <span className="block text-white">
+                  {t("landing_hero_title_line2")}
+                </span>
+                <span className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 w-full h-1.5 rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.9),rgba(255,255,255,0))]"></span>
+              </h1>
+
+              <p className="mx-auto lg:mx-0 mt-8 max-w-xl text-lg sm:text-xl text-white/90 leading-relaxed line-clamp-2">
+                {t("landing_hero_subtitle")}
+              </p>
+
+              <div className="mt-10 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-4 w-full">
+                <Link
+                  to="/signup"
+                  className="group relative w-full sm:w-auto rounded-full bg-white text-primary px-9 py-4 text-lg font-bold shadow-[0_20px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_22px_70px_-10px_rgba(0,0,0,0.4)] overflow-hidden"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {t("landing_hero_cta_primary")}
+                    <ArrowLeft className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+                  </span>
+                </Link>
+
+                <a
+                  href="#demo"
+                  className="group flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-white/30 bg-white/20 backdrop-blur px-9 py-4 text-lg font-semibold text-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-105 hover:bg-white/30 hover:shadow-[0_16px_50px_-10px_rgba(0,0,0,0.45)]"
+                >
+                  <Play className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
+                  <span>{t("landing_hero_cta_secondary")}</span>
+                </a>
               </div>
-              <span className="text-sm text-muted-foreground">
-                {t("landing_social_proof_rating")}
-              </span>
+
+              {/* Social Proof */}
+              <div className="mt-12 flex flex-wrap justify-center lg:justify-start gap-6 text-white/85">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-2">
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} className="w-9 h-9 rounded-full bg-white/20 border-2 border-white/30 flex items-center justify-center backdrop-blur">
+                        <Users className="h-4 w-4 text-white" />
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-sm">
+                    {t("landing_social_proof_clinics")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <Star key={i} className="h-4 w-4 fill-warning text-warning" />
+                    ))}
+                  </div>
+                  <span className="text-sm">
+                    {t("landing_social_proof_rating")}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -298,7 +412,7 @@ export default function LandingPage() {
 
       {/* Stats Section */}
       <section className="bg-muted/30 py-16">
-        <div className="mx-auto max-w-6xl px-4">
+        <div className="mx-auto max-w-7xl px-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="border-0 bg-transparent shadow-none text-center">
               <CardContent className="pt-6">
@@ -330,7 +444,7 @@ export default function LandingPage() {
 
       {/* How it Works */}
       <section id="how" className="py-16" ref={el => sectionRefs.current['how'] = el}>
-        <div className={`mx-auto max-w-6xl px-4 ${fadeInUpClass('how')}`}>
+        <div className={`mx-auto max-w-7xl px-4 ${fadeInUpClass('how')}`}>
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
               {t("landing_how_badge")}
@@ -381,7 +495,7 @@ export default function LandingPage() {
 
       {/* Demo Section */}
       <section id="demo" className="py-16 bg-muted/30" ref={el => sectionRefs.current['demo'] = el}>
-        <div className={`mx-auto max-w-6xl px-4 ${fadeInUpClass('demo')}`}>
+        <div className={`mx-auto max-w-7xl px-4 ${fadeInUpClass('demo')}`}>
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
               <Rocket className="h-4 w-4 ml-2" />
@@ -393,9 +507,10 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Demo Controls */}
-            <div className="space-y-6">
+          <div className="space-y-10">
+            <div className="grid lg:grid-cols-[1fr_1.1fr] gap-10">
+              {/* Demo Controls */}
+              <div className="space-y-6">
               <Card className="border-2 border-primary/20">
                 <CardContent className="p-6">
                   <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -447,149 +562,183 @@ export default function LandingPage() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
 
-              <Card>
-                <CardContent className="p-6">
-                  <h4 className="font-bold mb-3">{t("landing_demo_realtime_title")}</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">{t("landing_demo_realtime_identified")}</span>
-                      <Badge>3</Badge>
+              {/* Chat Mockups */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                {/* Old Client Chat */}
+                <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-2">
+                  <div className="flex flex-col h-[520px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
+                    {/* Top bar */}
+                    <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                        <Users className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 leading-tight">
+                        <p className="text-sm font-semibold">{t("landing_chat_old_header_title")}</p>
+                        <p className="text-[11px] text-white/80">{t("landing_chat_old_header_subtitle")}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-white/85">
+                        <Video className="h-4 w-4" />
+                        <PhoneCall className="h-4 w-4" />
+                        <MoreVertical className="h-4 w-4" />
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">{t("landing_demo_realtime_sent")}</span>
-                      <Badge variant="secondary">5</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">{t("landing_demo_realtime_replies")}</span>
-                      <Badge className="bg-success">2</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">{t("landing_demo_realtime_revenue")}</span>
-                      <span className="font-bold text-success">₪1,200</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Chat Mockups */}
-            <div className="grid sm:grid-cols-2 gap-4">
-              {/* Old Client Chat */}
-              <Card className="border-2 overflow-hidden">
-                <div className="bg-[#075E54] text-white p-3 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <Users className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm">{t("landing_chat_old_header_title")}</p>
-                    <p className="text-xs opacity-80">{t("landing_chat_old_header_subtitle")}</p>
-                  </div>
-                </div>
-                <div className="bg-[#ECE5DD] p-3 h-[760px] overflow-y-auto">
-                  <div className="space-y-2">
-                    {chatMessages.old.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          "flex",
-                          msg.type === 'sent'
-                            ? (language === 'he' ? 'justify-start' : 'justify-end')
-                            : (language === 'he' ? 'justify-end' : 'justify-start')
-                        )}
-                      >
+                    {/* Messages */}
+                    <div className="flex-1 px-3 py-3 space-y-2 overflow-y-auto custom-scroll">
+                      {chatMessages.old.map((msg, i) => (
                         <div
+                          key={i}
                           className={cn(
-                            "max-w-[80%] rounded-lg p-2 text-sm",
+                            "flex",
                             msg.type === 'sent'
-                              ? 'bg-[#DCF8C6] rounded-br-none'
-                              : msg.type === 'system'
-                                ? 'bg-yellow-100 text-yellow-800 text-xs text-center w-full'
-                                : 'bg-white rounded-bl-none'
+                              ? (language === 'he' ? 'justify-start' : 'justify-end')
+                              : (language === 'he' ? 'justify-end' : 'justify-start')
                           )}
                         >
-                          {msg.text}
-                          {msg.type !== 'system' && (
-                            <div className="flex justify-end items-center gap-1 mt-1">
-                              <span className="text-[10px] text-gray-500">
-                                {new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              {msg.type === 'sent' && <MessageStatus status={msg.status} />}
-                            </div>
-                          )}
+                          <div
+                            className={cn(
+                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                              msg.type === 'sent'
+                                ? 'bg-[#d9fdd3]'
+                                : msg.type === 'system'
+                                  ? 'bg-yellow-100 text-yellow-800 text-xs text-center w-full'
+                                  : 'bg-white'
+                            )}
+                          >
+                            {msg.text}
+                            {msg.type !== 'system' && (
+                              <div className="flex justify-end items-center gap-1 mt-1">
+                                <span className="text-[10px] text-gray-500">
+                                  {new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {msg.type === 'sent' && <MessageStatus status={msg.status} />}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                    {chatMessages.old.length > 0 && chatMessages.old.length < oldClientMessages.length && (
-                      <div className="flex justify-end">
-                        <TypingIndicator />
-                      </div>
-                    )}
+                      ))}
+                      {chatMessages.old.length > 0 && chatMessages.old.length < oldClientMessages.length && (
+                        <div className="flex justify-end">
+                          <TypingIndicator />
+                        </div>
+                      )}
+                    </div>
+                    {/* Input */}
+                    <div className="bg-white/95 border-t border-black/5 px-3 py-2 flex items-center gap-2">
+                      <Smile className="h-5 w-5 text-gray-500" />
+                      <Paperclip className="h-5 w-5 text-gray-500" />
+                      <input
+                        disabled
+                        className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+                        placeholder={t("landing_chat_old_header_subtitle")}
+                      />
+                      <Send className="h-5 w-5 text-[#25D366]" />
+                    </div>
                   </div>
                 </div>
-              </Card>
 
-              {/* New Client Chat */}
-              <Card className="border-2 overflow-hidden">
-                <div className="bg-[#075E54] text-white p-3 flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                    <Rocket className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-sm">{t("landing_chat_new_header_title")}</p>
-                    <p className="text-xs opacity-80">{t("landing_chat_new_header_subtitle")}</p>
-                  </div>
-                </div>
-                <div className="bg-[#ECE5DD] p-3 h-[760px] overflow-y-auto">
-                  <div className="space-y-2">
-                    {chatMessages.new.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          "flex",
-                          msg.type === 'sent'
-                            ? (language === 'he' ? 'justify-start' : 'justify-end')
-                            : (language === 'he' ? 'justify-end' : 'justify-start')
-                        )}
-                      >
+                {/* New Client Chat */}
+                <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-2">
+                  <div className="flex flex-col h-[520px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
+                    <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
+                        <Rocket className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 leading-tight">
+                        <p className="text-sm font-semibold">{t("landing_chat_new_header_title")}</p>
+                        <p className="text-[11px] text-white/80">{t("landing_chat_new_header_subtitle")}</p>
+                      </div>
+                      <div className="flex items-center gap-3 text-white/85">
+                        <Video className="h-4 w-4" />
+                        <PhoneCall className="h-4 w-4" />
+                        <MoreVertical className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="flex-1 px-3 py-3 space-y-2 overflow-y-auto custom-scroll">
+                      {chatMessages.new.map((msg, i) => (
                         <div
+                          key={i}
                           className={cn(
-                            "max-w-[80%] rounded-lg p-2 text-sm",
+                            "flex",
                             msg.type === 'sent'
-                              ? 'bg-[#DCF8C6] rounded-br-none'
-                              : msg.type === 'system'
-                                ? 'bg-blue-100 text-blue-800 text-xs text-center w-full'
-                                : 'bg-white rounded-bl-none'
+                              ? (language === 'he' ? 'justify-start' : 'justify-end')
+                              : (language === 'he' ? 'justify-end' : 'justify-start')
                           )}
                         >
-                          {msg.text}
-                          {msg.type !== 'system' && (
-                            <div className="flex justify-end items-center gap-1 mt-1">
-                              <span className="text-[10px] text-gray-500">
-                                {new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              {msg.type === 'sent' && <MessageStatus status={msg.status} />}
-                            </div>
-                          )}
+                          <div
+                            className={cn(
+                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                              msg.type === 'sent'
+                                ? 'bg-[#d9fdd3]'
+                                : msg.type === 'system'
+                                  ? 'bg-blue-100 text-blue-800 text-xs text-center w-full'
+                                  : 'bg-white'
+                            )}
+                          >
+                            {msg.text}
+                            {msg.type !== 'system' && (
+                              <div className="flex justify-end items-center gap-1 mt-1">
+                                <span className="text-[10px] text-gray-500">
+                                  {new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {msg.type === 'sent' && <MessageStatus status={msg.status} />}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                    {chatMessages.new.length > 0 && chatMessages.new.length < newClientMessages.length && (
-                      <div className="flex justify-end">
-                        <TypingIndicator />
-                      </div>
-                    )}
+                      ))}
+                      {chatMessages.new.length > 0 && chatMessages.new.length < newClientMessages.length && (
+                        <div className="flex justify-end">
+                          <TypingIndicator />
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-white/95 border-t border-black/5 px-3 py-2 flex items-center gap-2">
+                      <Smile className="h-5 w-5 text-gray-500" />
+                      <Paperclip className="h-5 w-5 text-gray-500" />
+                      <input
+                        disabled
+                        className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
+                        placeholder={t("landing_chat_new_header_subtitle")}
+                      />
+                      <Send className="h-5 w-5 text-[#25D366]" />
+                    </div>
                   </div>
                 </div>
-              </Card>
+              </div>
             </div>
+
+            <Card className="border-2">
+              <CardContent className="p-6">
+                <h4 className="font-bold mb-3">{t("landing_demo_realtime_title")}</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">{t("landing_demo_realtime_identified")}</span>
+                    <Badge>3</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">{t("landing_demo_realtime_sent")}</span>
+                    <Badge variant="secondary">5</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">{t("landing_demo_realtime_replies")}</span>
+                    <Badge className="bg-success">2</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">{t("landing_demo_realtime_revenue")}</span>
+                    <span className="font-bold text-success">₪1,200</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
 
       {/* Results Section */}
       <section id="results" className="py-16" ref={el => sectionRefs.current['results'] = el}>
-        <div className={`mx-auto max-w-6xl px-4 ${fadeInUpClass('results')}`}>
+        <div className={`mx-auto max-w-7xl px-4 ${fadeInUpClass('results')}`}>
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-success/10 text-success">
               <Target className="h-4 w-4 ml-2" />
@@ -644,10 +793,119 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section id="pricing" className="py-16 bg-muted/30" ref={el => sectionRefs.current['pricing'] = el}>
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="text-center mb-12">
+            <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
+              Pricing
+            </Badge>
+            <h2 className="text-3xl md:text-4xl font-bold">Choose the plan that fits your clinic</h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              Start free, scale when you’re ready. All plans include secure WhatsApp automation, smart follow-ups, and analytics.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            {/* Starter */}
+            <Card className="border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
+              <CardContent className="p-7 space-y-6">
+                <div>
+                  <p className="text-sm font-semibold text-primary">Starter</p>
+                  <p className="text-4xl font-bold mt-2">$0</p>
+                  <p className="text-sm text-muted-foreground">Up to 150 contacts • 1 user</p>
+                </div>
+                <div className="space-y-3 text-sm text-foreground">
+                  {[
+                    "Basic WhatsApp inbox",
+                    "Automated reminders",
+                    "Email support",
+                    "1 landing form"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/signup" className="block">
+                  <Button className="w-full rounded-full" variant="outline">
+                    Get started
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Growth */}
+            <Card className="relative border-2 border-primary shadow-card-hover hover:shadow-card transition-all duration-300 overflow-hidden">
+              <div className="absolute top-3 right-3 rounded-full bg-primary text-primary-foreground text-xs px-3 py-1 font-semibold shadow-sm">
+                Most popular
+              </div>
+              <CardContent className="p-7 space-y-6">
+                <div>
+                  <p className="text-sm font-semibold text-primary">Growth</p>
+                  <p className="text-4xl font-bold mt-2">$49</p>
+                  <p className="text-sm text-muted-foreground">Up to 2,000 contacts • 5 users</p>
+                </div>
+                <div className="space-y-3 text-sm text-foreground">
+                  {[
+                    "WhatsApp automation & templates",
+                    "Smart lead scoring and tags",
+                    "Two-way SMS & email reminders",
+                    "Custom landing pages",
+                    "Team inbox & roles",
+                    "Priority chat support"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/signup" className="block">
+                  <Button className="w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+                    Start free trial
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Scale */}
+            <Card className="border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
+              <CardContent className="p-7 space-y-6">
+                <div>
+                  <p className="text-sm font-semibold text-primary">Scale</p>
+                  <p className="text-4xl font-bold mt-2">$129</p>
+                  <p className="text-sm text-muted-foreground">Unlimited contacts • 20 users</p>
+                </div>
+                <div className="space-y-3 text-sm text-foreground">
+                  {[
+                    "Advanced automations & branching",
+                    "API & webhooks",
+                    "Dedicated success manager",
+                    "Custom reporting & exports",
+                    "SLA + phone support"
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+                <Link to="/contact" className="block">
+                  <Button className="w-full rounded-full" variant="outline">
+                    Talk to sales
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials */}
-// Testimonials section - fixed version
       <section className="py-16 bg-muted/30">
-        <div className="mx-auto max-w-6xl px-4">
+        <div className="mx-auto max-w-7xl px-4">
           <h2 className="text-3xl font-bold text-center mb-12">{t("landing_testimonials_title")}</h2>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -691,28 +949,50 @@ export default function LandingPage() {
 
       {/* CTA Section */}
       <section className="py-16">
-        <div className="mx-auto max-w-3xl px-4">
-          <Card className="bg-gradient-to-br from-primary to-secondary border-0 text-white">
-            <CardContent className="p-12 text-center">
-              <h2 className="text-3xl font-bold mb-4">{t("landing_cta_title")}</h2>
-              <p className="text-white/80 mb-8 text-lg">
-                {t("landing_cta_subtitle")}
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" variant="secondary" className="rounded-full text-lg px-8">
-                  <Download className="h-5 w-5 ml-2" />
-                  {t("landing_cta_download_brochure")}
-                </Button>
-                <Link to="/signup">
-                  <Button size="lg" className="rounded-full text-lg px-8 bg-white text-primary hover:bg-white/90">
-                    {t("landing_cta_start_trial")}
-                    <ArrowLeft className="h-5 w-5 mr-2" />
+        <div className="mx-auto max-w-6xl px-4">
+          <Card className="relative overflow-hidden border border-primary/20 bg-primary text-white shadow-[0_30px_90px_-40px_rgba(0,0,0,0.6)]">
+            <CardContent className="relative p-10 sm:p-12 lg:p-14">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+                <div className="max-w-2xl space-y-4">
+                  <Badge className="bg-white/15 text-white border-white/30 shadow-sm px-3 py-1.5 w-fit">
+                    {t("landing_cta_no_commitment")}
+                  </Badge>
+                  <h2 className="text-3xl sm:text-4xl font-extrabold leading-tight">
+                    {t("landing_cta_title")}
+                  </h2>
+                  <p className="text-white/85 text-lg">
+                    {t("landing_cta_subtitle")}
+                  </p>
+                  <div className="flex flex-wrap gap-3 text-sm text-white/80">
+                    <span className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1">
+                      <Users className="h-4 w-4" /> 1,200+ clinics onboarded
+                    </span>
+                    <span className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1">
+                      <Star className="h-4 w-4" /> 4.9/5 average rating
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                  <Button
+                    size="lg"
+                    variant="secondary"
+                    className="w-full sm:w-auto rounded-full text-base px-6 sm:px-8 bg-white/12 border border-white/30 text-white hover:bg-white/18"
+                  >
+                    <Download className="h-5 w-5 mr-2" />
+                    {t("landing_cta_download_brochure")}
                   </Button>
-                </Link>
+                  <Link to="/signup" className="w-full sm:w-auto">
+                    <Button
+                      size="lg"
+                      className="w-full sm:w-auto rounded-full text-base px-6 sm:px-8 bg-white text-primary hover:bg-white/90 shadow-[0_16px_50px_-20px_rgba(0,0,0,0.45)]"
+                    >
+                      {t("landing_cta_start_trial")}
+                      <ArrowLeft className="h-5 w-5 mr-2" />
+                    </Button>
+                  </Link>
+                </div>
               </div>
-              <p className="text-white/60 text-sm mt-6">
-                {t("landing_cta_no_commitment")}
-              </p>
             </CardContent>
           </Card>
         </div>
@@ -720,7 +1000,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-8">
-        <div className="mx-auto max-w-6xl px-4">
+        <div className="mx-auto max-w-7xl px-4">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">

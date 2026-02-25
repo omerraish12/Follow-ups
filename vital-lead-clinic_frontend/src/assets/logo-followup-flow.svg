@@ -1,0 +1,20 @@
+<svg width="360" height="360" viewBox="0 0 360 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="arrowGrad" x1="96" y1="266" x2="262" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00C9A7"/>
+      <stop offset="1" stop-color="#1D8CF8"/>
+    </linearGradient>
+    <linearGradient id="chatGrad" x1="98" y1="244" x2="194" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B6CF5"/>
+      <stop offset="1" stop-color="#11A7D8"/>
+    </linearGradient>
+  </defs>
+  <path d="M134 90h96c9 0 16 7 16 16v52l-33 33H160l-26 26v-26h-16c-9 0-16-7-16-16v-69c0-9 7-16 16-16Z"
+        fill="none" stroke="url(#chatGrad)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M174 133h-54M174 160h-54M160 187h-40" stroke="#0B6CF5" stroke-width="12" stroke-linecap="round"/>
+  <path d="M150 230c40-27 72-64 100-116l26 64-8-4c-14 21-30 39-48 55l29 13-86 20 19-32-4-0.5c-9.7-1.5-18.8-4.1-27.5-7.9Z"
+        fill="url(#arrowGrad)"/>
+  <path d="M246 113 292 94l-8 86-26-58-12-9Z" fill="#0C8CEB"/>
+  <text x="82" y="303" fill="#0C1C3B" font-family="Inter, Arial, sans-serif" font-size="52" font-weight="800">FollowUp</text>
+  <text x="132" y="338" fill="#00C9A7" font-family="Inter, Arial, sans-serif" font-size="44" font-weight="700">Flow</text>
+</svg>
