@@ -81,10 +81,14 @@ const pool = new Pool({
     ssl: { rejectUnauthorized: false },
     max: parseInt(process.env.DB_POOL_MAX, 10) || 20,
     idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT, 10) || 30000,
-    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 2000
+    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 10000
 });
 
 console.log('Database client initialized using Supabase connection string');
+
+pool.on('error', (err) => {
+    console.error('Unexpected database pool error:', err);
+});
 
 // Test connection on startup
 pool.connect((err, client, release) => {
@@ -96,7 +100,38 @@ pool.connect((err, client, release) => {
     }
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isTransientConnectionError = (err) => {
+    if (!err) return false;
+    const message = (err.message || '').toLowerCase();
+    return (
+        err.code === 'ECONNRESET' ||
+        err.code === 'ETIMEDOUT' ||
+        message.includes('connection terminated unexpectedly') ||
+        message.includes('connection terminated due to connection timeout') ||
+        message.includes('terminating connection due to administrator command')
+    );
+};
+
+const queryWithRetry = async (text, params) => {
+    const maxAttempts = parseInt(process.env.DB_QUERY_RETRIES, 10) || 2;
+    let attempt = 0;
+    while (true) {
+        attempt += 1;
+        try {
+            return await pool.query(text, params);
+        } catch (err) {
+            if (!isTransientConnectionError(err) || attempt >= maxAttempts) {
+                throw err;
+            }
+            const backoffMs = 250 * attempt;
+            await sleep(backoffMs);
+        }
+    }
+};
+
 module.exports = {
-    query: (text, params) => pool.query(text, params),
+    query: queryWithRetry,
     pool
 };
