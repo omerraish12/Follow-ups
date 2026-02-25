@@ -7,7 +7,7 @@ module.exports = (req, res) => {
     // Allow list - add any frontend origins you need here or use env var
     const allowedOrigins = [
         process.env.FRONTEND_URL,
-        'https://clinic-mwhu.vercel.app'
+        'https://follow-ups-vx12.vercel.app/'
     ].filter(Boolean);
 
     const origin = req.headers.origin;
