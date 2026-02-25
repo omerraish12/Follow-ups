@@ -308,6 +308,7 @@
     "for_address": "לכתובת:",
     "passwords_dont_match": "הסיסמאות אינן תואמות",
     "password_requirements": "הסיסמה חייבת להכיל לפחות 8 תווים, אות אחת ומספר אחד",
+    "password_min_length": "הסיסמה חייבת להכיל לפחות 6 תווים",
     "password_strength": "חוזק הסיסמה:",
     "weak": "חלשה",
     "medium": "בינונית",

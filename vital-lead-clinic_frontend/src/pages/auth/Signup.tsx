@@ -45,6 +45,11 @@ export default function Signup() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (formData.password.length < 6) {
+            alert(t('password_min_length'));
+            return;
+        }
+
         if (formData.password !== formData.confirmPassword) {
             alert(t('passwords_dont_match'));
             return;

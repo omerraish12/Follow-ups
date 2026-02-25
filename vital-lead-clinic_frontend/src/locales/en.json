@@ -308,6 +308,7 @@
     "for_address": "For address:",
     "passwords_dont_match": "Passwords don't match",
     "password_requirements": "Password must contain at least 8 characters, one letter and one number",
+    "password_min_length": "Password must be at least 6 characters",
     "password_strength": "Password strength:",
     "weak": "Weak",
     "medium": "Medium",
