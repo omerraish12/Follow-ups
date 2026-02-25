@@ -43,12 +43,12 @@ export const AuthProvider = ({ children }) => {
             const data = await authService.login(credentials);
             setUser(data.user);
             toast({
-                title: "התחברת בהצלחה",
-                description: `ברוך הבא, ${data.user.name}!`,
+                title: "Signed in",
+                description: `Welcome back, ${data.user.name}!`,
             });
             return data;
         } catch (error) {
-            setError(error.response?.data?.message || 'התחברות נכשלה');
+            setError(error.response?.data?.message || 'Sign in failed');
             throw error;
         } finally {
             setIsLoading(false);
@@ -62,15 +62,27 @@ export const AuthProvider = ({ children }) => {
             const data = await authService.signup(userData);
             setUser(data.user);
             toast({
-                title: "נרשמת בהצלחה!",
-                description: "חשבונך נוצר. כעת תוכל להתחבר.",
+                title: "Account created",
+                description: "Your account is ready. You can sign in now.",
             });
             return data;
         } catch (error) {
-            setError(error.response?.data?.message || 'הרשמה נכשלה');
+            setError(error.response?.data?.message || 'Sign up failed');
             throw error;
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const refreshUser = async () => {
+        try {
+            const data = await authService.getCurrentUser();
+            setUser(data);
+            localStorage.setItem('user', JSON.stringify(data));
+            return data;
+        } catch (error) {
+            console.error('Error refreshing user:', error);
+            return null;
         }
     };
 
@@ -78,8 +90,8 @@ export const AuthProvider = ({ children }) => {
         authService.logout();
         setUser(null);
         toast({
-            title: "התנתקת",
-            description: "להתראות, נתראה בקרוב!",
+            title: "Signed out",
+            description: "You have been logged out.",
         });
     };
 
@@ -95,6 +107,7 @@ export const AuthProvider = ({ children }) => {
             login,
             signup,
             logout,
+            refreshUser,
             clearError
         }}>
             {children}

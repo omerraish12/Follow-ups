@@ -36,6 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { settingsService } from "@/services/settingsService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,10 +80,11 @@ interface Integration {
 }
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const { t, language } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -178,10 +180,56 @@ export default function SettingsPage() {
   const loadSettings = async () => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const data = await settingsService.getSettings();
 
-      // Data would be loaded from API here
+      if (data?.clinic) {
+        setClinicSettings({
+          id: data.clinic.id,
+          name: data.clinic.name,
+          email: data.clinic.email,
+          phone: data.clinic.phone,
+          address: data.clinic.address,
+          logo: data.clinic.logo || undefined,
+          timezone: data.clinic.timezone,
+          language: data.clinic.language,
+          currency: data.clinic.currency,
+        });
+      }
+
+      if (data?.profile) {
+        setProfile({
+          id: data.profile.id,
+          name: data.profile.name,
+          email: data.profile.email,
+          phone: data.profile.phone || '',
+          role: data.profile.role,
+          createdAt: data.profile.createdAt,
+        });
+      }
+
+      if (data?.notificationSettings) {
+        setNotificationSettings(data.notificationSettings);
+      }
+
+      if (data?.backupSettings) {
+        setBackupSettings({
+          autoBackup: data.backupSettings.autoBackup,
+          backupFrequency: data.backupSettings.backupFrequency,
+          retentionDays: data.backupSettings.retentionDays,
+          lastBackup: data.backupSettings.lastBackup || '',
+        });
+      }
+
+      if (data?.integrations) {
+        setIntegrations((prev) =>
+          prev.map((integration) => ({
+            ...integration,
+            status: (data.integrations[integration.type]?.status as Integration["status"]) || integration.status,
+          }))
+        );
+      }
+
+      setHasLoadedSettings(true);
     } catch (error) {
       console.error('Error loading settings:', error);
       toast({
@@ -194,11 +242,37 @@ export default function SettingsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!hasLoadedSettings) return;
+    const timeout = setTimeout(() => {
+      settingsService.updateBackupSettings(backupSettings).catch(() => {
+        toast({
+          title: t("error"),
+          description: t("settings_save_failed"),
+          variant: "destructive"
+        });
+      });
+    }, 800);
+    return () => clearTimeout(timeout);
+  }, [backupSettings, hasLoadedSettings, t]);
+
   const handleSaveClinic = async () => {
     setIsSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const updated = await settingsService.updateClinic({
+        name: clinicSettings.name,
+        email: clinicSettings.email,
+        phone: clinicSettings.phone,
+        address: clinicSettings.address,
+        timezone: clinicSettings.timezone,
+        language: clinicSettings.language,
+        currency: clinicSettings.currency,
+        logo: clinicSettings.logo,
+      });
+
+      if (updated) {
+        setClinicSettings((prev) => ({ ...prev, ...updated }));
+      }
 
       toast({
         title: t("settings_saved"),
@@ -218,8 +292,21 @@ export default function SettingsPage() {
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const updated = await settingsService.updateProfile({
+        name: profile.name,
+        email: profile.email,
+        phone: profile.phone,
+      });
+
+      if (updated) {
+        setProfile((prev) => ({
+          ...prev,
+          name: updated.name ?? prev.name,
+          email: updated.email ?? prev.email,
+          phone: updated.phone ?? prev.phone,
+        }));
+        await refreshUser?.();
+      }
 
       toast({
         title: t("profile_updated"),
@@ -257,8 +344,7 @@ export default function SettingsPage() {
 
     setIsSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await settingsService.changePassword(passwordData.current, passwordData.new);
 
       setPasswordData({ current: '', new: '', confirm: '' });
 
@@ -280,8 +366,7 @@ export default function SettingsPage() {
   const handleSaveNotifications = async () => {
     setIsSaving(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await settingsService.updateNotifications(notificationSettings);
 
       toast({
         title: t("settings_saved"),
@@ -300,8 +385,13 @@ export default function SettingsPage() {
 
   const handleBackup = async () => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const updated = await settingsService.runBackup();
+      if (updated) {
+        setBackupSettings((prev) => ({
+          ...prev,
+          lastBackup: updated.lastBackup || prev.lastBackup,
+        }));
+      }
 
       toast({
         title: t("backup_completed"),
@@ -318,8 +408,7 @@ export default function SettingsPage() {
 
   const handleExportData = async () => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await settingsService.exportData();
 
       toast({
         title: t("export_completed"),
@@ -336,8 +425,7 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await settingsService.deleteAccount();
 
       toast({
         title: t("account_deleted"),
@@ -345,6 +433,7 @@ export default function SettingsPage() {
       });
 
       // Redirect to login
+      logout?.();
       window.location.href = '/login';
     } catch (error) {
       toast({
@@ -357,14 +446,18 @@ export default function SettingsPage() {
 
   const toggleIntegration = async (id: string) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const integration = integrations.find((item) => item.id === id);
+      if (!integration) return;
 
-      setIntegrations(prev => prev.map(int =>
-        int.id === id
-          ? { ...int, status: int.status === 'connected' ? 'disconnected' : 'connected' }
-          : int
-      ));
+      const nextStatus = integration.status === 'connected' ? 'disconnected' : 'connected';
+      await settingsService.updateIntegration(integration.type, nextStatus);
+
+      setIntegrations(prev =>
+        prev.map(int =>
+          int.id === id
+            ? { ...int, status: nextStatus }
+            : int
+        ));
 
       toast({
         title: t("status_updated"),
@@ -392,8 +485,10 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5 lg:space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="text-2xl font-extrabold text-foreground">{t("settings")}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t("settings_description")}</p>
+        <h1 className="text-2xl font-semibold text-foreground font-display">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Keep your clinic profile, preferences, and integrations up to date.
+        </p>
       </div>
 
       <Tabs defaultValue="general" className="space-y-4">
@@ -627,7 +722,13 @@ export default function SettingsPage() {
                   <Label htmlFor="profile-role">{t("role")}</Label>
                   <Input
                     id="profile-role"
-                    value={profile.role === 'admin' ? t("admin_role") : t("user")}
+                    value={
+                      profile.role?.toLowerCase() === 'admin'
+                        ? t("admin_role")
+                        : profile.role?.toLowerCase() === 'manager'
+                          ? t("manager_role")
+                          : t("user")
+                    }
                     disabled
                     className="rounded-xl bg-muted"
                   />

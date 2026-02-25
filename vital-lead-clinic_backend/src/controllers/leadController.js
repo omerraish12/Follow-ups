@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Activity = require('../models/Activity');
+const Notification = require('../models/Notification');
 
 // @desc    Get all leads for clinic
 // @route   GET /api/leads
@@ -84,6 +85,19 @@ const createLead = async (req, res) => {
             leadId: lead.id
         });
 
+        // Create notification
+        await Notification.create({
+            type: 'lead',
+            title: 'New lead added',
+            message: `Lead ${lead.name} was created.`,
+            priority: lead.value && Number(lead.value) >= 1000 ? 'high' : 'medium',
+            actionLabel: 'View lead',
+            actionLink: `/leads/${lead.id}`,
+            metadata: { leadId: lead.id, leadName: lead.name, value: lead.value },
+            userId: lead.assigned_to_id || null,
+            clinicId: req.user.clinic_id
+        });
+
         res.status(201).json(lead);
     } catch (error) {
         console.error(error);
@@ -123,6 +137,40 @@ const updateLead = async (req, res) => {
                 userId: req.user.id,
                 leadId: lead.id
             });
+
+            let notifType = 'system';
+            let notifPriority = 'medium';
+            let notifTitle = 'Lead status updated';
+            let notifMessage = `Lead ${lead.name} moved to ${status}.`;
+
+            if (status === 'HOT') {
+                notifType = 'alert';
+                notifPriority = 'high';
+                notifTitle = 'Lead is hot';
+                notifMessage = `Lead ${lead.name} is now HOT.`;
+            } else if (status === 'CLOSED') {
+                notifType = 'success';
+                notifPriority = 'high';
+                notifTitle = 'Lead closed';
+                notifMessage = `Lead ${lead.name} was closed.`;
+            } else if (status === 'LOST') {
+                notifType = 'alert';
+                notifPriority = 'medium';
+                notifTitle = 'Lead lost';
+                notifMessage = `Lead ${lead.name} was marked as lost.`;
+            }
+
+            await Notification.create({
+                type: notifType,
+                title: notifTitle,
+                message: notifMessage,
+                priority: notifPriority,
+                actionLabel: 'View lead',
+                actionLink: `/leads/${lead.id}`,
+                metadata: { leadId: lead.id, leadName: lead.name, status },
+                userId: lead.assigned_to_id || null,
+                clinicId: req.user.clinic_id
+            });
         } else {
             await Activity.create({
                 type: 'LEAD_UPDATED',
@@ -130,6 +178,23 @@ const updateLead = async (req, res) => {
                 userId: req.user.id,
                 leadId: lead.id
             });
+        }
+
+        // Notify assignee if changed
+        if (assignedToId !== undefined && String(assignedToId) !== String(existingLead.assigned_to_id || '')) {
+            if (assignedToId) {
+                await Notification.create({
+                    type: 'lead',
+                    title: 'Lead assigned',
+                    message: `Lead ${lead.name} was assigned to you.`,
+                    priority: 'medium',
+                    actionLabel: 'View lead',
+                    actionLink: `/leads/${lead.id}`,
+                    metadata: { leadId: lead.id, leadName: lead.name },
+                    userId: assignedToId,
+                    clinicId: req.user.clinic_id
+                });
+            }
         }
 
         res.json(lead);
@@ -187,6 +252,21 @@ const addMessage = async (req, res) => {
             userId: req.user.id,
             leadId: lead.id
         });
+
+        if (type === 'RECEIVED') {
+            const preview = content.length > 80 ? `${content.substring(0, 80)}...` : content;
+            await Notification.create({
+                type: 'lead',
+                title: 'New message received',
+                message: `Message from ${lead.name}: ${preview}`,
+                priority: 'high',
+                actionLabel: 'Reply',
+                actionLink: `/leads/${lead.id}`,
+                metadata: { leadId: lead.id, leadName: lead.name },
+                userId: lead.assigned_to_id || null,
+                clinicId: req.user.clinic_id
+            });
+        }
 
         res.status(201).json(message);
     } catch (error) {

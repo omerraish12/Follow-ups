@@ -37,10 +37,10 @@ export default function EditLeadDialog({ lead, onSuccess }: EditLeadDialogProps)
 
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.phone.trim()) {
-      toast({ 
-        title: t("error") || "שגיאה", 
-        description: t("name_and_phone_required") || "שם וטלפון הם שדות חובה", 
-        variant: "destructive" 
+      toast({
+        title: t("error") || "Error",
+        description: t("name_and_phone_required") || "Name and phone are required",
+        variant: "destructive"
       });
       return;
     }
@@ -125,7 +125,7 @@ export default function EditLeadDialog({ lead, onSuccess }: EditLeadDialogProps)
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">{t("value")} (₪)</Label>
+            <Label className="text-xs font-semibold">{t("value")} (ILS)</Label>
             <Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} className="rounded-xl" dir="ltr" min={0} disabled={isSubmitting} />
           </div>
           <div className="space-y-1.5">

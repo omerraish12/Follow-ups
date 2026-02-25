@@ -28,10 +28,10 @@ export const useLeads = (initialFilters: Filters = {}) => {
       const data = await leadService.getLeads(filters);
       setLeads(data);
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה בטעינת לידים';
+      const msg = err.response?.data?.message || 'Unable to load leads.';
       setError(msg);
       toast({
-        title: "שגיאה",
+        title: "Error",
         description: msg,
         variant: "destructive",
       });
@@ -49,8 +49,8 @@ export const useLeads = (initialFilters: Filters = {}) => {
       return await leadService.getLead(id);
     } catch (err: ErrorResponse) {
       toast({
-        title: "שגיאה",
-        description: 'שגיאה בטעינת ליד',
+        title: "Error",
+        description: "Unable to load lead details.",
         variant: "destructive",
       });
       throw err;
@@ -62,13 +62,13 @@ export const useLeads = (initialFilters: Filters = {}) => {
       const newLead = await leadService.createLead(leadData as any);
       setLeads(prev => [newLead, ...prev]);
       toast({
-        title: "ליד נוסף",
-        description: "הליד נוסף בהצלחה",
+        title: "Lead added",
+        description: "Lead was created successfully.",
       });
       return newLead;
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה בהוספת ליד';
-      toast({ title: "שגיאה", description: msg, variant: "destructive" });
+      const msg = err.response?.data?.message || 'Unable to add lead.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
   };
@@ -78,13 +78,13 @@ export const useLeads = (initialFilters: Filters = {}) => {
       const updated = await leadService.updateLead(id, leadData as any);
       setLeads(prev => prev.map(l => l.id === id ? updated : l));
       toast({
-        title: "ליד עודכן",
-        description: "הליד עודכן בהצלחה",
+        title: "Lead updated",
+        description: "Lead was updated successfully.",
       });
       return updated;
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה בעדכון ליד';
-      toast({ title: "שגיאה", description: msg, variant: "destructive" });
+      const msg = err.response?.data?.message || 'Unable to update lead.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
   };
@@ -94,12 +94,12 @@ export const useLeads = (initialFilters: Filters = {}) => {
       await leadService.deleteLead(id);
       setLeads(prev => prev.filter(l => l.id !== id));
       toast({
-        title: "ליד נמחק",
-        description: "הליד נמחק בהצלחה",
+        title: "Lead deleted",
+        description: "Lead was removed successfully.",
       });
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה במחיקת ליד';
-      toast({ title: "שגיאה", description: msg, variant: "destructive" });
+      const msg = err.response?.data?.message || 'Unable to delete lead.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
   };
@@ -114,8 +114,8 @@ export const useLeads = (initialFilters: Filters = {}) => {
       } : l));
       return message;
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה בשליחת הודעה';
-      toast({ title: "שגיאה", description: msg, variant: "destructive" });
+      const msg = err.response?.data?.message || 'Unable to send message.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
   };
@@ -125,13 +125,13 @@ export const useLeads = (initialFilters: Filters = {}) => {
       const result = await leadService.bulkUpdate(leadIds, data);
       await fetchLeads();
       toast({
-        title: "עודכן",
-        description: `${result.count} לידים עודכנו בהצלחה`,
+        title: "Updated",
+        description: `${result.count} leads updated successfully.`,
       });
       return result;
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה בעדכון קבוצתי';
-      toast({ title: "שגיאה", description: msg, variant: "destructive" });
+      const msg = err.response?.data?.message || 'Unable to update selected leads.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
   };
@@ -140,8 +140,8 @@ export const useLeads = (initialFilters: Filters = {}) => {
     try {
       return await leadService.getFollowupNeeded();
     } catch (err: ErrorResponse) {
-      const msg = err.response?.data?.message || 'שגיאה בטעינת לידים למעקב';
-      toast({ title: "שגיאה", description: msg, variant: "destructive" });
+      const msg = err.response?.data?.message || 'Unable to load follow-up leads.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
   };

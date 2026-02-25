@@ -64,7 +64,7 @@ export const useAnalytics = (initialPeriod: string = 'month') => {
             setWeeklyActivity(weeklyData);
             setTeamPerformance(teamData);
         } catch (error: ErrorResponse) {
-            setError(error.response?.data?.message || 'שגיאה בטעינת נתונים');
+            setError(error.response?.data?.message || 'Unable to load analytics.');
             console.error('Error fetching analytics:', error);
         } finally {
             setIsLoading(false);

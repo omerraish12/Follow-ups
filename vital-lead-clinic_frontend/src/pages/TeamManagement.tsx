@@ -50,6 +50,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { teamService } from "@/services/teamService";
+import type { TeamMemberApi, TeamRole, TeamStatus } from "@/types/team";
+import { formatDistanceToNow } from "date-fns";
+import { he, enUS } from "date-fns/locale";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -66,11 +70,11 @@ interface TeamMember {
     name: string;
     email: string;
     phone: string;
-    role: 'admin' | 'manager' | 'staff';
+    role: TeamRole;
     clinicId: string;
     clinicName?: string;
     avatar?: string;
-    status: 'active' | 'inactive' | 'pending';
+    status: TeamStatus;
     lastActive: string;
     permissions: string[];
     performance: {
@@ -106,8 +110,98 @@ export default function TeamManagement() {
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [clinics, setClinics] = useState<Clinic[]>([]);
+
+    const [newMember, setNewMember] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        role: 'staff' as TeamRole,
+        clinicId: '',
+        permissions: {
+            leads: true,
+            analytics: false,
+            team: false,
+            settings: false
+        }
+    });
+
+    const [editMember, setEditMember] = useState({
+        id: '',
+        name: '',
+        email: '',
+        phone: '',
+        role: 'staff' as TeamRole,
+        status: 'active' as TeamStatus
+    });
+
+    const normalizeRole = (role?: string | null): TeamRole => {
+        const upper = (role || '').toUpperCase();
+        if (upper === 'ADMIN') return 'admin';
+        if (upper === 'MANAGER') return 'manager';
+        return 'staff';
+    };
+
+    const normalizeStatus = (status?: string | null): TeamStatus => {
+        const lower = (status || '').toLowerCase();
+        if (lower === 'inactive') return 'inactive';
+        if (lower === 'pending') return 'pending';
+        return 'active';
+    };
+
+    const roleToPermissions = (role: TeamRole): string[] => {
+        if (role === 'admin') return ['all'];
+        if (role === 'manager') return ['leads', 'analytics', 'team'];
+        return ['leads'];
+    };
+
+    const toNumber = (value: unknown) => {
+        if (typeof value === 'number') return value;
+        if (typeof value === 'string') return parseFloat(value) || 0;
+        return 0;
+    };
+
+    const formatRelativeTime = (value?: string | null) => {
+        if (!value) return '-';
+        try {
+            return formatDistanceToNow(new Date(value), {
+                addSuffix: true,
+                locale: language === 'he' ? he : enUS
+            });
+        } catch {
+            return '-';
+        }
+    };
+
+    const mapMember = (member: TeamMemberApi): TeamMember => {
+        const leadsAssigned = toNumber(member.leads_assigned);
+        const conversions = toNumber(member.conversions);
+        const revenue = toNumber(member.revenue);
+        const successRate = leadsAssigned > 0 ? conversions / leadsAssigned : 0;
+
+        return {
+            id: String(member.id),
+            name: member.name,
+            email: member.email,
+            phone: member.phone || '',
+            role: normalizeRole(member.role),
+            clinicId: String(member.clinic_id || user?.clinicId || ''),
+            clinicName: member.clinic_name || user?.clinicName,
+            status: normalizeStatus(member.status),
+            lastActive: member.last_active || member.created_at || new Date().toISOString(),
+            permissions: roleToPermissions(normalizeRole(member.role)),
+            performance: {
+                leadsAssigned,
+                conversions,
+                responseTime: formatRelativeTime(member.last_active || member.created_at || undefined),
+                rating: leadsAssigned > 0 ? Math.min(5, Math.round(successRate * 5 * 10) / 10) : 0,
+                revenue
+            },
+            createdAt: member.created_at ? new Date(member.created_at).toISOString().split('T')[0] : ''
+        };
+    };
 
     // Load data
     useEffect(() => {
@@ -115,95 +209,20 @@ export default function TeamManagement() {
         loadClinics();
     }, []);
 
+    useEffect(() => {
+        if (!newMember.clinicId) {
+            const defaultClinicId = user?.clinicId?.toString() || clinics[0]?.id?.toString();
+            if (defaultClinicId) {
+                setNewMember((prev) => ({ ...prev, clinicId: defaultClinicId }));
+            }
+        }
+    }, [clinics, newMember.clinicId, user]);
+
     const loadTeamMembers = async () => {
         setIsLoading(true);
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Mock data - replace with actual API call
-            setTeamMembers([
-                {
-                    id: '1',
-                    name: 'דנה כהן',
-                    email: 'dana@clinic.co.il',
-                    phone: '050-1234567',
-                    role: 'admin',
-                    clinicId: '1',
-                    clinicName: t('clinic_herzliya') || 'מרפאת שיניים הרצליה',
-                    status: 'active',
-                    lastActive: new Date().toISOString(),
-                    permissions: ['all'],
-                    performance: {
-                        leadsAssigned: 145,
-                        conversions: 89,
-                        responseTime: t('minutes_ago').replace('%s', '15'),
-                        rating: 4.8,
-                        revenue: 178500
-                    },
-                    createdAt: '2024-01-15'
-                },
-                {
-                    id: '2',
-                    name: 'יוסי לוי',
-                    email: 'yossi@clinic.co.il',
-                    phone: '052-7654321',
-                    role: 'manager',
-                    clinicId: '2',
-                    clinicName: t('clinic_tel_aviv') || 'מרפאת שיניים תל אביב',
-                    status: 'active',
-                    lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-                    permissions: ['leads', 'analytics', 'team'],
-                    performance: {
-                        leadsAssigned: 98,
-                        conversions: 62,
-                        responseTime: t('minutes_ago').replace('%s', '25'),
-                        rating: 4.5,
-                        revenue: 124000
-                    },
-                    createdAt: '2024-02-20'
-                },
-                {
-                    id: '3',
-                    name: 'מיכל גולן',
-                    email: 'michal@clinic.co.il',
-                    phone: '054-9876543',
-                    role: 'staff',
-                    clinicId: '1',
-                    clinicName: t('clinic_herzliya') || 'מרפאת שיניים הרצליה',
-                    status: 'active',
-                    lastActive: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-                    permissions: ['leads'],
-                    performance: {
-                        leadsAssigned: 76,
-                        conversions: 41,
-                        responseTime: t('minutes_ago').replace('%s', '32'),
-                        rating: 4.2,
-                        revenue: 61500
-                    },
-                    createdAt: '2024-03-10'
-                },
-                {
-                    id: '4',
-                    name: 'אבי אברהם',
-                    email: 'avi@clinic.co.il',
-                    phone: '053-4567890',
-                    role: 'staff',
-                    clinicId: '2',
-                    clinicName: t('clinic_tel_aviv') || 'מרפאת שיניים תל אביב',
-                    status: 'inactive',
-                    lastActive: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-                    permissions: ['leads'],
-                    performance: {
-                        leadsAssigned: 34,
-                        conversions: 18,
-                        responseTime: t('minutes_ago').replace('%s', '45'),
-                        rating: 3.9,
-                        revenue: 27000
-                    },
-                    createdAt: '2024-04-05'
-                }
-            ]);
+            const data = await teamService.getMembers();
+            setTeamMembers(data.map(mapMember));
         } catch (error) {
             console.error('Error loading team members:', error);
             toast({
@@ -218,51 +237,56 @@ export default function TeamManagement() {
 
     const loadClinics = async () => {
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            setClinics([
-                { id: '1', name: t('clinic_herzliya') || 'מרפאת שיניים הרצליה', email: 'herzliya@clinic.co.il', phone: '09-1234567', address: t('herzliya_address') || 'הרצל 12, הרצליה', members: 8, leads: 245, conversion: '67%' },
-                { id: '2', name: t('clinic_tel_aviv') || 'מרפאת שיניים תל אביב', email: 'tlv@clinic.co.il', phone: '03-1234567', address: t('tel_aviv_address') || 'דיזנגוף 100, תל אביב', members: 12, leads: 389, conversion: '72%' },
-                { id: '3', name: t('clinic_haifa') || 'מרפאת שיניים חיפה', email: 'haifa@clinic.co.il', phone: '04-1234567', address: t('haifa_address') || 'הנמל 30, חיפה', members: 6, leads: 156, conversion: '58%' },
-            ]);
+            const data = await teamService.getClinics();
+            setClinics(
+                data.map((clinic) => ({
+                    id: String(clinic.id),
+                    name: clinic.name,
+                    email: clinic.email,
+                    phone: clinic.phone,
+                    address: clinic.address,
+                    members: Number(clinic.members) || 0,
+                    leads: Number(clinic.leads) || 0,
+                    conversion: clinic.conversion
+                }))
+            );
         } catch (error) {
             console.error('Error loading clinics:', error);
         }
     };
 
-    const handleAddMember = async (memberData: Partial<TeamMember>) => {
+    const handleAddMember = async () => {
+        if (!newMember.name || !newMember.email) {
+            toast({
+                title: t("error"),
+                description: t("add_member_failed") || "Missing required fields",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsSaving(true);
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await teamService.createMember({
+                name: newMember.name,
+                email: newMember.email,
+                phone: newMember.phone,
+                role: newMember.role
+            });
 
-            const newMember: TeamMember = {
-                id: Date.now().toString(),
-                name: memberData.name || '',
-                email: memberData.email || '',
-                phone: memberData.phone || '',
-                role: memberData.role || 'staff',
-                clinicId: memberData.clinicId || '1',
-                clinicName: clinics.find(c => c.id === memberData.clinicId)?.name,
-                status: 'pending',
-                lastActive: new Date().toISOString(),
-                permissions: memberData.permissions || ['leads'],
-                performance: {
-                    leadsAssigned: 0,
-                    conversions: 0,
-                    responseTime: '-',
-                    rating: 0,
-                    revenue: 0
-                },
-                createdAt: new Date().toISOString().split('T')[0]
-            };
-
-            setTeamMembers(prev => [newMember, ...prev]);
+            await loadTeamMembers();
             setShowAddDialog(false);
+            setNewMember((prev) => ({
+                ...prev,
+                name: '',
+                email: '',
+                phone: '',
+                role: 'staff'
+            }));
 
             toast({
                 title: t("member_added") || "חבר צוות נוסף",
-                description: t("invitation_sent").replace('%s', memberData.email || ''),
+                description: t("invitation_sent").replace('%s', newMember.email),
             });
         } catch (error) {
             toast({
@@ -270,18 +294,25 @@ export default function TeamManagement() {
                 description: t("add_member_failed") || "הוספת חבר צוות נכשלה",
                 variant: "destructive"
             });
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    const handleUpdateMember = async (id: string, data: Partial<TeamMember>) => {
+    const handleUpdateMember = async () => {
+        if (!editMember.id) return;
+
+        setIsSaving(true);
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await teamService.updateMember(editMember.id, {
+                name: editMember.name,
+                email: editMember.email,
+                phone: editMember.phone,
+                role: editMember.role,
+                status: editMember.status
+            });
 
-            setTeamMembers(prev => prev.map(m =>
-                m.id === id ? { ...m, ...data } : m
-            ));
-
+            await loadTeamMembers();
             setShowEditDialog(false);
             setSelectedMember(null);
 
@@ -295,6 +326,8 @@ export default function TeamManagement() {
                 description: t("update_failed") || "עדכון פרטים נכשל",
                 variant: "destructive"
             });
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -302,10 +335,9 @@ export default function TeamManagement() {
         if (!memberToDelete) return;
 
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            setTeamMembers(prev => prev.filter(m => m.id !== memberToDelete));
+            setIsSaving(true);
+            await teamService.deleteMember(memberToDelete);
+            await loadTeamMembers();
             setShowDeleteDialog(false);
             setMemberToDelete(null);
 
@@ -319,7 +351,38 @@ export default function TeamManagement() {
                 description: t("remove_failed") || "הסרת חבר צוות נכשלה",
                 variant: "destructive"
             });
+        } finally {
+            setIsSaving(false);
         }
+    };
+
+    const handleResetPassword = async (member: TeamMember) => {
+        try {
+            await teamService.resetPassword(member.id);
+            toast({
+                title: t("settings_saved") || "Reset sent",
+                description: t("invitation_sent").replace('%s', member.email),
+            });
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("update_failed") || "Failed to send reset email",
+                variant: "destructive"
+            });
+        }
+    };
+
+    const openEditDialog = (member: TeamMember) => {
+        setSelectedMember(member);
+        setEditMember({
+            id: member.id,
+            name: member.name,
+            email: member.email,
+            phone: member.phone,
+            role: member.role,
+            status: member.status
+        });
+        setShowEditDialog(true);
     };
 
     const filteredMembers = teamMembers.filter(member => {
@@ -357,6 +420,7 @@ export default function TeamManagement() {
         pending: teamMembers.filter(m => m.status === 'pending').length,
         totalRevenue: teamMembers.reduce((sum, m) => sum + m.performance.revenue, 0)
     };
+    const activePercent = stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0;
 
     if (isLoading && !teamMembers.length) {
         return (
@@ -385,9 +449,9 @@ export default function TeamManagement() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-extrabold text-foreground">{t("team_management")}</h1>
+                    <h1 className="text-2xl font-semibold text-foreground font-display">Team & Roles</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        {t("team_management_description")}
+                        Manage access, performance, and accountability across your clinic.
                     </p>
                 </div>
                 <Button className="rounded-xl" onClick={() => setShowAddDialog(true)}>
@@ -423,7 +487,7 @@ export default function TeamManagement() {
                         <div className="text-2xl font-bold text-foreground">{stats.active}</div>
                         <div className="flex items-center gap-1 mt-1 text-xs">
                             <Activity className="h-3 w-3 text-success" />
-                            <span>{Math.round((stats.active / stats.total) * 100)}% {t("of_team")}</span>
+                            <span>{activePercent}% {t("of_team")}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -554,14 +618,19 @@ export default function TeamManagement() {
                                                     className="cursor-pointer"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        setSelectedMember(member);
-                                                        setShowEditDialog(true);
+                                                        openEditDialog(member);
                                                     }}
                                                 >
                                                     <Edit className="h-4 w-4 ml-2" />
                                                     {t("edit_details")}
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem className="cursor-pointer">
+                                                <DropdownMenuItem
+                                                    className="cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleResetPassword(member);
+                                                    }}
+                                                >
                                                     <Key className="h-4 w-4 ml-2" />
                                                     {t("reset_password")}
                                                 </DropdownMenuItem>
@@ -703,7 +772,9 @@ export default function TeamManagement() {
                                                     <td className="py-3">{member.performance.conversions}</td>
                                                     <td className="py-3">
                                                         <span className="text-success">
-                                                            {Math.round((member.performance.conversions / member.performance.leadsAssigned) * 100)}%
+                                                            {member.performance.leadsAssigned > 0
+                                                                ? Math.round((member.performance.conversions / member.performance.leadsAssigned) * 100)
+                                                                : 0}%
                                                         </span>
                                                     </td>
                                                     <td className="py-3 font-bold">₪{member.performance.revenue.toLocaleString()}</td>
@@ -736,20 +807,41 @@ export default function TeamManagement() {
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label>{t("full_name")}</Label>
-                            <Input placeholder={t("israeli_name")} className="rounded-xl" />
+                            <Input
+                                placeholder={t("israeli_name")}
+                                className="rounded-xl"
+                                value={newMember.name}
+                                onChange={(e) => setNewMember((prev) => ({ ...prev, name: e.target.value }))}
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label>{t("email")}</Label>
-                            <Input type="email" placeholder="user@clinic.co.il" className="rounded-xl" />
+                            <Input
+                                type="email"
+                                placeholder="user@clinic.co.il"
+                                className="rounded-xl"
+                                value={newMember.email}
+                                onChange={(e) => setNewMember((prev) => ({ ...prev, email: e.target.value }))}
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label>{t("phone")}</Label>
-                            <Input placeholder="050-1234567" className="rounded-xl" />
+                            <Input
+                                placeholder="050-1234567"
+                                className="rounded-xl"
+                                value={newMember.phone}
+                                onChange={(e) => setNewMember((prev) => ({ ...prev, phone: e.target.value }))}
+                            />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>{t("role")}</Label>
-                                <Select defaultValue="staff">
+                                <Select
+                                    value={newMember.role}
+                                    onValueChange={(value) =>
+                                        setNewMember((prev) => ({ ...prev, role: value as TeamRole }))
+                                    }
+                                >
                                     <SelectTrigger className="rounded-xl">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -762,7 +854,12 @@ export default function TeamManagement() {
                             </div>
                             <div className="space-y-2">
                                 <Label>{t("clinic")}</Label>
-                                <Select defaultValue="1">
+                                <Select
+                                    value={newMember.clinicId}
+                                    onValueChange={(value) =>
+                                        setNewMember((prev) => ({ ...prev, clinicId: value }))
+                                    }
+                                >
                                     <SelectTrigger className="rounded-xl">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -778,19 +875,55 @@ export default function TeamManagement() {
                             <Label>{t("permissions")}</Label>
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2">
-                                    <Switch id="perm_leads" defaultChecked />
+                                    <Switch
+                                        id="perm_leads"
+                                        checked={newMember.permissions.leads}
+                                        onCheckedChange={(checked) =>
+                                            setNewMember((prev) => ({
+                                                ...prev,
+                                                permissions: { ...prev.permissions, leads: checked }
+                                            }))
+                                        }
+                                    />
                                     <Label htmlFor="perm_leads">{t("manage_leads")}</Label>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Switch id="perm_analytics" />
+                                    <Switch
+                                        id="perm_analytics"
+                                        checked={newMember.permissions.analytics}
+                                        onCheckedChange={(checked) =>
+                                            setNewMember((prev) => ({
+                                                ...prev,
+                                                permissions: { ...prev.permissions, analytics: checked }
+                                            }))
+                                        }
+                                    />
                                     <Label htmlFor="perm_analytics">{t("view_analytics")}</Label>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Switch id="perm_team" />
+                                    <Switch
+                                        id="perm_team"
+                                        checked={newMember.permissions.team}
+                                        onCheckedChange={(checked) =>
+                                            setNewMember((prev) => ({
+                                                ...prev,
+                                                permissions: { ...prev.permissions, team: checked }
+                                            }))
+                                        }
+                                    />
                                     <Label htmlFor="perm_team">{t("manage_team")}</Label>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Switch id="perm_settings" />
+                                    <Switch
+                                        id="perm_settings"
+                                        checked={newMember.permissions.settings}
+                                        onCheckedChange={(checked) =>
+                                            setNewMember((prev) => ({
+                                                ...prev,
+                                                permissions: { ...prev.permissions, settings: checked }
+                                            }))
+                                        }
+                                    />
                                     <Label htmlFor="perm_settings">{t("system_settings")}</Label>
                                 </div>
                             </div>
@@ -800,7 +933,7 @@ export default function TeamManagement() {
                         <Button variant="outline" onClick={() => setShowAddDialog(false)} className="rounded-xl">
                             {t("cancel")}
                         </Button>
-                        <Button onClick={() => handleAddMember({})} className="rounded-xl">
+                        <Button onClick={handleAddMember} className="rounded-xl" disabled={isSaving}>
                             {t("send_invitation")}
                         </Button>
                     </DialogFooter>
@@ -820,20 +953,38 @@ export default function TeamManagement() {
                         <div className="space-y-4 py-4">
                             <div className="space-y-2">
                                 <Label>{t("full_name")}</Label>
-                                <Input defaultValue={selectedMember.name} className="rounded-xl" />
+                                <Input
+                                    value={editMember.name}
+                                    className="rounded-xl"
+                                    onChange={(e) => setEditMember((prev) => ({ ...prev, name: e.target.value }))}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>{t("email")}</Label>
-                                <Input type="email" defaultValue={selectedMember.email} className="rounded-xl" />
+                                <Input
+                                    type="email"
+                                    value={editMember.email}
+                                    className="rounded-xl"
+                                    onChange={(e) => setEditMember((prev) => ({ ...prev, email: e.target.value }))}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>{t("phone")}</Label>
-                                <Input defaultValue={selectedMember.phone} className="rounded-xl" />
+                                <Input
+                                    value={editMember.phone}
+                                    className="rounded-xl"
+                                    onChange={(e) => setEditMember((prev) => ({ ...prev, phone: e.target.value }))}
+                                />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>{t("role")}</Label>
-                                    <Select defaultValue={selectedMember.role}>
+                                    <Select
+                                        value={editMember.role}
+                                        onValueChange={(value) =>
+                                            setEditMember((prev) => ({ ...prev, role: value as TeamRole }))
+                                        }
+                                    >
                                         <SelectTrigger className="rounded-xl">
                                             <SelectValue />
                                         </SelectTrigger>
@@ -846,7 +997,12 @@ export default function TeamManagement() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label>{t("status")}</Label>
-                                    <Select defaultValue={selectedMember.status}>
+                                    <Select
+                                        value={editMember.status}
+                                        onValueChange={(value) =>
+                                            setEditMember((prev) => ({ ...prev, status: value as TeamStatus }))
+                                        }
+                                    >
                                         <SelectTrigger className="rounded-xl">
                                             <SelectValue />
                                         </SelectTrigger>
@@ -864,7 +1020,7 @@ export default function TeamManagement() {
                         <Button variant="outline" onClick={() => setShowEditDialog(false)} className="rounded-xl">
                             {t("cancel")}
                         </Button>
-                        <Button onClick={() => selectedMember && handleUpdateMember(selectedMember.id, {})} className="rounded-xl">
+                        <Button onClick={handleUpdateMember} className="rounded-xl" disabled={isSaving}>
                             {t("save_changes")}
                         </Button>
                     </DialogFooter>

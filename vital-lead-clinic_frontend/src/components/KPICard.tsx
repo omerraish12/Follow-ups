@@ -6,7 +6,7 @@ interface KPICardProps {
   value: string | number;
   subtitle?: string;
   icon: LucideIcon;
-  trend?: { value: number; positive: boolean };
+  trend?: { value: number; positive: boolean; label?: string };
   variant?: "default" | "primary" | "success" | "warning" | "info";
 }
 
@@ -52,7 +52,7 @@ export default function KPICard({
         </div>
         <div className="text-left space-y-1">
           <p className="text-xs font-medium text-muted-foreground">{title}</p>
-          <p className="text-2xl font-extrabold text-card-foreground">{value}</p>
+          <p className="text-2xl font-semibold text-card-foreground font-display">{value}</p>
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between">
@@ -66,7 +66,7 @@ export default function KPICard({
               trend.positive ? "text-success" : "text-destructive"
             )}
           >
-            {trend.positive ? "↑" : "↓"} {Math.abs(trend.value)}% מהחודש שעבר
+            {trend.positive ? "+" : "-"} {Math.abs(trend.value)}% {trend.label || "vs last period"}
           </p>
         )}
       </div>

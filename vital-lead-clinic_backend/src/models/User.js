@@ -25,12 +25,20 @@ class User {
     }
 
     static async create(userData) {
-        const { email, password, name, phone, clinicId, role = 'STAFF' } = userData;
+        const {
+            email,
+            password,
+            name,
+            phone,
+            clinicId,
+            role = 'STAFF',
+            status = 'active'
+        } = userData;
         const result = await query(
-            `INSERT INTO users (email, password, name, phone, clinic_id, role) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
-       RETURNING id, email, name, role, clinic_id`,
-            [email, password, name, phone, clinicId, role]
+            `INSERT INTO users (email, password, name, phone, clinic_id, role, status) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       RETURNING id, email, name, role, status, clinic_id`,
+            [email, password, name, phone, clinicId, role, status]
         );
         return result.rows[0];
     }
@@ -85,6 +93,45 @@ class User {
         const result = await query(
             `SELECT id, name, email, phone, role, created_at 
        FROM users WHERE clinic_id = $1 ORDER BY created_at DESC`,
+            [clinicId]
+        );
+        return result.rows;
+    }
+
+    static async getClinicUsersWithStats(clinicId) {
+        const result = await query(
+            `SELECT 
+                u.id,
+                u.name,
+                u.email,
+                u.phone,
+                u.role,
+                u.status,
+                u.clinic_id,
+                c.name as clinic_name,
+                u.created_at,
+                COALESCE(ls.assigned, 0) as leads_assigned,
+                COALESCE(ls.conversions, 0) as conversions,
+                COALESCE(ls.revenue, 0) as revenue,
+                COALESCE(al.last_active, u.created_at) as last_active
+             FROM users u
+             LEFT JOIN clinics c ON u.clinic_id = c.id
+             LEFT JOIN (
+                SELECT assigned_to_id,
+                       COUNT(*) as assigned,
+                       SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as conversions,
+                       COALESCE(SUM(value), 0) as revenue
+                FROM leads
+                WHERE clinic_id = $1
+                GROUP BY assigned_to_id
+             ) ls ON ls.assigned_to_id = u.id
+             LEFT JOIN (
+                SELECT user_id, MAX(created_at) as last_active
+                FROM activities
+                GROUP BY user_id
+             ) al ON al.user_id = u.id
+             WHERE u.clinic_id = $1
+             ORDER BY u.created_at DESC`,
             [clinicId]
         );
         return result.rows;

@@ -138,8 +138,10 @@ export default function Automations() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">{t("automations")}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{t("automations_subtitle")}</p>
+          <h1 className="text-2xl font-semibold text-foreground font-display">Automation Studio</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Build follow‑ups that feel personal and run on time, every time.
+          </p>
         </div>
         <AutomationRuleDialog onSuccess={() => { fetchAutomations(); fetchStats(); }} />
       </div>

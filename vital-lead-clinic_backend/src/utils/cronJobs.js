@@ -3,6 +3,7 @@ const Automation = require('../models/Automation');
 const Execution = require('../models/Execution');
 const Lead = require('../models/Lead');
 const Activity = require('../models/Activity');
+const Notification = require('../models/Notification');
 const { query } = require('../config/database');
 
 class CronJobs {
@@ -31,11 +32,24 @@ class CronJobs {
                 const leads = await Lead.getFollowupNeeded(clinic.id);
 
                 for (const lead of leads) {
+                    const targetUserId = lead.assigned_to_id || (await this.getClinicAdmin(clinic.id));
                     await Activity.create({
                         type: 'AUTOMATION_RUN',
                         description: `Lead ${lead.name} needs follow-up (no contact for 3+ days)`,
-                        userId: lead.assigned_to_id || (await this.getClinicAdmin(clinic.id)),
+                        userId: targetUserId,
                         leadId: lead.id
+                    });
+
+                    await Notification.create({
+                        type: 'reminder',
+                        title: 'Follow-up needed',
+                        message: `Lead ${lead.name} needs a follow-up.`,
+                        priority: 'high',
+                        actionLabel: 'View lead',
+                        actionLink: `/leads/${lead.id}`,
+                        metadata: { leadId: lead.id, leadName: lead.name },
+                        userId: targetUserId,
+                        clinicId: clinic.id
                     });
                 }
             }
@@ -78,6 +92,7 @@ class CronJobs {
                 );
 
                 for (const lead of leads.rows) {
+                    const adminId = await this.getClinicAdmin(automation.clinic_id);
                     // Record execution
                     await Execution.create({
                         automationId: automation.id,
@@ -92,8 +107,25 @@ class CronJobs {
                     await Activity.create({
                         type: 'AUTOMATION_RUN',
                         description: `Automation "${automation.name}" executed for lead ${lead.name}`,
-                        userId: await this.getClinicAdmin(automation.clinic_id),
+                        userId: adminId,
                         leadId: lead.id
+                    });
+
+                    await Notification.create({
+                        type: 'system',
+                        title: 'Automation executed',
+                        message: `Automation "${automation.name}" ran for lead ${lead.name}.`,
+                        priority: 'low',
+                        actionLabel: 'View lead',
+                        actionLink: `/leads/${lead.id}`,
+                        metadata: {
+                            leadId: lead.id,
+                            leadName: lead.name,
+                            automationId: automation.id,
+                            automationName: automation.name
+                        },
+                        userId: adminId,
+                        clinicId: automation.clinic_id
                     });
                 }
             }

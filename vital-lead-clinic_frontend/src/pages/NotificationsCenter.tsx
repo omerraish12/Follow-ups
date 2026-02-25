@@ -1,5 +1,5 @@
 // src/pages/NotificationsCenter.tsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
     Bell, BellRing, CheckCheck, X, Clock,
     AlertCircle, CheckCircle, Info, AlertTriangle,
@@ -38,29 +38,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import type { NotificationItem } from "@/types/notifications";
 import { formatDistanceToNow } from "date-fns";
 import { he, enUS } from "date-fns/locale";
-
-interface Notification {
-    id: string;
-    type: 'lead' | 'system' | 'alert' | 'success' | 'reminder';
-    title: string;
-    message: string;
-    time: string;
-    read: boolean;
-    actionable: boolean;
-    actionLabel?: string;
-    actionLink?: string;
-    priority: 'high' | 'medium' | 'low';
-    metadata?: {
-        leadId?: string;
-        leadName?: string;
-        value?: number;
-    };
-}
 
 const notificationIcons = {
     lead: MessageSquare,
@@ -79,11 +61,18 @@ const notificationColors = {
 };
 
 export default function NotificationsCenter() {
-    const { user } = useAuth();
     const { t, language } = useLanguage();
     const [filter, setFilter] = useState('all');
-    const [isLoading, setIsLoading] = useState(false);
-    const [notifications, setNotifications] = useState<Notification[]>([]);
+    const {
+        notifications,
+        isLoading,
+        unreadCount,
+        fetchNotifications,
+        markAsRead,
+        markAllAsRead,
+        deleteNotification,
+        clearAll
+    } = useNotifications();
     const [settings, setSettings] = useState({
         leadAlerts: true,
         systemAlerts: true,
@@ -93,168 +82,6 @@ export default function NotificationsCenter() {
         dailyDigest: false,
         marketingAlerts: false
     });
-
-    // Load notifications
-    useEffect(() => {
-        loadNotifications();
-    }, []);
-
-    const loadNotifications = async () => {
-        setIsLoading(true);
-        try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Mock data - replace with actual API call
-            setNotifications([
-                {
-                    id: '1',
-                    type: 'lead',
-                    title: t('new_hot_lead'),
-                    message: t('lead_responded').replace('%s', 'דנה כהן'),
-                    time: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-                    read: false,
-                    actionable: true,
-                    actionLabel: t('view_lead'),
-                    priority: 'high',
-                    metadata: { leadId: '101', leadName: 'דנה כהן', value: 450 }
-                },
-                {
-                    id: '2',
-                    type: 'success',
-                    title: t('client_returned'),
-                    message: t('lead_scheduled_followup').replace('%s', 'יוסי לוי'),
-                    time: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-                    read: false,
-                    actionable: true,
-                    actionLabel: t('view_details') || 'ראה פרטים',
-                    priority: 'high',
-                    metadata: { leadId: '102', leadName: 'יוסי לוי', value: 800 }
-                },
-                {
-                    id: '3',
-                    type: 'system',
-                    title: t('import_completed'),
-                    message: t('messages_processed').replace('%s', '1,284'),
-                    time: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-                    read: true,
-                    actionable: false,
-                    priority: 'medium'
-                },
-                {
-                    id: '4',
-                    type: 'alert',
-                    title: t('automation_rule_inactive'),
-                    message: t('rule_disabled').replace('%s', t('follow_up_1_week')),
-                    time: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-                    read: false,
-                    actionable: true,
-                    actionLabel: t('fix_now'),
-                    priority: 'high'
-                },
-                {
-                    id: '5',
-                    type: 'reminder',
-                    title: t('reminder_leads_need_followup').replace('%s', '5'),
-                    message: t('leads_not_responded_followup'),
-                    time: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-                    read: true,
-                    actionable: true,
-                    actionLabel: t('view_leads'),
-                    priority: 'medium'
-                },
-                {
-                    id: '6',
-                    type: 'lead',
-                    title: t('new_message_from_lead'),
-                    message: t('lead_message').replace('%s', t('moshe_golan') || 'משה גולן').replace('%s', t('whitening_info') || '"אשמח לפרטים נוספים על טיפול הלבנה"'),
-                    time: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-                    read: true,
-                    actionable: true,
-                    actionLabel: t('reply'),
-                    priority: 'medium',
-                    metadata: { leadId: '103', leadName: 'משה גולן' }
-                }
-            ]);
-        } catch (error) {
-            console.error('Error loading notifications:', error);
-            toast({
-                title: t("error"),
-                description: t("error_loading_notifications"),
-                variant: "destructive"
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const markAsRead = async (id: string) => {
-        try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            setNotifications(prev =>
-                prev.map(n => n.id === id ? { ...n, read: true } : n)
-            );
-
-            toast({
-                title: t("marked_as_read"),
-                description: t("notification_marked_read") || "ההתראה סומנה כנקראה",
-            });
-        } catch (error) {
-            console.error('Error marking as read:', error);
-        }
-    };
-
-    const markAllAsRead = async () => {
-        try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            setNotifications(prev =>
-                prev.map(n => ({ ...n, read: true }))
-            );
-
-            toast({
-                title: t("all_read") || "הכל נקרא",
-                description: t("all_notifications_read") || "כל ההתראות סומנו כנקראו",
-            });
-        } catch (error) {
-            console.error('Error marking all as read:', error);
-        }
-    };
-
-    const deleteNotification = async (id: string) => {
-        try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            setNotifications(prev => prev.filter(n => n.id !== id));
-
-            toast({
-                title: t("deleted"),
-                description: t("notification_deleted") || "ההתראה נמחקה",
-            });
-        } catch (error) {
-            console.error('Error deleting notification:', error);
-        }
-    };
-
-    const clearAll = async () => {
-        try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            setNotifications([]);
-
-            toast({
-                title: t("all_cleared") || "הכל נקה",
-                description: t("all_notifications_cleared") || "כל ההתראות נמחקו",
-            });
-        } catch (error) {
-            console.error('Error clearing notifications:', error);
-        }
-    };
 
     const saveSettings = async () => {
         try {
@@ -270,14 +97,12 @@ export default function NotificationsCenter() {
         }
     };
 
-    const filteredNotifications = notifications.filter(n => {
+    const filteredNotifications: NotificationItem[] = notifications.filter(n => {
         if (filter === 'unread') return !n.read;
         if (filter === 'high') return n.priority === 'high';
         if (filter !== 'all') return n.type === filter;
         return true;
     });
-
-    const unreadCount = notifications.filter(n => !n.read).length;
 
     const formatTime = (time: string) => {
         try {
@@ -329,9 +154,9 @@ export default function NotificationsCenter() {
                         )}
                     </div>
                     <div>
-                        <h1 className="text-2xl font-extrabold text-foreground">{t("notifications_center")}</h1>
+                        <h1 className="text-2xl font-semibold text-foreground font-display">Notifications & Tasks</h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            {t("notifications_description")}
+                            Stay on top of replies, follow‑ups, and system updates.
                         </p>
                     </div>
                 </div>
@@ -381,7 +206,7 @@ export default function NotificationsCenter() {
                         variant="outline"
                         size="icon"
                         className="rounded-xl"
-                        onClick={loadNotifications}
+                        onClick={fetchNotifications}
                         disabled={isLoading}
                     >
                         <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />

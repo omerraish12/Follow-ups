@@ -154,8 +154,8 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="NEW">{t("status_new")}</SelectItem>
-                <SelectItem value="HOT">{t("status_hot")} 🔥</SelectItem>
-                <SelectItem value="CLOSED">{t("status_closed")} ✓</SelectItem>
+                <SelectItem value="HOT">{t("status_hot")}</SelectItem>
+                <SelectItem value="CLOSED">{t("status_closed")}</SelectItem>
                 <SelectItem value="LOST">{t("status_lost")}</SelectItem>
               </SelectContent>
             </Select>

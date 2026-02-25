@@ -37,14 +37,14 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
 
   const validate = () => {
     const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = t("name_required") || "שם חובה";
-    if (!form.phone.trim()) errs.phone = t("phone_required") || "טלפון חובה";
+    if (!form.name.trim()) errs.name = t("name_required") || "Name is required";
+    if (!form.phone.trim()) errs.phone = t("phone_required") || "Phone number is required";
     else if (!/^(\+972|0)[\d\-]{8,12}$/.test(form.phone.replace(/\s/g, "")))
-      errs.phone = t("invalid_phone") || "מספר טלפון לא תקין";
+      errs.phone = t("invalid_phone") || "Invalid phone number";
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      errs.email = t("invalid_email") || "אימייל לא תקין";
-    if (!form.service) errs.service = t("service_required") || "שירות חובה";
-    if (!form.source) errs.source = t("source_required") || "מקור חובה";
+      errs.email = t("invalid_email") || "Invalid email address";
+    if (!form.service) errs.service = t("service_required") || "Service is required";
+    if (!form.source) errs.source = t("source_required") || "Source is required";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -99,7 +99,7 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Field label={t("full_name") + " *"} error={errors.name}>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("full_name") || "שם מלא"} className="rounded-xl" maxLength={100} disabled={isSubmitting} />
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("full_name") || "Full name"} className="rounded-xl" maxLength={100} disabled={isSubmitting} />
           </Field>
           <Field label={t("phone_number") + " *"} error={errors.phone}>
             <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+972-50-000-0000" className="rounded-xl" dir="ltr" maxLength={20} disabled={isSubmitting} />
@@ -107,12 +107,12 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
           <Field label={t("email")} error={errors.email}>
             <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" className="rounded-xl" dir="ltr" maxLength={255} disabled={isSubmitting} />
           </Field>
-          <Field label={t("value") + " (₪)"}>
+          <Field label={t("value") + " (ILS)"}>
             <Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="0" className="rounded-xl" dir="ltr" min={0} disabled={isSubmitting} />
           </Field>
           <Field label={t("service") + " *"} error={errors.service}>
             <Select value={form.service} onValueChange={(v) => setForm({ ...form, service: v })} disabled={isSubmitting}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_service") || "בחר שירות"} /></SelectTrigger>
+              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_service") || "Select service"} /></SelectTrigger>
               <SelectContent>
                 {services.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
@@ -120,7 +120,7 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
           </Field>
           <Field label={t("source") + " *"} error={errors.source}>
             <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })} disabled={isSubmitting}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_source") || "בחר מקור"} /></SelectTrigger>
+              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_source") || "Select source"} /></SelectTrigger>
               <SelectContent>
                 {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
@@ -142,7 +142,7 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
           </Field>
           <div className="sm:col-span-2">
             <Field label={t("notes")}>
-              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("additional_notes") || "הערות נוספות..."} className="rounded-xl resize-none" rows={2} maxLength={500} disabled={isSubmitting} />
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("additional_notes") || "Additional notes..."} className="rounded-xl resize-none" rows={2} maxLength={500} disabled={isSubmitting} />
             </Field>
           </div>
         </div>

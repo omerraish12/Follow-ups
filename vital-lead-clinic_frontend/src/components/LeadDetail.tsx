@@ -65,7 +65,7 @@ export default function LeadDetail({
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { getLead, updateLead, addMessage: addMessageService, deleteLead: deleteLeadService } = useLeads();
 
   const [lead, setLead] = useState<Lead | null>(propLead || null);
@@ -87,8 +87,8 @@ export default function LeadDetail({
     } catch (error) {
       console.error('Error loading lead:', error);
       toast({
-        title: "שגיאה",
-        description: "שגיאה בטעינת פרטי הליד",
+        title: "Error",
+        description: "Unable to load lead details.",
         variant: "destructive",
       });
       navigate('/leads');
@@ -148,7 +148,7 @@ export default function LeadDetail({
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('he-IL', {
+    return date.toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -222,7 +222,7 @@ export default function LeadDetail({
               {lead.value && lead.value > 0 && (
                 <div className="text-left">
                   <p className="text-sm text-muted-foreground">{t("potential_value")}</p>
-                  <p className="text-2xl font-bold text-success">₪{lead.value.toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-success">ILS {lead.value.toLocaleString()}</p>
                 </div>
               )}
             </div>

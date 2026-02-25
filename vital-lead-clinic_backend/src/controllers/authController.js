@@ -91,6 +91,10 @@ const login = async (req, res) => {
             ['USER_LOGIN', `User ${user.name} logged in`, user.id]
         );
 
+        if (user.status !== 'active') {
+            await User.update(user.id, { status: 'active' });
+        }
+
         res.json({
             token,
             user: {
@@ -161,6 +165,7 @@ const resetPassword = async (req, res) => {
 
         // Update password
         await User.updatePassword(user.id, hashedPassword);
+        await User.update(user.id, { status: 'active' });
 
         res.json({ message: 'Password reset successfully' });
     } catch (error) {

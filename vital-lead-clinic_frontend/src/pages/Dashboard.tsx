@@ -286,9 +286,9 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">{t("dashboard")}</h1>
+          <h1 className="text-2xl font-semibold text-foreground font-display">Clinic Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {t("analytics_subtitle")}
+            Track pipeline health, recoveries, and revenue in one view.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -410,15 +410,15 @@ export default function Dashboard() {
             </div>
             <div className="flex-1">
               <p className="font-semibold text-foreground">
-                {t("reminder_leads_need_followup").replace("%s", followupLeads.length.toString())}
+                {followupLeads.length} leads need a follow‑up today
               </p>
               <p className="text-sm text-muted-foreground">
-                {t("leads_not_responded_followup")}
+                Reach out before the conversation cools down.
               </p>
             </div>
             <Link to="/leads?filter=followup">
               <Button variant="outline" size="sm" className="rounded-xl">
-                {t("view_leads")}
+                Review follow‑ups
               </Button>
             </Link>
           </div>
@@ -651,8 +651,8 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <Card className="rounded-2xl border-border">
           <CardHeader>
-            <CardTitle className="text-lg">{t("new_message_from_lead")}</CardTitle>
-            <CardDescription>{t("became_hot")}</CardDescription>
+            <CardTitle className="text-lg">Recent activity</CardTitle>
+            <CardDescription>Latest changes across your pipeline.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -690,8 +690,8 @@ export default function Dashboard() {
         {/* Top Performing Rules */}
         <Card className="rounded-2xl border-border">
           <CardHeader>
-            <CardTitle className="text-lg">{t("message_templates")}</CardTitle>
-            <CardDescription>{t("performance_by_source")}</CardDescription>
+            <CardTitle className="text-lg">Top performing automations</CardTitle>
+            <CardDescription>Which sequences drive the most replies.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -725,12 +725,12 @@ export default function Dashboard() {
         <CardHeader className="border-b border-border">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">{t("returned_leads")}</CardTitle>
-              <CardDescription>5 {t("leads")} {t("today")}</CardDescription>
+              <CardTitle className="text-lg">Recent leads</CardTitle>
+              <CardDescription>Latest activity across the team.</CardDescription>
             </div>
             <Link to="/leads">
               <Button variant="ghost" size="sm" className="rounded-xl">
-                {t("view_leads")}
+                View all
                 <ArrowLeft className="h-4 w-4 mr-2" />
               </Button>
             </Link>

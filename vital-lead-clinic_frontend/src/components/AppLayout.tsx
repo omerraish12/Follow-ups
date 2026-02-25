@@ -1,5 +1,5 @@
 // src/components/AppLayout.tsx (updated with auth)
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation, Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageSwitcher from "./LanguageSwitcher";
+import { useNotifications } from "@/hooks/useNotifications";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,10 +51,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
+  const { unreadCount, refreshUnreadCount } = useNotifications({ autoFetch: false });
 
   // Mock data for badges
-  const notificationCount = 3;
+  const notificationCount = unreadCount;
   const leadsNeedingFollowup = 5;
+
+  useEffect(() => {
+    refreshUnreadCount();
+  }, [refreshUnreadCount]);
 
   const handleLogout = () => {
     logout();
@@ -84,12 +90,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         <div className="flex h-full flex-col">
           {/* Logo */}
-          <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-r from-primary to-primary/70 shadow-lg">
+          <div className="flex items-center gap-3 border-b border-border px-5 py-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 shadow-lg">
               <Phone className="h-5 w-5 text-primary-foreground" />
             </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-base font-bold text-foreground truncate">{t("app_title")}</h1>
+              <h1 className="text-base font-semibold text-foreground truncate font-display">{t("app_title")}</h1>
               <p className="text-[11px] text-muted-foreground">{t("app_subtitle")}</p>
             </div>
             <button
@@ -172,13 +178,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* WhatsApp status */}
           <div className="border-t border-border p-3">
-            <div className="flex items-center gap-3 rounded-xl bg-muted/80 p-3.5">
+            <div className="flex items-center gap-3 rounded-2xl bg-muted/60 p-3.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-whatsapp/10">
                 <MessageSquare className="h-4 w-4 text-whatsapp" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground">וואטסאפ</p>
-                <p className="text-[11px] text-muted-foreground">ממתין לחיבור</p>
+                <p className="text-xs font-semibold text-foreground">WhatsApp</p>
+                <p className="text-[11px] text-muted-foreground">Ready to connect</p>
               </div>
               <span className="h-2.5 w-2.5 rounded-full bg-warning animate-pulse-soft" />
             </div>
@@ -187,11 +193,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div className="rounded-xl bg-muted/30 p-2 text-center">
                 <p className="text-xs font-bold text-foreground">78%</p>
-                <p className="text-[9px] text-muted-foreground">החזרת לקוחות</p>
+                <p className="text-[9px] text-muted-foreground">Recovery rate</p>
               </div>
               <div className="rounded-xl bg-muted/30 p-2 text-center">
-                <p className="text-xs font-bold text-foreground">₪45K</p>
-                <p className="text-[9px] text-muted-foreground">הכנסות</p>
+                <p className="text-xs font-bold text-foreground">?45K</p>
+                <p className="text-[9px] text-muted-foreground">Monthly revenue</p>
               </div>
             </div>
           </div>

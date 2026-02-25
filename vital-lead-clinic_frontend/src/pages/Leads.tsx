@@ -261,9 +261,9 @@ export default function Leads() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground">{t("leads")}</h1>
+          <h1 className="text-2xl font-semibold text-foreground font-display">Leads & Patients</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {t("manage_leads")}
+            Prioritize every inquiry, track next steps, and close faster.
           </p>
         </div>
         <div className="flex items-center gap-2">

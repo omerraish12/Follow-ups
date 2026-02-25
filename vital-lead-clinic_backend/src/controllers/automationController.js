@@ -1,5 +1,6 @@
 const Automation = require('../models/Automation');
 const Execution = require('../models/Execution');
+const Notification = require('../models/Notification');
 
 // @desc    Get all automations for clinic
 // @route   GET /api/automations
@@ -56,6 +57,18 @@ const createAutomation = async (req, res) => {
             targetStatus,
             notifyOnReply: notifyOnReply !== undefined ? notifyOnReply : true,
             personalization: personalization || ['name'],
+            clinicId: req.user.clinic_id
+        });
+
+        await Notification.create({
+            type: 'system',
+            title: 'Automation created',
+            message: `Automation "${automation.name}" was created.`,
+            priority: 'low',
+            actionLabel: 'View automations',
+            actionLink: '/automations',
+            metadata: { automationId: automation.id, automationName: automation.name },
+            userId: null,
             clinicId: req.user.clinic_id
         });
 
@@ -133,6 +146,18 @@ const toggleAutomation = async (req, res) => {
         }
 
         const updated = await Automation.toggleActive(req.params.id, req.user.clinic_id);
+
+        await Notification.create({
+            type: updated.active ? 'success' : 'alert',
+            title: updated.active ? 'Automation enabled' : 'Automation disabled',
+            message: `Automation "${updated.name}" was ${updated.active ? 'enabled' : 'disabled'}.`,
+            priority: updated.active ? 'low' : 'medium',
+            actionLabel: 'View automations',
+            actionLink: '/automations',
+            metadata: { automationId: updated.id, automationName: updated.name },
+            userId: null,
+            clinicId: req.user.clinic_id
+        });
 
         res.json(updated);
     } catch (error) {
