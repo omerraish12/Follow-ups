@@ -6,12 +6,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import type { AutomationRule, LeadStatus } from "@/data/sampleData";
+import type { LeadStatus } from "@/types/leads";
+import type { Automation } from "@/types/automation";
 import { useAutomations } from "@/hooks/useAutomations";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface AutomationRuleDialogProps {
-  rule?: AutomationRule;
+  rule?: Automation;
   onSuccess?: () => void;
   trigger?: React.ReactNode;
 }
@@ -24,10 +25,10 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: rule?.name || "",
-    trigger: rule?.trigger || "",
-    delayDays: String(rule?.delayDays ?? 0),
+    trigger: (rule as any)?.trigger || "",
+    delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
     message: rule?.message || "",
-    targetStatus: (rule?.targetStatus || "new") as LeadStatus,
+    targetStatus: ((rule?.target_status as LeadStatus) || "NEW") as LeadStatus,
     active: rule?.active ?? true,
   });
 
@@ -41,7 +42,6 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
 
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.trigger || !form.message.trim()) {
-      // Toast error already shown by the hook
       return;
     }
 
@@ -49,8 +49,7 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
     try {
       const ruleData = {
         name: form.name.trim(),
-        trigger: form.trigger,
-        delayDays: Number(form.delayDays) || 0,
+        triggerDays: [Number(form.delayDays) || 0],
         message: form.message.trim(),
         targetStatus: form.targetStatus,
         active: form.active,
@@ -62,10 +61,10 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
         await addAutomation(ruleData as any);
       }
 
-      onSuccess?.(); // Notify parent to refresh
+      onSuccess?.();
       setOpen(false);
-    } catch (error) {
-      // Error already handled by the hook with toast notification
+    } catch {
+      // handled in hook toast
     } finally {
       setIsSubmitting(false);
     }
@@ -74,10 +73,10 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
   const resetForm = () => {
     setForm({
       name: rule?.name || "",
-      trigger: rule?.trigger || "",
-      delayDays: String(rule?.delayDays ?? 0),
+      trigger: (rule as any)?.trigger || "",
+      delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
       message: rule?.message || "",
-      targetStatus: (rule?.targetStatus || "new") as LeadStatus,
+      targetStatus: ((rule?.target_status as LeadStatus) || "NEW") as LeadStatus,
       active: rule?.active ?? true,
     });
   };
@@ -154,10 +153,10 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">{t("status_new")}</SelectItem>
-                <SelectItem value="hot">{t("status_hot")} 🔥</SelectItem>
-                <SelectItem value="closed">{t("status_closed")} ✓</SelectItem>
-                <SelectItem value="lost">{t("status_lost")}</SelectItem>
+                <SelectItem value="NEW">{t("status_new")}</SelectItem>
+                <SelectItem value="HOT">{t("status_hot")} 🔥</SelectItem>
+                <SelectItem value="CLOSED">{t("status_closed")} ✓</SelectItem>
+                <SelectItem value="LOST">{t("status_lost")}</SelectItem>
               </SelectContent>
             </Select>
           </div>

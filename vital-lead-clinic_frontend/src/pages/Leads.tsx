@@ -41,7 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LeadStatus } from "@/data/sampleData";
+import { LeadStatus } from "@/types/leads";
 import { Progress } from "@/components/ui/progress";
 
 export default function Leads() {

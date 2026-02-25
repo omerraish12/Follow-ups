@@ -1,30 +1,5 @@
 import api from './api';
-
-// Define interfaces for lead, message, and other types as needed
-interface Lead {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  service?: string;
-  assigned_to_name?: string;
-  assigned_to?: string;
-  source?: string;
-  value?: number;
-  created_at: string;
-  last_contacted?: string;
-  notes?: string;
-  status: string;
-  messages?: Message[];
-}
-
-interface Message {
-  id: string;
-  content: string;
-  type: 'SENT' | 'RECEIVED';
-  timestamp: string;
-  is_business: boolean;
-}
+import type { Lead, LeadMessage as Message } from "@/types/leads";
 
 interface Filters {
   status?: string;
