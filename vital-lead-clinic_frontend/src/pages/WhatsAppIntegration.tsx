@@ -6,7 +6,7 @@ import {
     Shield, Globe, Key, Smartphone, Download,
     Upload, FileText, Filter, Clock, Users,
     Eye, EyeOff, Copy, Check, Plus, Trash2,
-    Edit, Loader2
+    Edit, Loader2, Send
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -103,6 +103,9 @@ export default function WhatsAppIntegration() {
     const [importHistory, setImportHistory] = useState<ImportHistory[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [testPhone, setTestPhone] = useState("");
+    const [testTemplate, setTestTemplate] = useState("");
+    const [testLanguage, setTestLanguage] = useState(language === "he" ? "he" : "en");
     const [integrationUpdatedAt, setIntegrationUpdatedAt] = useState<string | null>(null);
     const [connectionForm, setConnectionForm] = useState<ConnectionForm>({
         phoneNumber: "",
@@ -197,6 +200,28 @@ export default function WhatsAppIntegration() {
         },
         [buildConfig, syncFromConfig, t]
     );
+
+    useEffect(() => {
+        setTestLanguage(language === "he" ? "he" : "en");
+    }, [language]);
+
+    const handleSendTest = async () => {
+        if (!testPhone || !testTemplate) {
+            toast({ title: t("error"), description: t("settings_save_failed"), variant: "destructive" });
+            return;
+        }
+        try {
+            await whatsappService.sendTemplate({
+                to: testPhone,
+                templateName: testTemplate,
+                language: testLanguage,
+            });
+            toast({ title: t("success"), description: t("message_sent") });
+        } catch (err) {
+            console.error("sendTemplate failed", err);
+            toast({ title: t("error"), description: t("send_failed"), variant: "destructive" });
+        }
+    };
 
     const loadConfig = useCallback(async () => {
         setIsLoading(true);
@@ -583,7 +608,7 @@ export default function WhatsAppIntegration() {
                                     disabled={isSaving}
                                 >
                                     {isSaving && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
-                                    {t("save") || "Save"}
+                                    {t("save")}
                                 </Button>
                                 <Button
                                     variant="outline"
@@ -613,20 +638,60 @@ export default function WhatsAppIntegration() {
                                     <Badge variant="outline" className={cn( connectionStatus === "connected" && "bg-success/10 text-success", connectionStatus === "connecting" && "bg-warning/10 text-warning", connectionStatus === "disconnected" && "bg-destructive/10 text-destructive" )}>`n                                        {connectionStatus === "connected" ? t("active") : connectionStatus}`n                                    </Badge>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                                    <span className="text-sm">{t("messages_received_today") || "הודעות שהתקבלו היום"}</span>
+                                    <span className="text-sm">{t("messages_received_today")}</span>
                                     <span className="font-bold">47</span>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                                    <span className="text-sm">{t("send_rate_per_hour") || "קצב שליחה (לשעה)"}</span>
+                                    <span className="text-sm">{t("send_rate_per_hour")}</span>
                                     <span className="font-bold">250</span>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                                    <span className="text-sm">{t("last_update") || "Last update"}</span>`n                                    <span className="font-bold text-xs">`n                                        {integrationUpdatedAt ? new Date(integrationUpdatedAt).toLocaleString(language === "he" ? "he-IL" : "en-US") : "-"}`n                                    </span>
+                                    <span className="text-sm">{t("last_update")}</span>
+                                    <span className="font-bold text-xs">
+                                        {integrationUpdatedAt ? new Date(integrationUpdatedAt).toLocaleString(language === "he" ? "he-IL" : "en-US") : "-"}
+                                    </span>
                                 </div>
                                 <div className="mt-4">
                                     <Progress value={10} className="h-2" />
                                 </div>
                             </CardContent>
+                        </Card>
+
+                        <Card className="rounded-2xl border-border">
+                            <CardHeader>
+                                <CardTitle className="text-lg">{t("send_test_message")}</CardTitle>
+                                <CardDescription>{t("send_test_message_desc")}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-3 md:grid-cols-3">
+                                    <div className="space-y-2">
+                                        <Label>{t("phone_number")}</Label>
+                                        <Input value={testPhone} onChange={(e) => setTestPhone(e.target.value)} placeholder="+9725..." dir="ltr" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>{t("template_name")}</Label>
+                                        <Input value={testTemplate} onChange={(e) => setTestTemplate(e.target.value)} placeholder="appointment_reminder" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>{t("language")}</Label>
+                                        <Select value={testLanguage} onValueChange={setTestLanguage}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="he">Hebrew (he)</SelectItem>
+                                                <SelectItem value="en">English (en)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </CardContent>
+                            <CardFooter>
+                                <Button onClick={handleSendTest} disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                                    {t("send")}
+                                </Button>
+                            </CardFooter>
                         </Card>
                     </div>
                 </TabsContent>
@@ -650,20 +715,20 @@ export default function WhatsAppIntegration() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="1month">{t("last_month_option")}</SelectItem>
-                                            <SelectItem value="2months">{t("last_2_months") || "חודשיים אחרונים"}</SelectItem>
+                                            <SelectItem value="2months">{t("last_2_months")}</SelectItem>
                                             <SelectItem value="3months">{t("last_3_months")}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>{t("export_format") || "פורמט ייצוא"}</Label>
+                                    <Label>{t("export_format")}</Label>
                                     <Select defaultValue="chat">
                                         <SelectTrigger className="rounded-xl">
-                                            <SelectValue placeholder={t("select_format") || "בחר פורמט"} />
+                                            <SelectValue placeholder={t("select_format")} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="chat">{t("chat_export") || "ייצוא צ'אט (.txt)"}</SelectItem>
+                                            <SelectItem value="chat">{t("chat_export")}</SelectItem>
                                             <SelectItem value="csv">CSV</SelectItem>
                                             <SelectItem value="json">JSON</SelectItem>
                                         </SelectContent>
@@ -671,15 +736,15 @@ export default function WhatsAppIntegration() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>{t("message_type") || "סוג הודעות"}</Label>
+                                    <Label>{t("message_type")}</Label>
                                     <Select defaultValue="all">
                                         <SelectTrigger className="rounded-xl">
-                                            <SelectValue placeholder={t("select_type") || "בחר סוג"} />
+                                            <SelectValue placeholder={t("select_type")} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t("all")}</SelectItem>
                                             <SelectItem value="business">{t("business")}</SelectItem>
-                                            <SelectItem value="personal">{t("personal") || "אישי"}</SelectItem>
+                                            <SelectItem value="personal">{t("personal")}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -687,19 +752,19 @@ export default function WhatsAppIntegration() {
 
                             <div className="border-2 border-dashed border-border rounded-2xl p-8 text-center">
                                 <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
-                                <p className="text-sm font-medium">{t("drag_drop_file") || "גרור לכאן קובץ ייצוא או לחץ לבחירה"}</p>
+                                <p className="text-sm font-medium">{t("drag_drop_file")}</p>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    {t("file_format_support") || "תמיכה בקבצי .txt, .csv, .json עד 50MB"}
+                                    {t("file_format_support")}
                                 </p>
                                 <Button variant="outline" className="mt-4 rounded-xl" onClick={handleSelectFile}>
-                                    {t("select_file") || "בחר קובץ"}
+                                    {t("select_file")}
                                 </Button>
                             </div>
 
                             {importing && (
                                 <div className="space-y-2">
                                     <div className="flex justify-between text-sm">
-                                        <span>{t("importing_messages") || "מייבא הודעות..."}</span>
+                                        <span>{t("importing_messages")}</span>
                                         <span>{importProgress}%</span>
                                     </div>
                                     <Progress value={importProgress} className="h-2" />
@@ -764,7 +829,7 @@ export default function WhatsAppIntegration() {
                             <CardHeader>
                                 <CardTitle className="text-lg">{t("filter_classify")}</CardTitle>
                                 <CardDescription>
-                                    {t("filter_settings_description") || "הגדר כללים לזיהוי אוטומטי של הודעות עסקיות ולידים פוטנציאליים"}
+                                    {t("filter_settings_description")}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -772,7 +837,7 @@ export default function WhatsAppIntegration() {
                                     <div>
                                         <p className="font-medium">{t("ignore_personal_chats")}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            {t("ignore_personal_description") || "מסנן שיחות עם בני משפחה וחברים"}
+                                            {t("ignore_personal_description")}
                                         </p>
                                     </div>
                                     <Switch
@@ -787,7 +852,7 @@ export default function WhatsAppIntegration() {
                                     <div>
                                         <p className="font-medium">{t("ignore_group_chats")}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            {t("ignore_groups_description") || "מסנן הודעות מקבוצות וואטסאפ"}
+                                            {t("ignore_groups_description")}
                                         </p>
                                     </div>
                                     <Switch
@@ -802,7 +867,7 @@ export default function WhatsAppIntegration() {
                                     <div>
                                         <p className="font-medium">{t("enable_business_keywords")}</p>
                                         <p className="text-xs text-muted-foreground">
-                                            {t("business_keywords_description") || "חפש מילים כמו \"טיפול\", \"תור\", \"מחיר\", \"המלצה\""}
+                                            {t("business_keywords_description")}
                                         </p>
                                     </div>
                                     <Switch
@@ -834,9 +899,9 @@ export default function WhatsAppIntegration() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>{t("keyword_filter") || "מילות מפתח לסינון (מופרדות בפסיקים)"}</Label>
+                                    <Label>{t("keyword_filter")}</Label>
                                     <Textarea
-                                        placeholder={t("keyword_placeholder") || "טיפול, תור, מרפאה, שיניים, הלבנה, ייעוץ, מחיר, עלות, המלצה"}
+                                        placeholder={t("keyword_placeholder")}
                                         className="rounded-xl min-h-[100px]"
                                         value={filterSettings.keywords}
                                         onChange={(event) => setFilterSettings({ ...filterSettings, keywords: event.target.value })}
@@ -847,9 +912,9 @@ export default function WhatsAppIntegration() {
 
                         <Card className="rounded-2xl border-border">
                             <CardHeader>
-                                <CardTitle className="text-lg">{t("preview") || "תצוגה מקדימה"}</CardTitle>
+                                <CardTitle className="text-lg">{t("preview")}</CardTitle>
                                 <CardDescription>
-                                    {t("preview_description") || "הודעות שיסווגו לפי ההגדרות הנוכחיות"}
+                                    {t("preview_description")}
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -878,7 +943,7 @@ export default function WhatsAppIntegration() {
                                                         chat.type === 'business' ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
                                                     )}
                                                 >
-                                                    {chat.type === 'business' ? t('business') : t('personal') || 'אישי'}
+                                                    {chat.type === 'business' ? t('business') : t('personal')}
                                                 </Badge>
                                             </div>
                                             <p className="text-sm text-muted-foreground line-clamp-1">{chat.lastMessage}</p>
@@ -891,9 +956,9 @@ export default function WhatsAppIntegration() {
 
                     <Card className="rounded-2xl border-border">
                         <CardHeader>
-                            <CardTitle className="text-lg">{t("content_classification") || "סיווג לפי תוכן"}</CardTitle>
+                            <CardTitle className="text-lg">{t("content_classification")}</CardTitle>
                             <CardDescription>
-                                {t("classification_description") || "הגדר כללים לזיהוי אוטומטי של סטטוס ליד לפי תוכן ההודעה"}
+                                {t("classification_description")}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -905,9 +970,9 @@ export default function WhatsAppIntegration() {
                                             <span className="font-medium">{t("new_status")}</span>
                                         </div>
                                         <Textarea
-                                            placeholder={t("new_keywords") || "מילות מפתח: שלום, אשמח, שאלה, מתעניין"}
+                                            placeholder={t("new_keywords")}
                                             className="text-sm min-h-[80px] rounded-xl"
-                                            defaultValue={t("new_keywords_default") || "שלום, אשמח, שאלה, מתעניין"}
+                                            defaultValue={t("new_keywords_default")}
                                         />
                                     </div>
 
@@ -917,9 +982,9 @@ export default function WhatsAppIntegration() {
                                             <span className="font-medium">{t("hot_status")}</span>
                                         </div>
                                         <Textarea
-                                            placeholder={t("hot_keywords") || "מילות מפתח: מתי אפשר, רוצה לקבוע, כן, מעוניין"}
+                                            placeholder={t("hot_keywords")}
                                             className="text-sm min-h-[80px] rounded-xl"
-                                            defaultValue={t("hot_keywords_default") || "מתי אפשר, רוצה לקבוע, כן, מעוניין"}
+                                            defaultValue={t("hot_keywords_default")}
                                         />
                                     </div>
 
@@ -929,9 +994,9 @@ export default function WhatsAppIntegration() {
                                             <span className="font-medium">{t("needs_followup_clock")}</span>
                                         </div>
                                         <Textarea
-                                            placeholder={t("followup_keywords") || "מילות מפתח: אחשוב על זה, אחזור, עוד לא החלטתי"}
+                                            placeholder={t("followup_keywords")}
                                             className="text-sm min-h-[80px] rounded-xl"
-                                            defaultValue={t("followup_keywords_default") || "אחשוב על זה, אחזור, עוד לא החלטתי"}
+                                            defaultValue={t("followup_keywords_default")}
                                         />
                                     </div>
                                 </div>
@@ -948,7 +1013,7 @@ export default function WhatsAppIntegration() {
                                 <div>
                                     <CardTitle className="text-lg">{t("message_templates")}</CardTitle>
                                     <CardDescription>
-                                        {t("manage_templates") || "נהל תבניות להודעות מעקב אוטומטיות"}
+                                        {t("manage_templates")}
                                     </CardDescription>
                                 </div>
                                 <Button
@@ -1005,7 +1070,7 @@ export default function WhatsAppIntegration() {
                                                 <span className="text-muted-foreground">{t("sent")} {template.usage} {t("times")}</span>
                                                 <span className="text-success">{t("success_rate")}: {template.successRate}</span>
                                                 <Badge variant="outline" className="bg-primary/5">
-                                                    {template.category === 'followup' ? t("followup") || 'מעקב' : t("promotion") || 'מבצע'}
+                                                    {template.category === 'followup' ? t("followup") : t("promotion")}
                                                 </Badge>
                                             </div>
                                         </div>
@@ -1026,8 +1091,8 @@ export default function WhatsAppIntegration() {
                         </DialogTitle>
                         <DialogDescription>
                             {editingTemplate
-                                ? t('edit_template_description') || 'ערוך את פרטי התבנית הקיימת'
-                                : t('create_template_description') || 'צור תבנית חדשה להודעות מעקב אוטומטיות'}
+                                ? t('edit_template_description')
+                                : t('create_template_description')}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -1035,7 +1100,7 @@ export default function WhatsAppIntegration() {
                             <Label htmlFor="template-name">{t("template_name")}</Label>
                             <Input
                                 id="template-name"
-                                placeholder={t("template_name_placeholder") || "לדוגמה: מעקב אחרי 3 ימים"}
+                                placeholder={t("template_name_placeholder")}
                                 defaultValue={editingTemplate?.name}
                             />
                         </div>
@@ -1043,7 +1108,7 @@ export default function WhatsAppIntegration() {
                             <Label htmlFor="template-message">{t("template_message")}</Label>
                             <Textarea
                                 id="template-message"
-                                placeholder={t("template_message_placeholder") || "היי {name}, רצינו לבדוק אם הגעת לטיפול שלך? 😊"}
+                                placeholder={t("template_message_placeholder")}
                                 className="min-h-[100px]"
                                 defaultValue={editingTemplate?.message}
                             />
@@ -1053,16 +1118,16 @@ export default function WhatsAppIntegration() {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="template-category">{t("category") || "קטגוריה"}</Label>
+                                <Label htmlFor="template-category">{t("category")}</Label>
                                 <Select defaultValue={editingTemplate?.category || 'followup'}>
                                     <SelectTrigger id="template-category">
-                                        <SelectValue placeholder={t("select_category") || "בחר קטגוריה"} />
+                                        <SelectValue placeholder={t("select_category")} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="followup">{t("followup") || "מעקב"}</SelectItem>
-                                        <SelectItem value="promotion">{t("promotion") || "מבצע"}</SelectItem>
-                                        <SelectItem value="welcome">{t("welcome") || "ברוך הבא"}</SelectItem>
-                                        <SelectItem value="reminder">{t("reminder") || "תזכורת"}</SelectItem>
+                                        <SelectItem value="followup">{t("followup")}</SelectItem>
+                                        <SelectItem value="promotion">{t("promotion")}</SelectItem>
+                                        <SelectItem value="welcome">{t("welcome")}</SelectItem>
+                                        <SelectItem value="reminder">{t("reminder")}</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1075,8 +1140,8 @@ export default function WhatsAppIntegration() {
                                     <SelectContent>
                                         <SelectItem value="he">{t("hebrew")}</SelectItem>
                                         <SelectItem value="en">{t("english")}</SelectItem>
-                                        <SelectItem value="ru">{t("russian") || "רוסית"}</SelectItem>
-                                        <SelectItem value="ar">{t("arabic") || "ערבית"}</SelectItem>
+                                        <SelectItem value="ru">{t("russian")}</SelectItem>
+                                        <SelectItem value="ar">{t("arabic")}</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1095,10 +1160,3 @@ export default function WhatsAppIntegration() {
         </div>
     );
 }
-
-
-
-
-
-
-

@@ -18,6 +18,7 @@ export interface SettingsResponse {
     email: string;
     phone: string;
     role: string;
+    avatar?: string | null;
     createdAt: string;
   };
   integrations: Record<string, { status: string; [key: string]: unknown }>;
@@ -26,6 +27,7 @@ export interface SettingsResponse {
     backupFrequency: string;
     retentionDays: number;
     lastBackup: string | null;
+    lastBackupFile?: string | null;
   };
   notificationSettings: {
     emailNotifications: boolean;
@@ -54,6 +56,20 @@ export const settingsService = {
     return response.data;
   },
 
+  uploadLogo: async (formData: FormData): Promise<{ logo: string }> => {
+    const response = await api.post("/settings/clinic/logo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
+  uploadProfilePhoto: async (formData: FormData): Promise<{ avatar: string }> => {
+    const response = await api.post("/settings/profile/photo", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
   changePassword: async (currentPassword: string, newPassword: string) => {
     const response = await api.put("/settings/password", { currentPassword, newPassword });
     return response.data;
@@ -79,9 +95,9 @@ export const settingsService = {
     return response.data;
   },
 
-  exportData: async () => {
-    const response = await api.post("/settings/export");
-    return response.data;
+  exportData: async (format: "csv" | "json" | "pdf" = "json") => {
+    const response = await api.post("/settings/export", { format }, { responseType: "blob" });
+    return response;
   },
 
   deleteAccount: async () => {

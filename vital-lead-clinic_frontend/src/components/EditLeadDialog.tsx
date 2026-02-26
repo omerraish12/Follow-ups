@@ -38,8 +38,8 @@ export default function EditLeadDialog({ lead, onSuccess }: EditLeadDialogProps)
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.phone.trim()) {
       toast({
-        title: t("error") || "Error",
-        description: t("name_and_phone_required") || "Name and phone are required",
+        title: t("error"),
+        description: t("name_and_phone_required"),
         variant: "destructive"
       });
       return;

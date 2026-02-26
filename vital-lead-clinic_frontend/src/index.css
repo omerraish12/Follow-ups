@@ -463,3 +463,76 @@
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background-color: #9a9a9a;
 }
+
+/* Landing glows */
+@keyframes blob-float {
+  0% { transform: translate3d(0,0,0) scale(1); }
+  50% { transform: translate3d(10px, -12px, 0) scale(1.05); }
+  100% { transform: translate3d(-12px, 14px, 0) scale(0.98); }
+}
+.gradient-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(42px);
+  opacity: 0.82;
+  animation: blob-float 16s ease-in-out infinite alternate;
+  mix-blend-mode: multiply;
+}
+.animation-delay-4 { animation-delay: 4s; }
+.animation-delay-8 { animation-delay: 8s; }
+
+/* Landing background layers (below hero) */
+.landing-bg {
+  position: fixed;
+  inset-inline: 0;
+  top: 45vh;
+  bottom: 0;
+  pointer-events: none;
+  z-index: -10;
+  overflow: hidden;
+}
+.mesh-layer {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 22% 28%, rgba(99, 102, 241, 0.38), transparent 36%),
+              radial-gradient(circle at 78% 22%, rgba(14, 165, 233, 0.32), transparent 32%),
+              radial-gradient(circle at 62% 68%, rgba(99, 230, 203, 0.26), transparent 36%);
+  filter: blur(52px);
+  opacity: 0.9;
+}
+.grid-layer {
+  position: absolute;
+  inset: -10%;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  background-size: 140px 140px, 140px 140px;
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.45) 12%, rgba(0,0,0,0.7) 100%);
+  opacity: 0.42;
+}
+.noise-layer {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.25'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+  opacity: 0.32;
+}
+
+.light-line {
+  position: absolute;
+  width: 140%;
+  height: 2px;
+  left: -20%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.22) 12%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.22) 88%, transparent 100%);
+  filter: blur(1px);
+  mix-blend-mode: screen;
+  animation: line-move 14s linear infinite;
+  opacity: 0.5;
+}
+.line-1 { top: 18%; }
+.line-2 { top: 62%; animation-duration: 18s; animation-delay: 3s; }
+
+@keyframes line-move {
+  0% { transform: translateX(-4%); }
+  100% { transform: translateX(12%); }
+}

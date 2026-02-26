@@ -399,7 +399,7 @@ export default function Analytics() {
                       yAxisId="right"
                       type="monotone"
                       dataKey="revenue"
-                      name={t("revenue") || "הכנסות (₪)"}
+                      name={t("revenue")}
                       stroke="#8B5CF6"
                       strokeWidth={2}
                       dot={{ r: 4 }}

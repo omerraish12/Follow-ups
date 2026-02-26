@@ -4,13 +4,12 @@ import {
   BarChart3, Shield, ChevronLeft, Star, CheckCircle,
   ArrowLeft, Sparkles, Rocket, Target, HeartHandshake,
   Activity, TrendingUp, Calendar, MessageCircle,
-  Award, Download, Play, Pause, RotateCcw, Bell, Sun, Moon,
+  Award, Download, Play, Pause, RotateCcw, Bell,
   PhoneCall, Video, MoreVertical, Send, Smile, Paperclip
 } from "lucide-react";
-import { Grid, Instagram, Linkedin, Mail, Slack, Globe2 } from "lucide-react";
+import { Grid, Instagram, Linkedin, Mail, Slack } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -78,7 +77,6 @@ function CountUpValue({
 
 export default function LandingPage() {
   const { t, language, setLanguage } = useLanguage();
-  const { theme, resolvedTheme, setTheme } = useTheme();
   const [isVisible, setIsVisible] = useState({});
   const [activeChat, setActiveChat] = useState<'old' | 'new' | 'both' | null>(null);
   const [chatMessages, setChatMessages] = useState({
@@ -89,7 +87,6 @@ export default function LandingPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [isNavScrolled, setIsNavScrolled] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(76);
-  const [themeMounted, setThemeMounted] = useState(false);
   const sectionRefs = useRef({});
   const navRef = useRef<HTMLElement | null>(null);
   const chatPreviewMessages = [
@@ -198,10 +195,6 @@ export default function LandingPage() {
     handleScroll();
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    setThemeMounted(true);
   }, []);
 
   useEffect(() => {
@@ -321,15 +314,25 @@ export default function LandingPage() {
   const isStatsVisible = Boolean(isVisible["stats"]);
   const isResultsVisible = Boolean(isVisible["results"]);
   const languageCode = language === "he" ? "HE" : "EN";
-  const effectiveTheme = themeMounted
-    ? (theme === "system" ? resolvedTheme || "light" : theme || "light")
-    : "light";
-  const isDarkTheme = effectiveTheme === "dark";
-  const toggleTheme = () => setTheme(isDarkTheme ? "light" : "dark");
   const toggleLanguage = () => setLanguage(language === "en" ? "he" : "en");
 
   return (
-    <div className="min-h-screen bg-background font-sans">
+    <div className="relative min-h-screen bg-background font-sans">
+      {/* Background layers (visible sitewide) */}
+      <div
+        className="absolute inset-x-0 -z-10 overflow-hidden landing-bg"
+        style={{ top: 0, bottom: 0 }}
+      >
+        <div className="mesh-layer" />
+        <div className="grid-layer" />
+        <div className="noise-layer" />
+        <div className="gradient-blob bg-primary/32 left-6 top-16 w-80 h-80" />
+        <div className="gradient-blob bg-secondary/30 right-8 top-1/4 w-96 h-96 animation-delay-4" />
+        <div className="gradient-blob bg-info/24 left-1/2 top-1/2 w-88 h-88 animation-delay-8" />
+        <div className="light-line line-1" />
+        <div className="light-line line-2" />
+      </div>
+
       {/* Navbar */}
       <nav
         ref={navRef}
@@ -384,6 +387,19 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              className={cn(
+                "text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full border transition-all duration-300",
+                isNavScrolled
+                  ? "border-border text-muted-foreground hover:text-foreground hover:border-primary/50"
+                  : "border-white/40 text-white hover:border-white hover:bg-white/10"
+              )}
+              aria-label={`Switch language (current ${languageCode})`}
+            >
+              {languageCode}
+            </button>
             <Link
               to="/login"
               className={cn(
@@ -433,46 +449,6 @@ export default function LandingPage() {
           </div>
         </div>
       </nav>
-
-      <div
-        className={cn(
-          "pointer-events-none fixed bottom-3 left-3 z-[70] transition-all duration-500 ease-out sm:bottom-6 sm:left-6",
-          isNavScrolled ? "translate-y-0 opacity-100" : "translate-y-2 opacity-85"
-        )}
-      >
-        <div className="floating-anchor floating-anchor-left">
-          <button
-            type="button"
-            onClick={toggleLanguage}
-            className={cn("floating-control floating-control-left floating-circle language-orb pointer-events-auto", isDarkTheme && "is-dark")}
-            aria-label={`Switch language (current ${languageCode})`}
-          >
-            <span className="language-orb-ping" />
-            <Globe2 className="language-orb-icon h-4 w-4" />
-            <span className="language-orb-code">{languageCode}</span>
-          </button>
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          "pointer-events-none fixed bottom-3 right-3 z-[70] transition-all duration-500 ease-out sm:bottom-6 sm:right-6",
-          isNavScrolled ? "translate-y-0 opacity-100" : "translate-y-2 opacity-85"
-        )}
-      >
-        <div className="floating-anchor floating-anchor-right">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={cn("floating-control floating-control-right floating-circle theme-orb pointer-events-auto", isDarkTheme && "is-dark")}
-            aria-label={isDarkTheme ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            <span className="theme-orb-core" />
-            <Sun className={cn("theme-orb-icon theme-orb-sun h-4 w-4", !isDarkTheme && "is-active")} />
-            <Moon className={cn("theme-orb-icon theme-orb-moon h-4 w-4", isDarkTheme && "is-active")} />
-          </button>
-        </div>
-      </div>
 
       {/* Hero Section */}
       <section
@@ -607,46 +583,6 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className={cn(sectionCompactClass, "bg-muted/30")} ref={el => sectionRefs.current['stats'] = el}>
-        <div className="mx-auto max-w-[96rem] px-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card className="border-0 bg-transparent shadow-none text-center">
-              <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">
-                  <CountUpValue target={78} isActive={isStatsVisible} suffix="%" locale={numberLocale} />
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_return_rate")}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 bg-transparent shadow-none text-center">
-              <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">
-                  <CountUpValue target={45} isActive={isStatsVisible} prefix={shekelPrefix} suffix="K" locale={numberLocale} />
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_monthly_revenue")}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 bg-transparent shadow-none text-center">
-              <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">
-                  <CountUpValue target={24} isActive={isStatsVisible} suffix="/7" locale={numberLocale} />
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_auto_followup")}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-0 bg-transparent shadow-none text-center">
-              <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">
-                  <CountUpValue target={3.2} decimals={1} isActive={isStatsVisible} suffix="x" locale={numberLocale} />
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_roi")}</p>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
@@ -1184,57 +1120,6 @@ export default function LandingPage() {
               </CardContent>
             </Card>
           </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className={cn(sectionCompactClass)}>
-        <div className="mx-auto max-w-[96rem] px-4">
-          <Card className="relative overflow-hidden border border-primary/20 bg-primary text-white shadow-[0_30px_90px_-40px_rgba(0,0,0,0.6)]">
-            <CardContent className="relative p-10 sm:p-12 lg:p-14">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
-                <div className="max-w-2xl space-y-4">
-                  <Badge className="bg-white/15 text-white border-white/30 shadow-sm px-3 py-1.5 w-fit">
-                    {t("landing_cta_no_commitment")}
-                  </Badge>
-                  <h2 className="text-3xl sm:text-4xl font-extrabold leading-tight">
-                    {t("landing_cta_title")}
-                  </h2>
-                  <p className="text-white/85 text-lg">
-                    {t("landing_cta_subtitle")}
-                  </p>
-                  <div className="flex flex-wrap gap-3 text-sm text-white/80">
-                    <span className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1">
-                      <Users className="h-4 w-4" /> 1,200+ clinics onboarded
-                    </span>
-                    <span className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1">
-                      <Star className="h-4 w-4" /> 4.9/5 average rating
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                  <Button
-                    size="lg"
-                    variant="secondary"
-                    className="w-full sm:w-auto rounded-full text-base px-6 sm:px-8 bg-white/12 border border-white/30 text-white hover:bg-white/18"
-                  >
-                    <Download className="h-5 w-5 mr-2" />
-                    {t("landing_cta_download_brochure")}
-                  </Button>
-                  <Link to="/signup" className="w-full sm:w-auto">
-                    <Button
-                      size="lg"
-                      className="w-full sm:w-auto rounded-full text-base px-6 sm:px-8 bg-white text-primary hover:bg-white/90 shadow-[0_16px_50px_-20px_rgba(0,0,0,0.45)]"
-                    >
-                      {t("landing_cta_start_trial")}
-                      <ArrowLeft className="h-5 w-5 mr-2" />
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </section>
 

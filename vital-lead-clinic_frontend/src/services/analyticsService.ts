@@ -26,6 +26,11 @@ export const analyticsService = {
         return response.data;
     },
 
+    getClinicMessages: async (months = 3) => {
+        const response = await api.get(`/analytics/clinic-messages?months=${months}`);
+        return response.data;
+    },
+
     // Backward-compatible alias for existing callsites.
     getTeamPerformace: async () => {
         return analyticsService.getTeamPerformance();

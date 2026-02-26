@@ -13,12 +13,13 @@ export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
     const { login, user, isLoading, error, clearError } = useAuth();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         email: '',
         password: '',
     });
+    const isRtl = language === 'he';
 
     // Get the redirect path from location state or default to dashboard
     const from = (location.state as any)?.from?.pathname || '/dashboard';
@@ -42,7 +43,7 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+        <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
             <Card className="w-full max-w-md rounded-2xl border-border shadow-card">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
@@ -65,9 +66,9 @@ export default function Login() {
                         )}
 
                         <div className="space-y-2">
-                            <Label htmlFor="email">{t('email')}</Label>
+                            <Label htmlFor="email" className={isRtl ? 'text-right' : ''}>{t('email')}</Label>
                             <div className="relative">
-                                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Mail className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                 <Input
                                     id="email"
                                     name="email"
@@ -75,7 +76,7 @@ export default function Login() {
                                     placeholder="your@email.com"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="pr-10 rounded-xl"
+                                    className={`${isRtl ? 'pl-10' : 'pr-10'} rounded-xl`}
                                     required
                                     dir="ltr"
                                 />
@@ -83,9 +84,9 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="password">{t('password')}</Label>
+                            <Label htmlFor="password" className={isRtl ? 'text-right' : ''}>{t('password')}</Label>
                             <div className="relative">
-                                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Lock className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                 <Input
                                     id="password"
                                     name="password"
@@ -93,14 +94,14 @@ export default function Login() {
                                     placeholder="********"
                                     value={formData.password}
                                     onChange={handleChange}
-                                    className="pr-10 rounded-xl"
+                                    className={`${isRtl ? 'pl-10 pr-10 text-right' : 'pr-10 pl-10'} rounded-xl`}
                                     required
                                     dir="ltr"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground`}
                                 >
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
@@ -126,7 +127,7 @@ export default function Login() {
                             {isLoading ? (
                                 <div className="flex items-center gap-2">
                                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                    <span>מתחבר...</span>
+                                    <span>{t('signing_in')}</span>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2">

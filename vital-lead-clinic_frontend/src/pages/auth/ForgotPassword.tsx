@@ -12,7 +12,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 
 export default function ForgotPassword() {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
+    const isRtl = language === 'he';
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -38,7 +39,7 @@ export default function ForgotPassword() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+        <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
             <Card className="w-full max-w-md rounded-2xl border-border shadow-card">
                 <CardHeader className="text-center">
                     <CardTitle className="text-2xl font-bold">{t('password_reset_title')}</CardTitle>
@@ -63,16 +64,16 @@ export default function ForgotPassword() {
                             </Alert>
                         ) : (
                             <div className="space-y-2">
-                                <Label htmlFor="email">{t('email')}</Label>
+                                <Label htmlFor="email" className={isRtl ? 'text-right' : ''}>{t('email')}</Label>
                                 <div className="relative">
-                                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Mail className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="email"
                                         type="email"
                                         placeholder="your@email.com"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10' : 'pr-10'} rounded-xl`}
                                         required
                                         dir="ltr"
                                     />

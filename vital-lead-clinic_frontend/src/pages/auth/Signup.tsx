@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, User, Phone as PhoneIcon, Building, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 export default function Signup() {
     const navigate = useNavigate();
     const { signup, user, isLoading, error, clearError } = useAuth();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [formData, setFormData] = useState({
@@ -25,6 +25,8 @@ export default function Signup() {
         confirmPassword: '',
         agreeTerms: false,
     });
+
+    const isRtl = language === 'he';
 
     // Redirect if already logged in
     useEffect(() => {
@@ -70,7 +72,7 @@ export default function Signup() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+        <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
             <Card className="w-full max-w-2xl rounded-2xl border-border shadow-card">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
@@ -94,33 +96,34 @@ export default function Signup() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="name">{t('full_name')}</Label>
+                                <Label htmlFor="name" className={isRtl ? 'text-right' : ''}>{t('full_name')}</Label>
                                 <div className="relative">
-                                    <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <User className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="name"
                                         name="name"
-                                        placeholder="ישראל ישראלי"
+                                        placeholder={t('full_name_placeholder')}
                                         value={formData.name}
                                         onChange={handleChange}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10 pr-3 text-right' : 'pr-10'} rounded-xl`}
+                                        dir={isRtl ? 'rtl' : 'ltr'}
                                         required
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="email">{t('email')}</Label>
+                                <Label htmlFor="email" className={isRtl ? 'text-right' : ''}>{t('email')}</Label>
                                 <div className="relative">
-                                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Mail className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="email"
                                         name="email"
                                         type="email"
-                                        placeholder="your@clinic.co.il"
+                                        placeholder={t('email_placeholder') || 'your@clinic.co.il'}
                                         value={formData.email}
                                         onChange={handleChange}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10' : 'pr-10'} rounded-xl`}
                                         required
                                         dir="ltr"
                                     />
@@ -128,40 +131,41 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="phone">{t('phone_number')}</Label>
+                                <Label htmlFor="phone" className={isRtl ? 'text-right' : ''}>{t('phone_number')}</Label>
                                 <div className="relative">
-                                    <PhoneIcon className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <PhoneIcon className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="phone"
                                         name="phone"
-                                        placeholder="050-1234567"
+                                        placeholder={t('phone_placeholder') || '050-1234567'}
                                         value={formData.phone}
                                         onChange={handleChange}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10' : 'pr-10'} rounded-xl`}
                                         dir="ltr"
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="clinicName">{t('clinic_name')}</Label>
+                                <Label htmlFor="clinicName" className={isRtl ? 'text-right' : ''}>{t('clinic_name')}</Label>
                                 <div className="relative">
-                                    <Building className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Building className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="clinicName"
                                         name="clinicName"
-                                        placeholder="מרפאת שיניים הרצליה"
+                                        placeholder={t('clinic_name_placeholder') || t('clinic_name')}
                                         value={formData.clinicName}
                                         onChange={handleChange}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10 pr-3 text-right' : 'pr-10'} rounded-xl`}
+                                        dir={isRtl ? 'rtl' : 'ltr'}
                                     />
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="password">{t('password')}</Label>
+                                <Label htmlFor="password" className={isRtl ? 'text-right' : ''}>{t('password')}</Label>
                                 <div className="relative">
-                                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Lock className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="password"
                                         name="password"
@@ -169,14 +173,14 @@ export default function Signup() {
                                         placeholder="********"
                                         value={formData.password}
                                         onChange={handleChange}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10 pr-10 text-right' : 'pr-10 pl-10'} rounded-xl`}
                                         required
                                         dir="ltr"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground`}
                                     >
                                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </button>
@@ -184,9 +188,9 @@ export default function Signup() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="confirmPassword">{t('confirm_password')}</Label>
+                                <Label htmlFor="confirmPassword" className={isRtl ? 'text-right' : ''}>{t('confirm_password')}</Label>
                                 <div className="relative">
-                                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Lock className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
                                     <Input
                                         id="confirmPassword"
                                         name="confirmPassword"
@@ -194,21 +198,20 @@ export default function Signup() {
                                         placeholder="********"
                                         value={formData.confirmPassword}
                                         onChange={handleChange}
-                                        className="pr-10 rounded-xl"
+                                        className={`${isRtl ? 'pl-10 pr-10 text-right' : 'pr-10 pl-10'} rounded-xl`}
                                         required
                                         dir="ltr"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground`}
                                     >
                                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </button>
                                 </div>
                             </div>
                         </div>
-
                         <div className="flex items-center space-x-2 space-x-reverse">
                             <Checkbox
                                 id="agreeTerms"
@@ -259,3 +262,4 @@ export default function Signup() {
         </div>
     );
 }
+

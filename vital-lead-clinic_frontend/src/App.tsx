@@ -16,6 +16,8 @@ import LandingPage from "@/pages/LandingPage";
 import Login from "@/pages/auth/Login";
 import Signup from "@/pages/auth/Signup";
 import ResetPassword from "@/pages/auth/ResetPassword";
+import Pricing from "@/pages/Pricing";
+import Profile from "@/pages/Profile";
 
 // Protected pages
 import Dashboard from "@/pages/Dashboard";
@@ -54,6 +56,7 @@ const App = () => {
                   <Route path="/signup" element={<Signup />} />
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/pricing" element={<Pricing />} />
 
                   {/* Protected Routes */}
                   <Route
@@ -154,6 +157,19 @@ const App = () => {
                         <AppLayout>
                           <ErrorBoundary>
                             <SettingsPage />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <Profile />
                           </ErrorBoundary>
                         </AppLayout>
                       </ProtectedRoute>

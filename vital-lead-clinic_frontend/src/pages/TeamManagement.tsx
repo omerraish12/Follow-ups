@@ -259,7 +259,7 @@ export default function TeamManagement() {
         if (!newMember.name || !newMember.email) {
             toast({
                 title: t("error"),
-                description: t("add_member_failed") || "Missing required fields",
+                description: t("add_member_failed"),
                 variant: "destructive"
             });
             return;
@@ -285,13 +285,13 @@ export default function TeamManagement() {
             }));
 
             toast({
-                title: t("member_added") || "חבר צוות נוסף",
+                title: t("member_added"),
                 description: t("invitation_sent").replace('%s', newMember.email),
             });
         } catch (error) {
             toast({
                 title: t("error"),
-                description: t("add_member_failed") || "הוספת חבר צוות נכשלה",
+                description: t("add_member_failed"),
                 variant: "destructive"
             });
         } finally {
@@ -317,13 +317,13 @@ export default function TeamManagement() {
             setSelectedMember(null);
 
             toast({
-                title: t("details_updated") || "פרטים עודכנו",
-                description: t("member_updated") || "פרטי חבר הצוות עודכנו בהצלחה",
+                title: t("details_updated"),
+                description: t("member_updated"),
             });
         } catch (error) {
             toast({
                 title: t("error"),
-                description: t("update_failed") || "עדכון פרטים נכשל",
+                description: t("update_failed"),
                 variant: "destructive"
             });
         } finally {
@@ -342,13 +342,13 @@ export default function TeamManagement() {
             setMemberToDelete(null);
 
             toast({
-                title: t("member_removed") || "חבר צוות הוסר",
-                description: t("member_removed_success") || "חבר הצוות הוסר בהצלחה",
+                title: t("member_removed"),
+                description: t("member_removed_success"),
             });
         } catch (error) {
             toast({
                 title: t("error"),
-                description: t("remove_failed") || "הסרת חבר צוות נכשלה",
+                description: t("remove_failed"),
                 variant: "destructive"
             });
         } finally {
@@ -360,13 +360,13 @@ export default function TeamManagement() {
         try {
             await teamService.resetPassword(member.id);
             toast({
-                title: t("settings_saved") || "Reset sent",
+                title: t("settings_saved"),
                 description: t("invitation_sent").replace('%s', member.email),
             });
         } catch (error) {
             toast({
                 title: t("error"),
-                description: t("update_failed") || "Failed to send reset email",
+                description: t("update_failed"),
                 variant: "destructive"
             });
         }
@@ -397,9 +397,9 @@ export default function TeamManagement() {
             case 'admin':
                 return <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20">{t("admin_role")}</Badge>;
             case 'manager':
-                return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">{t("manager_role") || "מנהל מרפאה"}</Badge>;
+                return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">{t("manager_role")}</Badge>;
             default:
-                return <Badge className="bg-gray-500/10 text-gray-500 border-gray-500/20">{t("staff_role") || "צוות"}</Badge>;
+                return <Badge className="bg-gray-500/10 text-gray-500 border-gray-500/20">{t("staff_role")}</Badge>;
         }
     };
 
@@ -408,9 +408,9 @@ export default function TeamManagement() {
             case 'active':
                 return <Badge className="bg-success/10 text-success border-success/20">{t("active")}</Badge>;
             case 'inactive':
-                return <Badge className="bg-destructive/10 text-destructive border-destructive/20">{t("inactive") || "לא פעיל"}</Badge>;
+                return <Badge className="bg-destructive/10 text-destructive border-destructive/20">{t("inactive")}</Badge>;
             default:
-                return <Badge className="bg-warning/10 text-warning border-warning/20">{t("pending") || "ממתין לאישור"}</Badge>;
+                return <Badge className="bg-warning/10 text-warning border-warning/20">{t("pending")}</Badge>;
         }
     };
 
@@ -687,7 +687,7 @@ export default function TeamManagement() {
                 {/* Clinics Tab */}
                 <TabsContent value="clinics" className="space-y-4">
                     <div className="grid grid-cols-1 gap-4">
-                        {clinics.map((clinic) => (
+                        {clinics.map((clinic) => ( 
                             <Card key={clinic.id} className="rounded-2xl border-border">
                                 <CardContent className="p-6">
                                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

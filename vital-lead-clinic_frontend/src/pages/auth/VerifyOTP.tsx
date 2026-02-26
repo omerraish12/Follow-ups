@@ -19,7 +19,7 @@ export default function VerifyOTP() {
     const [timer, setTimer] = useState(60);
     const [canResend, setCanResend] = useState(false);
 
-    const email = searchParams.get('email') || '';
+    const email = searchParams.get('email');
 
     // Redirect if already verified
     useEffect(() => {

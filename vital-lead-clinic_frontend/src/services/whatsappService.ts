@@ -182,5 +182,9 @@ export const whatsappService = {
     const saved = asObject(integrationMap).whatsapp;
     return normalizeWhatsAppConfig(saved);
   },
-};
 
+  sendTemplate: async (payload: { to: string; templateName: string; language?: string; components?: unknown[] }) => {
+    const response = await api.post("/whatsapp/send-template", payload);
+    return response.data;
+  },
+};

@@ -61,14 +61,14 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
 
   const validate = () => {
     const errs: Record<string, string> = {};
-    if (!form.name.trim()) errs.name = t("name_required") || "Name is required";
-    if (!form.phone.trim()) errs.phone = t("phone_required") || "Phone number is required";
+    if (!form.name.trim()) errs.name = t("name_required");
+    if (!form.phone.trim()) errs.phone = t("phone_required");
     else if (!/^\+?[0-9()\-\s]{7,20}$/.test(form.phone.trim()))
-      errs.phone = t("invalid_phone") || "Invalid phone number";
+      errs.phone = t("invalid_phone");
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      errs.email = t("invalid_email") || "Invalid email address";
-    if (!form.service) errs.service = t("service_required") || "Service is required";
-    if (!form.source) errs.source = t("source_required") || "Source is required";
+      errs.email = t("invalid_email");
+    if (!form.service) errs.service = t("service_required");
+    if (!form.source) errs.source = t("source_required");
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -130,7 +130,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Field label={t("full_name") + " *"} error={errors.name}>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("full_name") || "Full name"} className="rounded-xl" maxLength={100} disabled={isSubmitting} />
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("full_name")} className="rounded-xl" maxLength={100} disabled={isSubmitting} />
           </Field>
           <Field label={t("phone_number") + " *"} error={errors.phone}>
             <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+972-50-000-0000" className="rounded-xl" dir="ltr" maxLength={20} disabled={isSubmitting} />
@@ -143,7 +143,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
           </Field>
           <Field label={t("service") + " *"} error={errors.service}>
             <Select value={form.service} onValueChange={(v) => setForm({ ...form, service: v })} disabled={isSubmitting}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_service") || "Select service"} /></SelectTrigger>
+              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_service")} /></SelectTrigger>
               <SelectContent>
                 {services.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
@@ -151,7 +151,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
           </Field>
           <Field label={t("source") + " *"} error={errors.source}>
             <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })} disabled={isSubmitting}>
-              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_source") || "Select source"} /></SelectTrigger>
+              <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_source")} /></SelectTrigger>
               <SelectContent>
                 {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
@@ -173,7 +173,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
           </Field>
           <div className="sm:col-span-2">
             <Field label={t("notes")}>
-              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("additional_notes") || "Additional notes..."} className="rounded-xl resize-none" rows={2} maxLength={500} disabled={isSubmitting} />
+              <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("additional_notes")} className="rounded-xl resize-none" rows={2} maxLength={500} disabled={isSubmitting} />
             </Field>
           </div>
         </div>

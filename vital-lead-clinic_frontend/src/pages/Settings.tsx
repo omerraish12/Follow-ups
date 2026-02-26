@@ -82,8 +82,10 @@ interface Integration {
 export default function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
   const { t, language } = useLanguage();
+  const isRTL = language === 'he' || language === 'ar';
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -91,10 +93,10 @@ export default function SettingsPage() {
   // Clinic settings
   const [clinicSettings, setClinicSettings] = useState<ClinicSettings>({
     id: '1',
-    name: t('clinic_herzliya') || 'מרפאת שיניים הרצליה',
+    name: t('clinic_herzliya'),
     email: 'clinic@herzliya.co.il',
     phone: '09-1234567',
-    address: t('herzliya_address') || 'הרצל 12, הרצליה',
+    address: t('herzliya_address'),
     timezone: 'Asia/Jerusalem',
     language: 'he',
     currency: 'ILS'
@@ -103,10 +105,11 @@ export default function SettingsPage() {
   // User profile
   const [profile, setProfile] = useState<UserProfile>({
     id: '1',
-    name: user?.name || t('admin_role') || 'מנהל מערכת',
+    name: user?.name || t('admin_role'),
     email: user?.email || 'admin@clinic.co.il',
     phone: '050-1234567',
     role: 'admin',
+    avatar: user?.avatar || '',
     createdAt: '2024-01-15'
   });
 
@@ -169,7 +172,8 @@ export default function SettingsPage() {
     autoBackup: true,
     backupFrequency: 'daily',
     retentionDays: 30,
-    lastBackup: '2025-02-23 03:00'
+    lastBackup: '2025-02-23 03:00',
+    lastBackupFile: ''
   });
 
   // Load data
@@ -203,6 +207,7 @@ export default function SettingsPage() {
           email: data.profile.email,
           phone: data.profile.phone || '',
           role: data.profile.role,
+          avatar: data.profile.avatar || '',
           createdAt: data.profile.createdAt,
         });
       }
@@ -217,6 +222,7 @@ export default function SettingsPage() {
           backupFrequency: data.backupSettings.backupFrequency,
           retentionDays: data.backupSettings.retentionDays,
           lastBackup: data.backupSettings.lastBackup || '',
+          lastBackupFile: data.backupSettings.lastBackupFile || ''
         });
       }
 
@@ -390,6 +396,7 @@ export default function SettingsPage() {
         setBackupSettings((prev) => ({
           ...prev,
           lastBackup: updated.lastBackup || prev.lastBackup,
+          lastBackupFile: updated.lastBackupFile ?? prev.lastBackupFile,
         }));
       }
 
@@ -406,9 +413,25 @@ export default function SettingsPage() {
     }
   };
 
-  const handleExportData = async () => {
+  const handleExportData = async (format: "csv" | "json" | "pdf") => {
+    setIsExporting(true);
     try {
-      await settingsService.exportData();
+      const response = await settingsService.exportData(format);
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const disposition = response.headers['content-disposition'] as string | undefined;
+      const suggested = disposition?.match(/filename=\"?([^\";]+)\"?/i)?.[1];
+      const extension = format === 'csv' ? 'csv' : format === 'pdf' ? 'pdf' : 'json';
+      const filename = suggested || `clinic-export-${Date.now()}.${extension}`;
+
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
 
       toast({
         title: t("export_completed"),
@@ -420,6 +443,8 @@ export default function SettingsPage() {
         description: t("export_failed"),
         variant: "destructive"
       });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -512,16 +537,72 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4 mb-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                    {clinicSettings.name.charAt(0)}
-                  </AvatarFallback>
+                  {clinicSettings.logo ? (
+                    <AvatarImage src={clinicSettings.logo} alt={clinicSettings.name} />
+                  ) : (
+                    <AvatarFallback className="bg-primary/10 text-primary text-xl">
+                      {clinicSettings.name.charAt(0)}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
-                <div>
-                  <Button variant="outline" size="sm" className="rounded-lg">
-                    <Upload className="h-4 w-4 ml-2" />
-                    {t("upload_logo")}
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-2">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="logo-upload"
+                      type="file"
+                      accept="image/png, image/jpeg"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast({
+                            title: t("error"),
+                            description: t("logo_format"),
+                            variant: "destructive"
+                          });
+                          return;
+                        }
+                        const formData = new FormData();
+                        formData.append('logo', file);
+                        try {
+                          setIsSaving(true);
+                          const { logo } = await settingsService.uploadLogo(formData);
+                          setClinicSettings((prev) => ({ ...prev, logo }));
+                          toast({ title: t("settings_saved"), description: t("clinic_settings_updated") });
+                        } catch (error) {
+                          toast({
+                            title: t("error"),
+                            description: t("settings_save_failed"),
+                            variant: "destructive"
+                          });
+                        } finally {
+                          setIsSaving(false);
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg"
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                      disabled={isSaving}
+                    >
+                      <Upload className="h-4 w-4 ml-2" />
+                      {t("upload_logo")}
+                    </Button>
+                    {clinicSettings.logo && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-lg text-destructive"
+                        onClick={() => setClinicSettings((prev) => ({ ...prev, logo: undefined }))}
+                      >
+                        {t("delete")}
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
                     {t("logo_format")}
                   </p>
                 </div>
@@ -677,15 +758,73 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center gap-4 mb-4">
                 <Avatar className="h-20 w-20">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                    {profile.name.charAt(0)}
-                  </AvatarFallback>
+                  {profile.avatar ? (
+                    <AvatarImage src={profile.avatar} alt={profile.name} />
+                  ) : (
+                    <AvatarFallback className="bg-primary/10 text-primary text-xl">
+                      {profile.name.charAt(0)}
+                    </AvatarFallback>
+                  )}
                 </Avatar>
                 <div>
-                  <Button variant="outline" size="sm" className="rounded-lg">
-                    <Upload className="h-4 w-4 ml-2" />
-                    {t("upload_photo")}
-                  </Button>
+                  <Input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/png,image/jpeg"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) {
+                        toast({
+                          title: t("error"),
+                          description: t("photo_format"),
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      const formData = new FormData();
+                      formData.append("photo", file);
+                      try {
+                        setIsSaving(true);
+                        const { avatar } = await settingsService.uploadProfilePhoto(formData);
+                        setProfile((prev) => ({ ...prev, avatar }));
+                        await refreshUser?.();
+                        toast({ title: t("profile_updated"), description: t("profile_updated_success") });
+                      } catch (error) {
+                        toast({
+                          title: t("error"),
+                          description: t("settings_save_failed"),
+                          variant: "destructive"
+                        });
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg"
+                      onClick={() => document.getElementById("avatar-upload")?.click()}
+                      disabled={isSaving}
+                    >
+                      <Upload className="h-4 w-4 ml-2" />
+                      {t("upload_photo")}
+                    </Button>
+                    {profile.avatar && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-lg text-destructive"
+                        onClick={() => setProfile((prev) => ({ ...prev, avatar: '' }))}
+                        disabled={isSaving}
+                      >
+                        {t("delete")}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -777,7 +916,10 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2"
+                    className={cn(
+                      "absolute top-1/2 -translate-y-1/2",
+                      isRTL ? "left-3" : "right-3"
+                    )}
                   >
                     {showApiKey ? (
                       <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -1097,16 +1239,43 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button variant="outline" className="h-auto py-4" onClick={handleExportData}>
-                  <Download className="h-5 w-5 mb-2 mx-auto" />
+                <Button
+                  variant="outline"
+                  className="h-auto py-4"
+                  disabled={isExporting}
+                  onClick={() => handleExportData("csv")}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
+                  ) : (
+                    <Download className="h-5 w-5 mb-2 mx-auto" />
+                  )}
                   <span>Excel (CSV)</span>
                 </Button>
-                <Button variant="outline" className="h-auto py-4" onClick={handleExportData}>
-                  <Download className="h-5 w-5 mb-2 mx-auto" />
+                <Button
+                  variant="outline"
+                  className="h-auto py-4"
+                  disabled={isExporting}
+                  onClick={() => handleExportData("pdf")}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
+                  ) : (
+                    <Download className="h-5 w-5 mb-2 mx-auto" />
+                  )}
                   <span>PDF</span>
                 </Button>
-                <Button variant="outline" className="h-auto py-4" onClick={handleExportData}>
-                  <Download className="h-5 w-5 mb-2 mx-auto" />
+                <Button
+                  variant="outline"
+                  className="h-auto py-4"
+                  disabled={isExporting}
+                  onClick={() => handleExportData("json")}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
+                  ) : (
+                    <Download className="h-5 w-5 mb-2 mx-auto" />
+                  )}
                   <span>JSON</span>
                 </Button>
               </div>

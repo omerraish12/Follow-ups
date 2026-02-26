@@ -1,5 +1,5 @@
 // src/pages/NotificationsCenter.tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Bell, BellRing, CheckCheck, X, Clock,
     AlertCircle, CheckCircle, Info, AlertTriangle,
@@ -40,9 +40,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNotifications } from "@/hooks/useNotifications";
+import { settingsService } from "@/services/settingsService";
 import type { NotificationItem } from "@/types/notifications";
 import { formatDistanceToNow } from "date-fns";
 import { he, enUS } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
 
 const notificationIcons = {
     lead: MessageSquare,
@@ -62,6 +64,7 @@ const notificationColors = {
 
 export default function NotificationsCenter() {
     const { t, language } = useLanguage();
+    const navigate = useNavigate();
     const [filter, setFilter] = useState('all');
     const {
         notifications,
@@ -83,17 +86,50 @@ export default function NotificationsCenter() {
         marketingAlerts: false
     });
 
+    useEffect(() => {
+        (async () => {
+            try {
+                const data = await settingsService.getSettings();
+                if (data?.notificationSettings) {
+                    setSettings({
+                        leadAlerts: data.notificationSettings.leadAlerts,
+                        systemAlerts: data.notificationSettings.automationAlerts ?? data.notificationSettings.systemAlerts ?? true,
+                        emailNotifications: data.notificationSettings.emailNotifications,
+                        soundAlerts: data.notificationSettings.pushNotifications,
+                        desktopNotifications: data.notificationSettings.pushNotifications,
+                        dailyDigest: data.notificationSettings.dailyDigest,
+                        marketingAlerts: data.notificationSettings.marketingEmails,
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to load notification settings", error);
+            }
+        })();
+    }, []);
+
     const saveSettings = async () => {
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 500));
-
+            const payload = {
+                emailNotifications: settings.emailNotifications,
+                pushNotifications: settings.desktopNotifications || settings.soundAlerts,
+                leadAlerts: settings.leadAlerts,
+                automationAlerts: settings.systemAlerts,
+                dailyDigest: settings.dailyDigest,
+                weeklyReport: false,
+                marketingEmails: settings.marketingAlerts
+            };
+            await settingsService.updateNotifications(payload);
             toast({
-                title: t("settings_saved") || "הגדרות נשמרו",
-                description: t("notification_preferences_updated") || "העדפות ההתראות עודכנו",
+                title: t("settings_saved"),
+                description: t("notification_preferences_updated"),
             });
         } catch (error) {
             console.error('Error saving settings:', error);
+            toast({
+                title: t("error"),
+                description: t("notification_save_failed"),
+                variant: "destructive"
+            });
         }
     };
 
@@ -154,9 +190,9 @@ export default function NotificationsCenter() {
                         )}
                     </div>
                     <div>
-                        <h1 className="text-2xl font-semibold text-foreground font-display">Notifications & Tasks</h1>
+                        <h1 className="text-2xl font-semibold text-foreground font-display">{t("notifications_title")}</h1>
                         <p className="text-sm text-muted-foreground mt-0.5">
-                            Stay on top of replies, follow‑ups, and system updates.
+            {t("notifications_subtitle")}
                         </p>
                     </div>
                 </div>
@@ -330,8 +366,22 @@ export default function NotificationsCenter() {
                                             </div>
                                             {notification.actionable && (
                                                 <div className="mt-3">
-                                                    <Button size="sm" variant="outline" className="rounded-lg h-8 text-xs">
-                                                        {notification.actionLabel}
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="rounded-lg h-8 text-xs"
+                                                        onClick={() => {
+                                                            if (notification.actionLink) {
+                                                                window.location.href = notification.actionLink;
+                                                                return;
+                                                            }
+                                                            const leadId = notification.metadata?.leadId;
+                                                            if (leadId) {
+                                                                navigate(`/leads/${leadId}`);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {notification.actionLabel || t("view_lead")}
                                                         <Eye className="h-3 w-3 mr-2" />
                                                     </Button>
                                                 </div>

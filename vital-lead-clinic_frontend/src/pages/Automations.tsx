@@ -326,7 +326,7 @@ export default function Automations() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="rounded-full text-xs">
-                        {rule.target_status || "NEW"}
+                        {rule.target_status ? t(`status_${rule.target_status.toLowerCase()}` as any) : t("all_leads")}
                       </Badge>
                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleToggle(rule.id)}>
                         {rule.active ? <ToggleRight className="h-5 w-5 text-primary" /> : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}

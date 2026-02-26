@@ -6,11 +6,13 @@ interface KPI {
     newLeads: number;
     hotLeads: number;
     closedLeads: number;
+    lostLeads?: number;
     totalRevenue: number;
     followupNeeded: number;
     returnedLeads: number;
     returnedRevenue?: number;
     returnRate: number;
+    avgResponseHours?: number;
     period?: string;
 }
 

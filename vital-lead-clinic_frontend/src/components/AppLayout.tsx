@@ -17,12 +17,12 @@ import {
   UserCog,
   AlertCircle,
   LogOut,
-  User
+  User,
+  MoreVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import LanguageSwitcher from "./LanguageSwitcher";
 import ThemeToggle from "./ThemeToggle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { leadService } from "@/services/leadService";
@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import BrandLogo from "./BrandLogo";
 
 const navItemsConfig = [
   { to: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard" },
@@ -53,7 +54,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { t, language } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const { unreadCount, refreshUnreadCount } = useNotifications({ autoFetch: false });
   const notificationCount = unreadCount;
 
@@ -113,9 +114,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={() => setSidebarOpen(false)}
               className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 shadow-lg">
-                <Phone className="h-5 w-5 text-primary-foreground" />
-              </div>
+              <BrandLogo className="h-10 w-10" />
               <div className="min-w-0">
                 <h1 className="text-base font-semibold text-foreground truncate font-display">{t("app_title")}</h1>
                 <p className="text-[11px] text-muted-foreground">{t("app_subtitle")}</p>
@@ -206,8 +205,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <MessageSquare className="h-4 w-4 text-whatsapp" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground">WhatsApp</p>
-                <p className="text-[11px] text-muted-foreground">Ready to connect</p>
+                <p className="text-xs font-semibold text-foreground">{t("whatsapp")}</p>
+                <p className="text-[11px] text-muted-foreground">{t("whatsapp_ready")}</p>
               </div>
               <span className="h-2.5 w-2.5 rounded-full bg-warning animate-pulse-soft" />
             </div>
@@ -216,11 +215,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div className="rounded-xl bg-muted/30 p-2 text-center">
                 <p className="text-xs font-bold text-foreground">78%</p>
-                <p className="text-[9px] text-muted-foreground">Recovery rate</p>
+                <p className="text-[9px] text-muted-foreground">{t("recovery_rate_small")}</p>
               </div>
               <div className="rounded-xl bg-muted/30 p-2 text-center">
                 <p className="text-xs font-bold text-foreground">?45K</p>
-                <p className="text-[9px] text-muted-foreground">Monthly revenue</p>
+                <p className="text-[9px] text-muted-foreground">{t("monthly_revenue_small")}</p>
               </div>
             </div>
           </div>
@@ -261,10 +260,49 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             />
           </div>
 
-          {/* Language Switcher */}
-          <ThemeToggle />
+          {/* Language / Theme (desktop), condensed menu on mobile */}
+          <div className="hidden md:flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => setLanguage(language === "en" ? "he" : "en")}
+              className="h-10 w-10 rounded-full border border-border bg-card text-sm font-semibold flex items-center justify-center uppercase hover:border-primary/40 hover:shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-all"
+              aria-label={`Switch language (current ${language.toUpperCase()})`}
+            >
+              {language.toUpperCase()}
+            </button>
+          </div>
 
-          <LanguageSwitcher />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild className="md:hidden">
+              <button
+                className="relative flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted transition-colors"
+                aria-label="Quick actions"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52 rounded-xl">
+              <div className="px-3 py-2 text-xs uppercase text-muted-foreground tracking-wide">
+                {t("settings")}
+              </div>
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{t("theme")}</span>
+                <ThemeToggle />
+              </div>
+              <DropdownMenuSeparator />
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{t("language")}</span>
+                <button
+                  type="button"
+                  onClick={() => setLanguage(language === "en" ? "he" : "en")}
+                  className="h-10 w-10 rounded-full border border-border bg-card text-sm font-semibold flex items-center justify-center uppercase hover:border-primary/40 transition-colors"
+                >
+                  {language.toUpperCase()}
+                </button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Notifications button */}
           <Link

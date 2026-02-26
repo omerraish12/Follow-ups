@@ -1,4 +1,4 @@
-// src/pages/Dashboard.tsx
+﻿// src/pages/Dashboard.tsx
 import {
   Users,
   DollarSign,
@@ -84,6 +84,7 @@ interface FollowupLead {
 
 // Constants
 const STATUS_COLORS: Record<string, string> = {
+  ALL: "hsl(210, 10%, 50%)",
   NEW: "hsl(210, 80%, 55%)",
   HOT: "hsl(0, 72%, 55%)",
   CLOSED: "hsl(152, 60%, 42%)",
@@ -91,26 +92,54 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const SOURCE_COLORS: Record<string, string> = {
-  'וואטסאפ': '#25D366',
-  'פייסבוק': '#1877F2',
-  'אינסטגרם': '#E4405F',
-  'המלצות': '#8B5CF6',
-  'אחר': '#6B7280'
+  whatsapp: "#25D366",
+  facebook: "#1877F2",
+  instagram: "#E4405F",
+  website: "#8B5CF6",
+  other: "#6B7280"
 };
-
-const STATUS_NAMES: Record<string, string> = {
-  NEW: 'חדש',
-  HOT: 'חם',
-  CLOSED: 'נסגר',
-  LOST: 'אבוד'
-};
-
-const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('month');
   const [isExporting, setIsExporting] = useState(false);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const statusNames = useMemo(() => ({
+    ALL: t("all_leads"),
+    NEW: t("status_new"),
+    HOT: t("status_hot"),
+    CLOSED: t("status_closed"),
+    LOST: t("status_lost")
+  }), [t]);
+
+  const weekDays = useMemo(() => [
+    t("sunday"),
+    t("monday"),
+    t("tuesday"),
+    t("wednesday"),
+    t("thursday"),
+    t("friday"),
+    t("saturday"),
+  ], [t]);
+
+  const formatCurrency = useCallback((value?: number | null) => {
+    const formatter = new Intl.NumberFormat(language === "he" ? "he-IL" : "en-US", {
+      style: "currency",
+      currency: "ILS",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+    return formatter.format(value || 0);
+  }, [language]);
+
+  const formatSourceLabel = useCallback((source?: string) => {
+    const value = (source || "").toLowerCase().trim();
+    if (value.includes("whatsapp") || value.includes("וואטסאפ")) return t("source_whatsapp");
+    if (value.includes("facebook") || value.includes("פייסבוק")) return t("source_facebook");
+    if (value.includes("instagram") || value.includes("אינסטגרם")) return t("source_instagram");
+    if (value.includes("site") || value.includes("website") || value.includes("אתר")) return t("source_website");
+    if (!source) return "-";
+    return source;
+  }, [t]);
 
   // Real data hooks
   const {
@@ -148,30 +177,49 @@ export default function Dashboard() {
   // Generate recent activity from leads data
   useEffect(() => {
     if (leads?.length) {
-      const activities: Activity[] = leads.slice(0, 5).map((lead, index) => {
-        const days = ['היום', 'אתמול', 'לפני 3 ימים', 'לפני שבוע', 'לפני שבועיים'];
-        const types: Activity['type'][] = ['new', 'hot', 'followup', 'closed', 'return'];
-        const descriptions = [
-          'ליד חדש נוצר במערכת',
-          'הפך לחם - מעוניין בטיפול',
-          'לא הגיב 5 ימים - דורש מעקב',
-          'טיפול נקבע - הכנסה חדשה',
-          'חזר לאחר הודעת מעקב אוטומטית'
-        ];
+      const descriptionSets = language === "he"
+        ? [
+            "ליד חדש נוסף למערכת",
+            "הפך לחם - מוכן לטיפול",
+            "לא הגיב 5 ימים - דורש מעקב",
+            "טיפול נסגר - הכנסה חדשה",
+            "חזר לאחר הודעות מעקב אוטומטיות"
+          ]
+        : [
+            "New lead captured",
+            "Lead marked as hot - ready for treatment",
+            "No reply for 5 days - follow up needed",
+            "Deal closed - new revenue added",
+            "Lead returned after automated follow-up"
+          ];
 
-        return {
-          id: lead.id,
-          type: types[index % types.length],
-          name: lead.name,
-          desc: descriptions[index % descriptions.length],
-          time: days[index % days.length],
-          value: lead.value || Math.floor(Math.random() * 1000) + 200
-        };
-      });
+      const daysAgo = (count: number) =>
+        language === "he"
+          ? t("days_ago").replace("%s", String(count))
+          : `${count} ${t("days_ago").toLowerCase()}`;
+
+      const days = [
+        t("today"),
+        t("yesterday"),
+        daysAgo(3),
+        daysAgo(7),
+        daysAgo(14),
+      ];
+
+      const types: Activity['type'][] = ['new', 'hot', 'followup', 'closed', 'return'];
+
+      const activities: Activity[] = leads.slice(0, 5).map((lead, index) => ({
+        id: lead.id,
+        type: types[index % types.length],
+        name: lead.name,
+        desc: descriptionSets[index % descriptionSets.length],
+        time: days[index % days.length],
+        value: lead.value || Math.floor(Math.random() * 1000) + 200
+      }));
 
       setRecentActivity(activities);
     }
-  }, [leads]);
+  }, [leads, language, t]);
 
   const handleTimeRangeChange = useCallback((value: string) => {
     setTimeRange(value);
@@ -195,47 +243,102 @@ export default function Dashboard() {
     if (!statusDistribution?.length) return [];
 
     return statusDistribution.map(item => ({
-      name: STATUS_NAMES[item.status] || item.status,
+      name: statusNames[item.status] || item.status,
       value: parseInt(item.count) || 0,
       color: STATUS_COLORS[item.status] || '#6B7280'
     }));
-  }, [statusDistribution]);
+  }, [statusDistribution, statusNames]);
 
   const weeklyChartData = useMemo(() => {
+    const baseDays = [
+      { key: "sunday", label: weekDays[0] },
+      { key: "monday", label: weekDays[1] },
+      { key: "tuesday", label: weekDays[2] },
+      { key: "wednesday", label: weekDays[3] },
+      { key: "thursday", label: weekDays[4] },
+      { key: "friday", label: weekDays[5] },
+      { key: "saturday", label: weekDays[6] },
+    ];
+
     if (!weeklyActivity?.length) {
-      return WEEKDAYS.map(day => ({ day, leads: 0 }));
+      return baseDays.map(({ label }) => ({ day: label, leads: 0 }));
     }
 
-    const daysMap: Record<string, number> = {
-      'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3, 'חמישי': 4, 'שישי': 5, 'שבת': 6
+    const normalizeDay = (value: string) => {
+      const cleaned = (value || "").toLowerCase().replace(/[^a-z\u0590-\u05ff×־]/g, "");
+      const map: Record<string, string> = {
+        sunday: "sunday",
+        sun: "sunday",
+        monday: "monday",
+        mon: "monday",
+        tuesday: "tuesday",
+        tue: "tuesday",
+        wednesday: "wednesday",
+        wed: "wednesday",
+        thursday: "thursday",
+        thu: "thursday",
+        friday: "friday",
+        fri: "friday",
+        saturday: "saturday",
+        sat: "saturday",
+        "ראשון": "sunday",
+        "שני": "monday",
+        "שלישי": "tuesday",
+        "רביעי": "wednesday",
+        "חמישי": "thursday",
+        "שישי": "friday",
+        "שבת": "saturday",
+        "×¨××©×•×Ÿ": "sunday",
+        "×©× ×™": "monday",
+        "×©×œ×™×©×™": "tuesday",
+        "×¨×‘×™×¢×™": "wednesday",
+        "×—×ž×™×©×™": "thursday",
+        "×©×™×©×™": "friday",
+        "×©×‘×ª": "saturday",
+      };
+      return map[cleaned];
     };
 
-    const fullWeek = WEEKDAYS.map(day => ({ day, leads: 0 }));
+    const fullWeek = baseDays.map(({ label }) => ({ day: label, leads: 0 }));
 
     weeklyActivity.forEach(item => {
-      const index = daysMap[item.day];
-      if (index !== undefined) {
+      const key = normalizeDay(item.day);
+      const index = baseDays.findIndex(d => d.key === key);
+      if (index !== -1) {
         fullWeek[index].leads = item.leads || 0;
       }
     });
 
     return fullWeek;
-  }, [weeklyActivity]);
+  }, [weeklyActivity, weekDays]);
 
   const sourceChartData = useMemo((): SourceData[] => {
     if (!sourcePerformance?.length) return [];
 
+    const normalizeSource = (source?: string) => {
+      const value = (source || "").toLowerCase().trim();
+      if (value.includes("whatsapp") || value.includes("וואטסאפ") || value === "×•×•××˜×¡××¤") return "whatsapp";
+      if (value.includes("facebook") || value.includes("פייסבוק") || value === "×¤×™×™×¡×‘×•×§") return "facebook";
+      if (value.includes("instagram") || value.includes("אינסטגרם") || value === "××™× ×¡×˜×’×¨×") return "instagram";
+      if (value.includes("site") || value.includes("website") || value.includes("אתר") || value === "×”×ž×œ×¦×•×ª") return "website";
+      return "other";
+    };
+
     const totalLeads = sourcePerformance.reduce((sum, item) => sum + (item.count || 0), 0);
 
-    return sourcePerformance.map(item => ({
-      name: item.source || 'אחר',
-      value: totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0,
-      conversion: Math.round((item.count / totalLeads) * 100) || 0,
-      color: SOURCE_COLORS[item.source] || SOURCE_COLORS['אחר']
-    }));
-  }, [sourcePerformance]);
+    return sourcePerformance.map(item => {
+      const normalized = normalizeSource(item.source);
+      return {
+        name: item.source || t("other") || "Other",
+        value: totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0,
+        conversion: Math.round((item.count / totalLeads) * 100) || 0,
+        color: SOURCE_COLORS[normalized] || SOURCE_COLORS.other
+      };
+    });
+  }, [sourcePerformance, t]);
 
   const lostLeads = useMemo(() => {
+    if (kpi?.lostLeads !== undefined) return kpi.lostLeads;
     if (!kpi?.totalLeads) return 0;
     return kpi.totalLeads - (kpi.closedLeads + kpi.hotLeads + (kpi.newLeads || 0));
   }, [kpi]);
@@ -305,8 +408,8 @@ export default function Dashboard() {
       });
       rows.push("");
 
-      rows.push(toCsvRow(["Recent leads"]));
-      rows.push(toCsvRow(["Name", "Status", "Source", "Value"]));
+      rows.push(toCsvRow([t("recent_leads_title")]));
+      rows.push(toCsvRow([t("full_name"), t("status"), t("source"), t("value_shekels")]));
       leads.slice(0, 20).forEach((lead) => {
         rows.push(toCsvRow([lead.name || "-", lead.status || "-", lead.source || "-", lead.value || 0]));
       });
@@ -323,7 +426,7 @@ export default function Dashboard() {
       URL.revokeObjectURL(url);
 
       toast({
-        title: t("export") || "Export",
+        title: t("export"),
         description: "Dashboard CSV downloaded.",
       });
     } catch (error) {
@@ -394,9 +497,9 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground font-display">Clinic Overview</h1>
+          <h1 className="text-2xl font-semibold text-foreground font-display">{t("dashboard")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Track pipeline health, recoveries, and revenue in one view.
+            {t("dashboard_subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -444,45 +547,43 @@ export default function Dashboard() {
           value={kpi?.totalLeads || 0}
           icon={Users}
           variant="primary"
-          trend={{
-            value: kpi?.newLeads || 0,
-            positive: true,
-            label: normalizeTrendLabel(t("plus_new"), t("new"))
-          }}
+          trend={
+            kpi?.totalLeads
+              ? {
+                value: Math.round(((kpi.newLeads || 0) / kpi.totalLeads) * 100),
+                positive: true,
+                label: normalizeTrendLabel(t("plus_new"), t("new"))
+              }
+              : undefined
+          }
         />
         <KPICard
           title={t("hot_leads")}
           value={kpi?.hotLeads || 0}
           icon={Flame}
           variant="warning"
-          trend={{
-            value: kpi?.totalLeads ? Math.round((kpi.hotLeads / kpi.totalLeads) * 100) : 0,
-            positive: true,
-            label: t("performance")
-          }}
+          trend={
+            kpi?.totalLeads
+              ? {
+                value: Math.round(((kpi.hotLeads || 0) / kpi.totalLeads) * 100),
+                positive: true,
+                label: t("performance")
+              }
+              : undefined
+          }
         />
         <KPICard
           title={t("return_rate")}
           value={`${kpi?.returnRate || 0}%`}
           icon={Target}
           variant="success"
-          trend={{
-            value: 5,
-            positive: true,
-            label: normalizeTrendLabel(t("plus_percent_last_month"), t("last_month"))
-          }}
           subtitle={`${kpi?.returnedLeads || 0} ` + t("returned_leads")}
         />
         <KPICard
           title={t("recovery_revenue")}
-          value={`₪${(kpi?.totalRevenue || 0).toLocaleString()}`}
+          value={formatCurrency(kpi?.totalRevenue)}
           icon={DollarSign}
           variant="info"
-          trend={{
-            value: 23,
-            positive: true,
-            label: t("performance")
-          }}
         />
       </div>
 
@@ -490,17 +591,24 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <KPICard
           title={t("send_reminder")}
-          value="2.5 שעות"
+          value={`${(kpi?.avgResponseHours ?? 0).toFixed(1)} ${language === "he" ? "שעות" : "hrs"}`}
           icon={Clock}
           subtitle={t("last_3_days")}
-          trend={{ value: 15, positive: true, label: t("performance") }}
         />
         <KPICard
           title={t("treatment_scheduled_new_revenue")}
           value={kpi?.closedLeads || 0}
           icon={CheckCircle}
           subtitle={t("this_month")}
-          trend={{ value: 8, positive: true, label: t("performance") }}
+          trend={
+            kpi?.totalLeads
+              ? {
+                value: Math.round(((kpi.closedLeads || 0) / kpi.totalLeads) * 100),
+                positive: true,
+                label: t("performance")
+              }
+              : undefined
+          }
         />
         <KPICard
           title={t("status_lost")}
@@ -508,15 +616,31 @@ export default function Dashboard() {
           icon={XCircle}
           variant="destructive"
           subtitle={t("this_month")}
-          trend={{ value: 3, positive: false, label: t("performance") }}
+          trend={
+            kpi?.totalLeads
+              ? {
+                value: Math.round((lostLeads / kpi.totalLeads) * 100),
+                positive: false,
+                label: t("performance")
+              }
+              : undefined
+          }
         />
         <KPICard
           title={t("needs_followup_clock")}
-          value={followupLeads.length}
+          value={kpi?.followupNeeded ?? followupLeads.length}
           icon={Bell}
           variant="warning"
           subtitle={t("leads_not_responded")}
-          trend={{ value: 2, positive: false, label: t("leads_pending_followup") }}
+          trend={
+            kpi?.totalLeads
+              ? {
+                value: Math.round(((kpi.followupNeeded || 0) / kpi.totalLeads) * 100),
+                positive: false,
+                label: t("leads_pending_followup")
+              }
+              : undefined
+          }
         />
       </div>
 
@@ -529,15 +653,15 @@ export default function Dashboard() {
             </div>
             <div className="flex-1">
               <p className="font-semibold text-foreground">
-                {followupLeads.length} leads need a follow‑up today
+                {followupLeads.length} {t("followup_banner_title")}
               </p>
               <p className="text-sm text-muted-foreground">
-                Reach out before the conversation cools down.
+                {t("followup_banner_subtitle")}
               </p>
             </div>
             <Link to="/leads?filter=followup">
               <Button variant="outline" size="sm" className="rounded-xl">
-                Review follow‑ups
+                {t("review_followups")}
               </Button>
             </Link>
           </div>
@@ -572,7 +696,7 @@ export default function Dashboard() {
                         background: "hsl(0, 0%, 100%)",
                         border: "1px solid hsl(240, 12%, 90%)",
                         borderRadius: "10px",
-                        direction: "rtl"
+                        direction: language === "he" ? "rtl" : "ltr"
                       }}
                       formatter={(value: number) => [value, t("leads")]}
                     />
@@ -653,7 +777,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-center p-4 bg-muted/30 rounded-xl">
                       <p className="text-2xl font-bold text-primary">
-                        ₪{(kpi?.returnedRevenue || 0).toLocaleString()}
+                        {formatCurrency(kpi?.returnedRevenue)}
                       </p>
                       <p className="text-xs text-muted-foreground">{t("recovery_revenue")}</p>
                     </div>
@@ -770,8 +894,8 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <Card className="rounded-2xl border-border">
           <CardHeader>
-            <CardTitle className="text-lg">Recent activity</CardTitle>
-            <CardDescription>Latest changes across your pipeline.</CardDescription>
+          <CardTitle className="text-lg">{t("recent_activity_title")}</CardTitle>
+          <CardDescription>{t("recent_activity_subtitle")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -795,7 +919,7 @@ export default function Dashboard() {
                     </div>
                     <p className="text-sm text-muted-foreground">{activity.desc}</p>
                     {activity.value > 0 && (
-                      <p className="text-xs font-bold text-success mt-1">₪{activity.value}</p>
+                      <p className="text-xs font-bold text-success mt-1">{formatCurrency(activity.value)}</p>
                     )}
                   </div>
                 </div>
@@ -809,8 +933,8 @@ export default function Dashboard() {
         {/* Top Performing Rules */}
         <Card className="rounded-2xl border-border">
           <CardHeader>
-            <CardTitle className="text-lg">Top performing automations</CardTitle>
-            <CardDescription>Which sequences drive the most replies.</CardDescription>
+          <CardTitle className="text-lg">{t("top_automations_title")}</CardTitle>
+          <CardDescription>{t("top_automations_subtitle")}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -844,12 +968,12 @@ export default function Dashboard() {
         <CardHeader className="border-b border-border">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">Recent leads</CardTitle>
-              <CardDescription>Latest activity across the team.</CardDescription>
+              <CardTitle className="text-lg">{t("recent_leads_title")}</CardTitle>
+              <CardDescription>{t("recent_leads_subtitle")}</CardDescription>
             </div>
             <Link to="/leads">
               <Button variant="ghost" size="sm" className="rounded-xl">
-                View all
+                {t("view_all")}
                 <ArrowLeft className="h-4 w-4 mr-2" />
               </Button>
             </Link>
@@ -889,8 +1013,8 @@ export default function Dashboard() {
                       </td>
                       <td className="px-6 py-4 text-muted-foreground">{lead.service || '-'}</td>
                       <td className="px-6 py-4"><StatusBadge status={lead.status} /></td>
-                      <td className="px-6 py-4 text-muted-foreground">{lead.source || '-'}</td>
-                      <td className="px-6 py-4 font-bold">₪{(lead.value || 0).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-muted-foreground">{formatSourceLabel(lead.source)}</td>
+                      <td className="px-6 py-4 font-bold">{formatCurrency(lead.value)}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <MessageSquare className="h-4 w-4 text-muted-foreground" />
