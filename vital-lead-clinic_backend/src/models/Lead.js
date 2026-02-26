@@ -90,6 +90,18 @@ class Lead {
         return result.rows[0];
     }
 
+    static async findByPhone(phone) {
+        if (!phone) return null;
+        const normalized = phone.replace(/[^0-9+]/g, '');
+        const result = await query(
+            `SELECT * FROM leads 
+             WHERE regexp_replace(phone, '[^0-9+]', '', 'g') = $1
+             LIMIT 1`,
+            [normalized]
+        );
+        return result.rows[0];
+    }
+
     static async update(id, clinicId, leadData) {
         const fields = [];
         const values = [];
@@ -188,6 +200,7 @@ class Lead {
          COUNT(CASE WHEN status = 'NEW' AND created_at >= $2 THEN 1 END) as new,
          COUNT(CASE WHEN status = 'HOT' THEN 1 END) as hot,
          COUNT(CASE WHEN status = 'CLOSED' AND updated_at >= $2 THEN 1 END) as closed,
+         COUNT(CASE WHEN status = 'LOST' THEN 1 END) as lost,
          COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN value ELSE 0 END), 0) as revenue
        FROM leads 
        WHERE clinic_id = $1`,

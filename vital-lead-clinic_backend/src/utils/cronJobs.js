@@ -80,15 +80,15 @@ class CronJobs {
                     `SELECT l.* 
            FROM leads l
            WHERE l.clinic_id = $1 
-             AND l.status = $2
-             AND l.last_contacted <= $3
+             AND ($2::lead_status IS NULL OR l.status = $2::lead_status)
+             AND COALESCE(l.last_contacted, l.created_at) <= $3
              AND NOT EXISTS (
                SELECT 1 FROM executions e 
                WHERE e.lead_id = l.id 
                  AND e.automation_id = $4
                  AND e.executed_at >= $3
              )`,
-                    [automation.clinic_id, automation.target_status, targetDate, automation.id]
+                    [automation.clinic_id, automation.target_status || null, targetDate, automation.id]
                 );
 
                 for (const lead of leads.rows) {

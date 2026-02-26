@@ -90,6 +90,7 @@ async function initializeDatabase() {
         await query(`UPDATE clinics SET timezone = 'Asia/Jerusalem' WHERE timezone IS NULL;`);
         await query(`UPDATE clinics SET language = 'he' WHERE language IS NULL;`);
         await query(`UPDATE clinics SET currency = 'ILS' WHERE currency IS NULL;`);
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`);
 
         // Create leads table
         await query(`

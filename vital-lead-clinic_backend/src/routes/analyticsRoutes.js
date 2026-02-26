@@ -4,7 +4,8 @@ const {
     getStatusDistribution,
     getSourcePerformance,
     getWeeklyActivity,
-    getTeamPerformance
+    getTeamPerformance,
+    getClinicMessages
 } = require('../controllers/analyticsController');
 const { protect } = require('../middleware/auth');
 
@@ -17,5 +18,6 @@ router.get('/status-distribution', getStatusDistribution);
 router.get('/source-performance', getSourcePerformance);
 router.get('/weekly-activity', getWeeklyActivity);
 router.get('/team-performance', getTeamPerformance);
+router.get('/clinic-messages', getClinicMessages);
 
 module.exports = router;

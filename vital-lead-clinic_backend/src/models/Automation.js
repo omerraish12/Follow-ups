@@ -4,7 +4,7 @@ const DEFAULT_AUTOMATIONS = Object.freeze([
     {
         name: '3-Day Follow-up',
         triggerDays: [3],
-        message: 'Hi {name}, we wanted to check in about {service}. Reply here and we can help you book an appointment.',
+        message: 'Hi {name}, just checking in about {service}. We saved you a slot this week—reply here and we will book it for you.',
         targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
@@ -12,7 +12,7 @@ const DEFAULT_AUTOMATIONS = Object.freeze([
     {
         name: '7-Day Reminder',
         triggerDays: [7],
-        message: 'Hi {name}, this is a friendly reminder about {service}. We still have appointments available this week.',
+        message: 'Hi {name}, following up on your interest in {service}. We have openings next week—want us to reserve one?',
         targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
@@ -20,8 +20,24 @@ const DEFAULT_AUTOMATIONS = Object.freeze([
     {
         name: '14-Day Win-back',
         triggerDays: [14],
-        message: 'Hi {name}, we would love to welcome you back for {service}. Reply to this message and we will assist right away.',
+        message: 'Hi {name}, it’s been a while. We’re offering a follow-up on {service} this week. Reply YES and we’ll schedule you.',
         targetStatus: 'LOST',
+        notifyOnReply: true,
+        personalization: ['name', 'service']
+    },
+    {
+        name: 'Post-Treatment Check-in',
+        triggerDays: [2],
+        message: 'Hi {name}, how are you feeling after your {service}? Let us know if you have questions—we’re here to help.',
+        targetStatus: 'CLOSED',
+        notifyOnReply: true,
+        personalization: ['name', 'service']
+    },
+    {
+        name: 'No-Reply Nudge',
+        triggerDays: [5],
+        message: 'Hi {name}, we didn’t hear back about {service}. Want to pick a time? Reply with a day that works for you.',
+        targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
     }

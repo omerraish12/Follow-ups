@@ -3,6 +3,38 @@ const Automation = require('../models/Automation');
 const User = require('../models/User');
 const { query } = require('../config/database');
 
+// @desc    Get clinic messages within a recent window (default 3 months)
+// @route   GET /api/analytics/clinic-messages?months=3
+const getClinicMessages = async (req, res) => {
+    try {
+        const clinicId = req.user.clinic_id;
+        const months = Math.min(Math.max(parseInt(req.query.months || '3', 10) || 3, 1), 12);
+
+        const result = await query(
+            `SELECT 
+                m.*,
+                l.name AS lead_name,
+                l.phone AS lead_phone,
+                l.status AS lead_status
+             FROM messages m
+             JOIN leads l ON l.id = m.lead_id
+             WHERE l.clinic_id = $1
+               AND m.timestamp >= NOW() - ($2 || ' months')::interval
+             ORDER BY m.timestamp DESC`,
+            [clinicId, months]
+        );
+
+        res.json({
+            months,
+            count: result.rowCount,
+            messages: result.rows
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 // @desc    Get dashboard KPI data
 // @route   GET /api/analytics/kpi
 const getKPI = async (req, res) => {
@@ -38,6 +70,15 @@ const getKPI = async (req, res) => {
         // Get follow-up needed
         const followupNeeded = await Lead.getFollowupNeeded(clinicId);
 
+        // Average hours since last contact (proxy for reminder cadence)
+        const responseResult = await query(
+            `SELECT AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_contacted)) / 3600) AS avg_hours
+             FROM leads
+             WHERE clinic_id = $1 AND last_contacted IS NOT NULL`,
+            [clinicId]
+        );
+        const avgResponseHours = parseFloat(responseResult.rows[0]?.avg_hours) || 0;
+
         // Get returned leads count
         const returnedResult = await query(
             `SELECT COUNT(DISTINCT lead_id) as count 
@@ -56,10 +97,12 @@ const getKPI = async (req, res) => {
             newLeads: parseInt(stats.new) || 0,
             hotLeads: parseInt(stats.hot) || 0,
             closedLeads: parseInt(stats.closed) || 0,
+            lostLeads: parseInt(stats.lost) || 0,
             totalRevenue: parseFloat(stats.revenue) || 0,
             followupNeeded: followupNeeded.length,
             returnedLeads,
             returnRate: Math.round(returnRate * 10) / 10,
+            avgResponseHours,
             period
         });
     } catch (error) {
@@ -171,5 +214,6 @@ module.exports = {
     getStatusDistribution,
     getSourcePerformance,
     getWeeklyActivity,
-    getTeamPerformance
+    getTeamPerformance,
+    getClinicMessages
 };

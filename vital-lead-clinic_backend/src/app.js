@@ -11,6 +11,8 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const teamRoutes = require('./routes/teamRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
+const whatsappRoutes = require('./routes/whatsappRoutes');
+const pricingRoutes = require('./routes/pricingRoutes');
 
 const app = express();
 
@@ -59,6 +61,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/pricing', pricingRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
