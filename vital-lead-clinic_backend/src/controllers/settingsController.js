@@ -227,19 +227,27 @@ const runBackup = async (req, res) => {
 
 const updateIntegration = async (req, res) => {
     try {
-        const { type, status } = req.body;
+        const { type, status, data } = req.body;
         if (!type || !status) {
             return res.status(400).json({ message: 'Type and status are required' });
         }
+
+        const safeData = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 
         const clinicResult = await query(
             `SELECT integration_settings FROM clinics WHERE id = $1`,
             [req.user.clinic_id]
         );
         const current = clinicResult.rows[0]?.integration_settings || defaultIntegrationSettings;
+        const currentTypeSettings = current?.[type] || {};
         const next = {
             ...current,
-            [type]: { ...(current?.[type] || {}), status }
+            [type]: {
+                ...currentTypeSettings,
+                ...safeData,
+                status,
+                updatedAt: new Date().toISOString()
+            }
         };
 
         const result = await query(

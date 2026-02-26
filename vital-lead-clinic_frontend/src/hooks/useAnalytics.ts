@@ -1,31 +1,42 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { analyticsService } from '@/services/analyticsService';
 
 interface KPI {
-    // Define the structure of the KPI data
-    total: number;
-    conversionRate: number;
-    // Add other KPI-specific fields as necessary
+    totalLeads: number;
+    newLeads: number;
+    hotLeads: number;
+    closedLeads: number;
+    totalRevenue: number;
+    followupNeeded: number;
+    returnedLeads: number;
+    returnedRevenue?: number;
+    returnRate: number;
+    period?: string;
 }
 
 interface StatusDistribution {
     status: string;
-    count: number;
+    count: number | string;
 }
 
 interface SourcePerformance {
     source: string;
-    performance: number;
+    count: number;
 }
 
 interface WeeklyActivity {
-    date: string;
-    activityCount: number;
+    day: string;
+    leads: number;
 }
 
 interface TeamPerformance {
-    teamName: string;
-    performance: number;
+    id: string;
+    name: string;
+    role: string;
+    leadsAssigned: number;
+    activitiesCount: number;
+    conversions: number;
+    revenue: number;
 }
 
 interface ErrorResponse {
@@ -46,16 +57,20 @@ export const useAnalytics = (initialPeriod: string = 'month') => {
     const [error, setError] = useState<string | null>(null);
     const [period, setPeriod] = useState<string>(initialPeriod);
 
-    const fetchAll = async (): Promise<void> => {
+    useEffect(() => {
+        setPeriod(initialPeriod);
+    }, [initialPeriod]);
+
+    const fetchAll = useCallback(async (selectedPeriod = period): Promise<void> => {
         setIsLoading(true);
         setError(null);
         try {
             const [kpiData, statusData, sourceData, weeklyData, teamData] = await Promise.all([
-                analyticsService.getKPI(period),
+                analyticsService.getKPI(selectedPeriod),
                 analyticsService.getStatusDistribution(),
                 analyticsService.getSourcePerformance(),
                 analyticsService.getWeeklyActivity(),
-                analyticsService.getTeamPerformace()
+                analyticsService.getTeamPerformance()
             ]);
 
             setKpi(kpiData);
@@ -69,15 +84,15 @@ export const useAnalytics = (initialPeriod: string = 'month') => {
         } finally {
             setIsLoading(false);
         }
-    };
-
-    useEffect(() => {
-        fetchAll();
     }, [period]);
 
-    const refresh = (): void => {
-        fetchAll();
-    };
+    useEffect(() => {
+        fetchAll(period);
+    }, [period, fetchAll]);
+
+    const refresh = useCallback(async (): Promise<void> => {
+        await fetchAll(period);
+    }, [fetchAll, period]);
 
     return {
         kpi,

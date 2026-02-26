@@ -110,6 +110,7 @@ async function initializeDatabase() {
         assigned_to_id INTEGER REFERENCES users(id) ON DELETE SET NULL
       );
     `);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_follow_up TIMESTAMP;`);
 
         // Create messages table
         await query(`

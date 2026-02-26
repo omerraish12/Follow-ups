@@ -4,6 +4,14 @@ const Message = require('../models/Message');
 const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
 
+const ALLOWED_LEAD_STATUSES = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
+
+const normalizeLeadStatus = (status) => {
+    if (!status || typeof status !== 'string') return undefined;
+    const normalized = status.trim().toUpperCase();
+    return ALLOWED_LEAD_STATUSES.has(normalized) ? normalized : undefined;
+};
+
 // @desc    Get all leads for clinic
 // @route   GET /api/leads
 const getLeads = async (req, res) => {
@@ -63,16 +71,31 @@ const createLead = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { name, phone, email, service, source, value, notes, assignedToId } = req.body;
+        const {
+            name,
+            phone,
+            email,
+            service,
+            status,
+            source,
+            value,
+            notes,
+            nextFollowUp,
+            assignedToId
+        } = req.body;
+
+        const normalizedStatus = normalizeLeadStatus(status) || 'NEW';
 
         const lead = await Lead.create({
             name,
             phone,
             email,
             service,
+            status: normalizedStatus,
             source,
             value: parseFloat(value) || 0,
             notes,
+            nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId,
             clinicId: req.user.clinic_id
         });
@@ -109,7 +132,7 @@ const createLead = async (req, res) => {
 // @route   PUT /api/leads/:id
 const updateLead = async (req, res) => {
     try {
-        const { name, phone, email, service, status, source, value, notes, assignedToId } = req.body;
+        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId } = req.body;
 
         const existingLead = await Lead.findById(req.params.id, req.user.clinic_id);
 
@@ -117,23 +140,26 @@ const updateLead = async (req, res) => {
             return res.status(404).json({ message: 'Lead not found' });
         }
 
+        const normalizedStatus = normalizeLeadStatus(status);
+
         const lead = await Lead.update(req.params.id, req.user.clinic_id, {
             name,
             phone,
             email,
             service,
-            status,
+            status: normalizedStatus,
             source,
-            value: value ? parseFloat(value) : undefined,
+            value: value !== undefined && value !== null ? parseFloat(value) : undefined,
             notes,
+            nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId
         });
 
         // Log status change
-        if (status && status !== existingLead.status) {
+        if (normalizedStatus && normalizedStatus !== existingLead.status) {
             await Activity.create({
                 type: 'STATUS_CHANGED',
-                description: `Status changed from ${existingLead.status} to ${status}`,
+                description: `Status changed from ${existingLead.status} to ${normalizedStatus}`,
                 userId: req.user.id,
                 leadId: lead.id
             });
@@ -141,19 +167,19 @@ const updateLead = async (req, res) => {
             let notifType = 'system';
             let notifPriority = 'medium';
             let notifTitle = 'Lead status updated';
-            let notifMessage = `Lead ${lead.name} moved to ${status}.`;
+            let notifMessage = `Lead ${lead.name} moved to ${normalizedStatus}.`;
 
-            if (status === 'HOT') {
+            if (normalizedStatus === 'HOT') {
                 notifType = 'alert';
                 notifPriority = 'high';
                 notifTitle = 'Lead is hot';
                 notifMessage = `Lead ${lead.name} is now HOT.`;
-            } else if (status === 'CLOSED') {
+            } else if (normalizedStatus === 'CLOSED') {
                 notifType = 'success';
                 notifPriority = 'high';
                 notifTitle = 'Lead closed';
                 notifMessage = `Lead ${lead.name} was closed.`;
-            } else if (status === 'LOST') {
+            } else if (normalizedStatus === 'LOST') {
                 notifType = 'alert';
                 notifPriority = 'medium';
                 notifTitle = 'Lead lost';
@@ -167,7 +193,7 @@ const updateLead = async (req, res) => {
                 priority: notifPriority,
                 actionLabel: 'View lead',
                 actionLink: `/leads/${lead.id}`,
-                metadata: { leadId: lead.id, leadName: lead.name, status },
+                metadata: { leadId: lead.id, leadName: lead.name, status: normalizedStatus },
                 userId: lead.assigned_to_id || null,
                 clinicId: req.user.clinic_id
             });

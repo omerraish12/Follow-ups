@@ -11,8 +11,19 @@ interface Filters {
 interface BulkUpdateData {
   status?: string;
   assignedTo?: string;
-  [key: string]: any; // Allows for dynamic fields
+  [key: string]: unknown;
 }
+
+interface BulkUpdateResult {
+  message: string;
+  count: number;
+}
+
+type LeadUpsertPayload = Omit<Lead, 'id'> & {
+  id?: string;
+  nextFollowUp?: string;
+  assignedToId?: string | number;
+};
 
 export const leadService = {
   // Get all leads with filters
@@ -43,13 +54,13 @@ export const leadService = {
   },
 
   // Create lead
-  createLead: async (leadData: Lead): Promise<Lead> => {
+  createLead: async (leadData: LeadUpsertPayload): Promise<Lead> => {
     const response = await api.post('/leads', leadData);
     return response.data;
   },
 
   // Update lead
-  updateLead: async (id: string, leadData: Lead): Promise<Lead> => {
+  updateLead: async (id: string, leadData: Partial<LeadUpsertPayload>): Promise<Lead> => {
     const response = await api.put(`/leads/${id}`, leadData);
     return response.data;
   },
@@ -67,7 +78,7 @@ export const leadService = {
   },
 
   // Bulk update leads
-  bulkUpdate: async (leadIds: string[], data: BulkUpdateData): Promise<any> => {
+  bulkUpdate: async (leadIds: string[], data: BulkUpdateData): Promise<BulkUpdateResult> => {
     const response = await api.post('/leads/bulk', { leadIds, data });
     return response.data;
   },

@@ -1,5 +1,5 @@
 // src/pages/Leads.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search, MessageSquare, Phone, ChevronLeft, Users, Trash2,
   Clock, AlertCircle, Filter, Download, Mail, CheckCircle,
@@ -70,6 +70,8 @@ export default function Leads() {
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [addLeadOpen, setAddLeadOpen] = useState(false);
 
   // Hooks
   const {
@@ -81,24 +83,24 @@ export default function Leads() {
     fetchLeads,
     deleteLead,
     bulkUpdate,
-    getFollowupNeeded,
-    stats
+    getFollowupNeeded
   } = useLeads();
 
   // Load follow-up count
   const [followupCount, setFollowupCount] = useState(0);
 
+  const loadFollowupCount = useCallback(async () => {
+    try {
+      const data = await getFollowupNeeded();
+      setFollowupCount(data.length);
+    } catch (error) {
+      console.error('Error loading followup count:', error);
+    }
+  }, [getFollowupNeeded]);
+
   useEffect(() => {
-    const loadFollowupCount = async () => {
-      try {
-        const data = await getFollowupNeeded();
-        setFollowupCount(data.length);
-      } catch (error) {
-        console.error('Error loading followup count:', error);
-      }
-    };
     loadFollowupCount();
-  }, []);
+  }, [loadFollowupCount]);
 
   // Update filters when search/filter changes
   useEffect(() => {
@@ -187,6 +189,113 @@ export default function Leads() {
     setShowDeleteDialog(true);
   };
 
+  const handleLeadCreated = useCallback(() => {
+    fetchLeads();
+    loadFollowupCount();
+  }, [fetchLeads, loadFollowupCount]);
+
+  const toCsvCell = useCallback((value: string | number | boolean | null | undefined) => {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    const text = String(value).replace(/"/g, '""');
+    return /[",\n]/.test(text) ? `"${text}"` : text;
+  }, []);
+
+  const toCsvRow = useCallback((values: Array<string | number | boolean | null | undefined>) => {
+    return values.map(toCsvCell).join(",");
+  }, [toCsvCell]);
+
+  const handleExport = useCallback(() => {
+    if (!filteredLeads.length) {
+      toast({
+        title: t("export"),
+        description: t("no_data"),
+      });
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      const now = new Date();
+      const rows: string[] = [];
+
+      rows.push(toCsvRow(["Leads export"]));
+      rows.push(toCsvRow(["Generated at", now.toISOString()]));
+      rows.push(toCsvRow(["Filter", activeFilter]));
+      rows.push(toCsvRow(["Search", search || "-"]));
+      rows.push(toCsvRow(["Source", sourceFilter]));
+      rows.push("");
+
+      rows.push(
+        toCsvRow([
+          "Name",
+          "Phone",
+          "Email",
+          "Service",
+          "Status",
+          "Source",
+          "Value",
+          "Last Contacted",
+          "Next Follow-up",
+          "Messages",
+          "Needs Follow-up",
+          "Notes",
+        ])
+      );
+
+      filteredLeads.forEach((lead) => {
+        const daysSinceLastContact = lead.last_contacted
+          ? Math.floor((Date.now() - new Date(lead.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
+          : 0;
+        const needsFollowup = daysSinceLastContact >= 3 && lead.status !== "CLOSED" && lead.status !== "LOST";
+
+        rows.push(
+          toCsvRow([
+            lead.name || "-",
+            lead.phone || "-",
+            lead.email || "-",
+            lead.service || "-",
+            lead.status || "-",
+            lead.source || "-",
+            lead.value || 0,
+            lead.last_contacted || "-",
+            lead.next_follow_up || lead.nextFollowUp || "-",
+            lead.messages?.length || 0,
+            needsFollowup ? "Yes" : "No",
+            lead.notes || "-",
+          ])
+        );
+      });
+
+      const csvContent = rows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `leads-${now.toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: t("export"),
+        description: "Leads CSV downloaded.",
+      });
+    } catch (error) {
+      console.error("Error exporting leads:", error);
+      toast({
+        title: t("error"),
+        description: "Unable to export leads.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [filteredLeads, toCsvRow, activeFilter, search, sourceFilter, t]);
+
   const handleConfirmDelete = async () => {
     if (!leadToDelete) return;
 
@@ -267,11 +376,15 @@ export default function Leads() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="rounded-xl">
-            <Download className="h-4 w-4 ml-2" />
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 ml-2" />
+            )}
             {t("export")}
           </Button>
-          <AddLeadDialog onSuccess={() => fetchLeads()} />
+          <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} onSuccess={handleLeadCreated} />
         </div>
       </div>
 
@@ -657,7 +770,7 @@ export default function Leads() {
               : t("create_lead_to_start")}
           </p>
           {!search && activeFilter === 'all' && (
-            <Button className="mt-4" onClick={() => { }}>
+            <Button className="mt-4" onClick={() => setAddLeadOpen(true)}>
               <Plus className="h-4 w-4 ml-2" />
               {t("add_new_lead")}
             </Button>

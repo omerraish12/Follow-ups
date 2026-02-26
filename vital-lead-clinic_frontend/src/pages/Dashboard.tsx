@@ -6,7 +6,6 @@ import {
   Flame,
   CheckCircle,
   XCircle,
-  ArrowUpRight,
   MessageSquare,
   Target,
   RefreshCw,
@@ -14,8 +13,7 @@ import {
   AlertCircle,
   Download,
   ArrowLeft,
-  Loader2,
-  TrendingUp
+  Loader2
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -32,10 +30,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
-  AreaChart,
-  Area
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +50,7 @@ import { useAnalytics } from "@/hooks/useAnalytics";
 import { useLeads } from "@/hooks/useLeads";
 import { useAutomations } from "@/hooks/useAutomations";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { toast } from "@/hooks/use-toast";
 
 // Types
 interface Activity {
@@ -78,6 +73,13 @@ interface SourceData {
   value: number;
   conversion: number;
   color: string;
+}
+
+interface FollowupLead {
+  id: string | number;
+  name?: string;
+  status?: string;
+  last_contacted?: string | null;
 }
 
 // Constants
@@ -107,6 +109,7 @@ const WEEKDAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמיש�
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('month');
+  const [isExporting, setIsExporting] = useState(false);
   const { t } = useLanguage();
 
   // Real data hooks
@@ -118,28 +121,29 @@ export default function Dashboard() {
     teamPerformance,
     isLoading: analyticsLoading,
     error: analyticsError,
-    refresh: refreshAnalytics
+    refresh: refreshAnalytics,
+    setPeriod
   } = useAnalytics(timeRange);
 
-  const { leads, getFollowupNeeded, isLoading: leadsLoading } = useLeads();
-  const { stats: automationStats, isLoading: automationsLoading } = useAutomations();
+  const { leads, getFollowupNeeded, fetchLeads, isLoading: leadsLoading } = useLeads();
+  const { stats: automationStats, fetchAutomations, fetchStats, isLoading: automationsLoading } = useAutomations();
 
-  const [followupLeads, setFollowupLeads] = useState<any[]>([]);
+  const [followupLeads, setFollowupLeads] = useState<FollowupLead[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
+
+  const loadFollowupLeads = useCallback(async () => {
+    try {
+      const data = await getFollowupNeeded();
+      setFollowupLeads(data);
+    } catch (error) {
+      console.error('Error loading followup leads:', error);
+    }
+  }, [getFollowupNeeded]);
 
   // Load follow-up leads
   useEffect(() => {
-    const loadFollowupLeads = async () => {
-      try {
-        const data = await getFollowupNeeded();
-        setFollowupLeads(data);
-      } catch (error) {
-        console.error('Error loading followup leads:', error);
-      }
-    };
-
     loadFollowupLeads();
-  }, [getFollowupNeeded]);
+  }, [loadFollowupLeads]);
 
   // Generate recent activity from leads data
   useEffect(() => {
@@ -169,9 +173,20 @@ export default function Dashboard() {
     }
   }, [leads]);
 
-  const handleRefresh = useCallback(() => {
-    refreshAnalytics();
-  }, [refreshAnalytics]);
+  const handleTimeRangeChange = useCallback((value: string) => {
+    setTimeRange(value);
+    setPeriod(value);
+  }, [setPeriod]);
+
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([
+      refreshAnalytics(),
+      fetchLeads(),
+      fetchAutomations(),
+      fetchStats(),
+      loadFollowupLeads()
+    ]);
+  }, [refreshAnalytics, fetchLeads, fetchAutomations, fetchStats, loadFollowupLeads]);
 
   const isLoading = analyticsLoading || leadsLoading || automationsLoading;
 
@@ -229,6 +244,99 @@ export default function Dashboard() {
     if (!automationStats?.totals?.totalExecutions) return 0;
     return ((automationStats.totals.totalReplies || 0) / automationStats.totals.totalExecutions) * 100;
   }, [automationStats]);
+
+  const normalizeTrendLabel = useCallback((template: string, fallback = "") => {
+    const cleaned = template
+      .replace(/\+?%s%?/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    return cleaned || fallback;
+  }, []);
+
+  const toCsvCell = useCallback((value: string | number | boolean | null | undefined) => {
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    const asText = String(value).replace(/"/g, '""');
+    return /[",\n]/.test(asText) ? `"${asText}"` : asText;
+  }, []);
+
+  const toCsvRow = useCallback((values: Array<string | number | boolean | null | undefined>) => {
+    return values.map(toCsvCell).join(",");
+  }, [toCsvCell]);
+
+  const handleExport = useCallback(() => {
+    try {
+      setIsExporting(true);
+
+      const rows: string[] = [];
+      const now = new Date();
+
+      rows.push(toCsvRow(["Dashboard export"]));
+      rows.push(toCsvRow(["Generated at", now.toISOString()]));
+      rows.push(toCsvRow(["Period", timeRange]));
+      rows.push("");
+
+      rows.push(toCsvRow(["KPI", "Value"]));
+      rows.push(toCsvRow([t("total_leads"), kpi?.totalLeads || 0]));
+      rows.push(toCsvRow([t("hot_leads"), kpi?.hotLeads || 0]));
+      rows.push(toCsvRow([t("return_rate"), `${kpi?.returnRate || 0}%`]));
+      rows.push(toCsvRow([t("recovery_revenue"), kpi?.totalRevenue || 0]));
+      rows.push(toCsvRow([t("needs_followup_clock"), followupLeads.length]));
+      rows.push("");
+
+      rows.push(toCsvRow(["Status", "Count"]));
+      statusChartData.forEach((item) => {
+        rows.push(toCsvRow([item.name, item.value]));
+      });
+      rows.push("");
+
+      rows.push(toCsvRow(["Source", "Share (%)"]));
+      sourceChartData.forEach((item) => {
+        rows.push(toCsvRow([item.name, item.value]));
+      });
+      rows.push("");
+
+      rows.push(toCsvRow(["Weekday", "Leads"]));
+      weeklyChartData.forEach((item) => {
+        rows.push(toCsvRow([item.day, item.leads]));
+      });
+      rows.push("");
+
+      rows.push(toCsvRow(["Recent leads"]));
+      rows.push(toCsvRow(["Name", "Status", "Source", "Value"]));
+      leads.slice(0, 20).forEach((lead) => {
+        rows.push(toCsvRow([lead.name || "-", lead.status || "-", lead.source || "-", lead.value || 0]));
+      });
+
+      const csvContent = rows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `dashboard-${timeRange}-${now.toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: t("export") || "Export",
+        description: "Dashboard CSV downloaded.",
+      });
+    } catch (error) {
+      console.error("Error exporting dashboard:", error);
+      toast({
+        title: "Export failed",
+        description: "Unable to export dashboard data.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [kpi, followupLeads.length, statusChartData, sourceChartData, weeklyChartData, leads, toCsvRow, timeRange, t]);
 
   // Show error state
   if (analyticsError) {
@@ -292,7 +400,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={timeRange} onValueChange={setTimeRange}>
+          <Select value={timeRange} onValueChange={handleTimeRangeChange}>
             <SelectTrigger className="w-[140px] rounded-xl">
               <SelectValue placeholder={t("date_range")} />
             </SelectTrigger>
@@ -312,8 +420,19 @@ export default function Dashboard() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button variant="outline" size="icon" className="rounded-xl">
-            <Download className="h-4 w-4" />
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-xl"
+            onClick={handleExport}
+            disabled={isExporting}
+            title={t("export")}
+          >
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
           </Button>
         </div>
       </div>
@@ -328,7 +447,7 @@ export default function Dashboard() {
           trend={{
             value: kpi?.newLeads || 0,
             positive: true,
-            label: t("plus_new")
+            label: normalizeTrendLabel(t("plus_new"), t("new"))
           }}
         />
         <KPICard
@@ -339,7 +458,7 @@ export default function Dashboard() {
           trend={{
             value: kpi?.totalLeads ? Math.round((kpi.hotLeads / kpi.totalLeads) * 100) : 0,
             positive: true,
-            label: "% " + t("performance")
+            label: t("performance")
           }}
         />
         <KPICard
@@ -350,7 +469,7 @@ export default function Dashboard() {
           trend={{
             value: 5,
             positive: true,
-            label: t("plus_percent_last_month")
+            label: normalizeTrendLabel(t("plus_percent_last_month"), t("last_month"))
           }}
           subtitle={`${kpi?.returnedLeads || 0} ` + t("returned_leads")}
         />

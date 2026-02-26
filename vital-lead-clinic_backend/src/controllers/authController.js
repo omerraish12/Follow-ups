@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
 const { query } = require('../config/database');
 const User = require('../models/User');
+const Automation = require('../models/Automation');
 const emailService = require('../utils/emailService');
 
 // Generate JWT Token
@@ -53,6 +54,13 @@ const signup = async (req, res) => {
             clinicId,
             role: 'ADMIN'
         });
+
+        // Seed starter automations for new clinics
+        try {
+            await Automation.seedDefaults(clinicId);
+        } catch (seedError) {
+            console.error('Failed to seed default automations during signup:', seedError);
+        }
 
         res.status(201).json({
             message: 'User created successfully. Please verify your email.',

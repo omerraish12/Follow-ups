@@ -4,23 +4,81 @@ import {
   BarChart3, Shield, ChevronLeft, Star, CheckCircle,
   ArrowLeft, Sparkles, Rocket, Target, HeartHandshake,
   Activity, TrendingUp, Calendar, MessageCircle,
-  Award, Download, Play, Pause, RotateCcw, Bell,
+  Award, Download, Play, Pause, RotateCcw, Bell, Sun, Moon,
   PhoneCall, Video, MoreVertical, Send, Smile, Paperclip
 } from "lucide-react";
-import { Grid, Instagram, Linkedin, Mail, Slack } from "lucide-react";
+import { Grid, Instagram, Linkedin, Mail, Slack, Globe2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
-import LanguageSwitcher from "@/components/LanguageSwitcher";
 import LogoMark from "@/assets/logo.png";
 
+type CountUpValueProps = {
+  target: number;
+  isActive: boolean;
+  durationMs?: number;
+  decimals?: number;
+  prefix?: string;
+  suffix?: string;
+  locale?: string;
+};
+
+function CountUpValue({
+  target,
+  isActive,
+  durationMs = 1200,
+  decimals = 0,
+  prefix = "",
+  suffix = "",
+  locale = "en-US",
+}: CountUpValueProps) {
+  const [value, setValue] = useState(0);
+  const hasAnimatedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isActive || hasAnimatedRef.current) return;
+
+    hasAnimatedRef.current = true;
+    let rafId = 0;
+    const startTime = performance.now();
+
+    const step = (now: number) => {
+      const progress = Math.min((now - startTime) / durationMs, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      setValue(target * easedProgress);
+
+      if (progress < 1) {
+        rafId = window.requestAnimationFrame(step);
+      } else {
+        setValue(target);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(step);
+
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
+  }, [durationMs, isActive, target]);
+
+  const formattedValue = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+
+  return <>{`${prefix}${formattedValue}${suffix}`}</>;
+}
+
 export default function LandingPage() {
-  const { t, language } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [isVisible, setIsVisible] = useState({});
   const [activeChat, setActiveChat] = useState<'old' | 'new' | 'both' | null>(null);
   const [chatMessages, setChatMessages] = useState({
@@ -30,7 +88,10 @@ export default function LandingPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [isNavScrolled, setIsNavScrolled] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(76);
+  const [themeMounted, setThemeMounted] = useState(false);
   const sectionRefs = useRef({});
+  const navRef = useRef<HTMLElement | null>(null);
   const chatPreviewMessages = [
     { time: "2m", name: "Yossi Cohen", text: "Hi, I wanted to ask about your prices.", avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#111827", color: "#ffffff" },
     { time: "5m", name: "Michal Levi", text: "Thank you very much for the excellent service!", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80", icon: MessageCircle, bg: "#25D366", color: "#ffffff" },
@@ -63,6 +124,29 @@ export default function LandingPage() {
         { time: 8, message: t("landing_demo_scenario2_step5"), icon: Bell },
         { time: 12, message: t("landing_demo_scenario2_step6"), icon: CheckCircle },
       ]
+    }
+  ];
+
+  const faqItems = [
+    {
+      question: t("landing_faq_q1"),
+      answer: t("landing_faq_a1")
+    },
+    {
+      question: t("landing_faq_q2"),
+      answer: t("landing_faq_a2")
+    },
+    {
+      question: t("landing_faq_q3"),
+      answer: t("landing_faq_a3")
+    },
+    {
+      question: t("landing_faq_q4"),
+      answer: t("landing_faq_a4")
+    },
+    {
+      question: t("landing_faq_q5"),
+      answer: t("landing_faq_a5")
     }
   ];
 
@@ -115,6 +199,31 @@ export default function LandingPage() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    setThemeMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const navEl = navRef.current;
+    if (!navEl) return;
+
+    const updateHeaderHeight = () => {
+      const next = Math.round(navEl.offsetHeight || 0);
+      if (next > 0) setHeaderHeight(next);
+    };
+
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(navEl);
+
+    return () => {
+      window.removeEventListener("resize", updateHeaderHeight);
+      observer.disconnect();
+    };
+  }, [isNavScrolled, language]);
 
   const startChatAnimation = () => {
     setChatMessages({ old: [], new: [] });
@@ -196,10 +305,34 @@ export default function LandingPage() {
       : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)]"
   );
 
+  const heroSectionClass = "relative overflow-hidden flex items-center py-16 sm:py-20 md:py-24";
+  const sectionTallClass = "section-pro-bg scroll-mt-28 min-h-[calc(100svh-4.75rem)] md:min-h-screen flex items-center py-12 sm:py-16";
+  const sectionRegularClass = "section-pro-bg scroll-mt-28 py-16 sm:py-20";
+  const sectionCompactClass = "section-pro-bg scroll-mt-28 py-12 sm:py-14";
+  const mobileNavItems = [
+    { href: "#how", label: t("landing_nav_how") },
+    { href: "#demo", label: t("landing_nav_demo") },
+    { href: "#results", label: t("landing_nav_results") },
+    { href: "#pricing", label: t("landing_footer_product_pricing") },
+    { href: "#faq", label: t("landing_nav_faq") },
+  ];
+  const numberLocale = language === "he" ? "he-IL" : "en-US";
+  const shekelPrefix = String.fromCharCode(0x20aa);
+  const isStatsVisible = Boolean(isVisible["stats"]);
+  const isResultsVisible = Boolean(isVisible["results"]);
+  const languageCode = language === "he" ? "HE" : "EN";
+  const effectiveTheme = themeMounted
+    ? (theme === "system" ? resolvedTheme || "light" : theme || "light")
+    : "light";
+  const isDarkTheme = effectiveTheme === "dark";
+  const toggleTheme = () => setTheme(isDarkTheme ? "light" : "dark");
+  const toggleLanguage = () => setLanguage(language === "en" ? "he" : "en");
+
   return (
     <div className="min-h-screen bg-background font-sans">
       {/* Navbar */}
       <nav
+        ref={navRef}
         className={cn(
           "sticky top-0 z-50 transition-all duration-300 backdrop-blur-md supports-[backdrop-filter]:backdrop-blur-md",
           isNavScrolled
@@ -207,7 +340,7 @@ export default function LandingPage() {
             : "bg-primary text-white border-b border-primary/40 shadow-none"
         )}
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2 sm:py-3">
+        <div className="mx-auto flex max-w-[96rem] items-center justify-between px-4 py-2 sm:py-3">
           <div className="flex items-center gap-2 sm:gap-3">
             <div className={cn(
               "flex h-11 w-11 items-center justify-center transition-transform duration-300 overflow-hidden",
@@ -240,6 +373,10 @@ export default function LandingPage() {
               {t("landing_nav_results")}
               <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
+            <a href="#faq" className={navLinkClass}>
+              {t("landing_nav_faq")}
+              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
+            </a>
             <a href="#why" className={navLinkClass}>
               {t("landing_nav_why")}
               <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
@@ -247,9 +384,6 @@ export default function LandingPage() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden sm:block">
-              <LanguageSwitcher tone={isNavScrolled ? "light" : "dark"} />
-            </div>
             <Link
               to="/login"
               className={cn(
@@ -274,18 +408,85 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
+
+        <div className={cn(
+          "md:hidden border-t px-3 py-2",
+          isNavScrolled ? "border-border/80 bg-card/80" : "border-white/20 bg-black/10"
+        )}>
+          <div className="mx-auto max-w-[96rem] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center gap-2 min-w-max">
+              {mobileNavItems.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all duration-200",
+                    isNavScrolled
+                      ? "border-border bg-card text-foreground/80 hover:text-foreground hover:border-primary/40"
+                      : "border-white/25 bg-white/10 text-white hover:bg-white/20"
+                  )}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
       </nav>
+
+      <div
+        className={cn(
+          "pointer-events-none fixed bottom-3 left-3 z-[70] transition-all duration-500 ease-out sm:bottom-6 sm:left-6",
+          isNavScrolled ? "translate-y-0 opacity-100" : "translate-y-2 opacity-85"
+        )}
+      >
+        <div className="floating-anchor floating-anchor-left">
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            className={cn("floating-control floating-control-left floating-circle language-orb pointer-events-auto", isDarkTheme && "is-dark")}
+            aria-label={`Switch language (current ${languageCode})`}
+          >
+            <span className="language-orb-ping" />
+            <Globe2 className="language-orb-icon h-4 w-4" />
+            <span className="language-orb-code">{languageCode}</span>
+          </button>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "pointer-events-none fixed bottom-3 right-3 z-[70] transition-all duration-500 ease-out sm:bottom-6 sm:right-6",
+          isNavScrolled ? "translate-y-0 opacity-100" : "translate-y-2 opacity-85"
+        )}
+      >
+        <div className="floating-anchor floating-anchor-right">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={cn("floating-control floating-control-right floating-circle theme-orb pointer-events-auto", isDarkTheme && "is-dark")}
+            aria-label={isDarkTheme ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <span className="theme-orb-core" />
+            <Sun className={cn("theme-orb-icon theme-orb-sun h-4 w-4", !isDarkTheme && "is-active")} />
+            <Moon className={cn("theme-orb-icon theme-orb-moon h-4 w-4", isDarkTheme && "is-active")} />
+          </button>
+        </div>
+      </div>
 
       {/* Hero Section */}
       <section
-        className="relative overflow-hidden min-h-screen flex items-center py-20 sm:py-24 md:py-28"
-        style={{ background: "linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(215 92% 62%) 55%, hsl(207 95% 60%) 100%)" }}
+        className={heroSectionClass}
+        style={{
+          background: "linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(215 92% 62%) 55%, hsl(207 95% 60%) 100%)",
+          minHeight: `calc(100svh - ${headerHeight}px)`
+        }}
         ref={el => sectionRefs.current['hero'] = el}
       >
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,hsl(var(--primary)_/_0.18),hsl(var(--primary)_/_0.1),transparent)]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsl(var(--primary)_/_0.18),transparent_38%),radial-gradient(circle_at_80%_15%,hsl(var(--primary)_/_0.12),transparent_32%)]" />
 
-        <div className={`relative mx-auto max-w-7xl px-8 lg:px-14 ${fadeInUpClass('hero')}`}>
+        <div className={`relative mx-auto max-w-[96rem] px-4 sm:px-6 lg:px-14 ${fadeInUpClass('hero')}`}>
           <div className="grid lg:grid-cols-[1.05fr_1fr] items-center gap-14 lg:gap-24">
             {/* Chat preview mock (desktop only) */}
             <div className="hidden lg:block">
@@ -356,14 +557,14 @@ export default function LandingPage() {
                 <span className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 w-full h-1.5 rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.9),rgba(255,255,255,0))]"></span>
               </h1>
 
-              <p className="mx-auto lg:mx-0 mt-8 max-w-xl text-lg sm:text-xl text-white/90 leading-relaxed line-clamp-2">
+              <p className="mx-auto lg:mx-0 mt-8 max-w-xl text-base sm:text-xl text-white/90 leading-relaxed">
                 {t("landing_hero_subtitle")}
               </p>
 
               <div className="mt-10 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-4 w-full">
                 <Link
                   to="/signup"
-                  className="group relative w-full sm:w-auto rounded-full bg-white text-primary px-9 py-4 text-lg font-bold shadow-[0_20px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_22px_70px_-10px_rgba(0,0,0,0.4)] overflow-hidden"
+                  className="group relative w-full sm:w-auto rounded-full bg-white text-primary px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-bold shadow-[0_20px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_22px_70px_-10px_rgba(0,0,0,0.4)] overflow-hidden"
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
                     {t("landing_hero_cta_primary")}
@@ -373,7 +574,7 @@ export default function LandingPage() {
 
                 <a
                   href="#demo"
-                  className="group flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-white/30 bg-white/20 backdrop-blur px-9 py-4 text-lg font-semibold text-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-105 hover:bg-white/30 hover:shadow-[0_16px_50px_-10px_rgba(0,0,0,0.45)]"
+                  className="group flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-white/30 bg-white/20 backdrop-blur px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-105 hover:bg-white/30 hover:shadow-[0_16px_50px_-10px_rgba(0,0,0,0.45)]"
                 >
                   <Play className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
                   <span>{t("landing_hero_cta_secondary")}</span>
@@ -411,30 +612,38 @@ export default function LandingPage() {
       </section>
 
       {/* Stats Section */}
-      <section className="bg-muted/30 py-16">
-        <div className="mx-auto max-w-7xl px-4">
+      <section className={cn(sectionCompactClass, "bg-muted/30")} ref={el => sectionRefs.current['stats'] = el}>
+        <div className="mx-auto max-w-[96rem] px-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="border-0 bg-transparent shadow-none text-center">
               <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">78%</div>
+                <div className="text-4xl font-bold text-primary">
+                  <CountUpValue target={78} isActive={isStatsVisible} suffix="%" locale={numberLocale} />
+                </div>
                 <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_return_rate")}</p>
               </CardContent>
             </Card>
             <Card className="border-0 bg-transparent shadow-none text-center">
               <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">₪45K</div>
+                <div className="text-4xl font-bold text-primary">
+                  <CountUpValue target={45} isActive={isStatsVisible} prefix={shekelPrefix} suffix="K" locale={numberLocale} />
+                </div>
                 <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_monthly_revenue")}</p>
               </CardContent>
             </Card>
             <Card className="border-0 bg-transparent shadow-none text-center">
               <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">24/7</div>
+                <div className="text-4xl font-bold text-primary">
+                  <CountUpValue target={24} isActive={isStatsVisible} suffix="/7" locale={numberLocale} />
+                </div>
                 <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_auto_followup")}</p>
               </CardContent>
             </Card>
             <Card className="border-0 bg-transparent shadow-none text-center">
               <CardContent className="pt-6">
-                <div className="text-4xl font-bold text-primary">3.2x</div>
+                <div className="text-4xl font-bold text-primary">
+                  <CountUpValue target={3.2} decimals={1} isActive={isStatsVisible} suffix="x" locale={numberLocale} />
+                </div>
                 <p className="text-sm text-muted-foreground mt-2">{t("landing_stat_roi")}</p>
               </CardContent>
             </Card>
@@ -443,8 +652,8 @@ export default function LandingPage() {
       </section>
 
       {/* How it Works */}
-      <section id="how" className="py-16" ref={el => sectionRefs.current['how'] = el}>
-        <div className={`mx-auto max-w-7xl px-4 ${fadeInUpClass('how')}`}>
+      <section id="how" className={cn(sectionRegularClass)} ref={el => sectionRefs.current['how'] = el}>
+        <div className={`mx-auto max-w-[96rem] px-4 ${fadeInUpClass('how')}`}>
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
               {t("landing_how_badge")}
@@ -494,8 +703,8 @@ export default function LandingPage() {
       </section>
 
       {/* Demo Section */}
-      <section id="demo" className="py-16 bg-muted/30" ref={el => sectionRefs.current['demo'] = el}>
-        <div className={`mx-auto max-w-7xl px-4 ${fadeInUpClass('demo')}`}>
+      <section id="demo" className={cn(sectionTallClass, "bg-muted/30")} ref={el => sectionRefs.current['demo'] = el}>
+        <div className={`mx-auto max-w-[96rem] px-4 ${fadeInUpClass('demo')}`}>
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
               <Rocket className="h-4 w-4 ml-2" />
@@ -598,12 +807,12 @@ export default function LandingPage() {
                         >
                           <div
                             className={cn(
-                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
                               msg.type === 'sent'
-                                ? 'bg-[#d9fdd3]'
+                                ? 'bg-[#d9fdd3] text-[#111827]'
                                 : msg.type === 'system'
                                   ? 'bg-yellow-100 text-yellow-800 text-xs text-center w-full'
-                                  : 'bg-white'
+                                  : 'bg-white text-[#111827]'
                             )}
                           >
                             {msg.text}
@@ -668,12 +877,12 @@ export default function LandingPage() {
                         >
                           <div
                             className={cn(
-                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
                               msg.type === 'sent'
-                                ? 'bg-[#d9fdd3]'
+                                ? 'bg-[#d9fdd3] text-[#111827]'
                                 : msg.type === 'system'
                                   ? 'bg-blue-100 text-blue-800 text-xs text-center w-full'
-                                  : 'bg-white'
+                                  : 'bg-white text-[#111827]'
                             )}
                           >
                             {msg.text}
@@ -737,8 +946,8 @@ export default function LandingPage() {
       </section>
 
       {/* Results Section */}
-      <section id="results" className="py-16" ref={el => sectionRefs.current['results'] = el}>
-        <div className={`mx-auto max-w-7xl px-4 ${fadeInUpClass('results')}`}>
+      <section id="results" className={cn(sectionRegularClass)} ref={el => sectionRefs.current['results'] = el}>
+        <div className={`mx-auto max-w-[96rem] px-4 ${fadeInUpClass('results')}`}>
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-success/10 text-success">
               <Target className="h-4 w-4 ml-2" />
@@ -756,7 +965,9 @@ export default function LandingPage() {
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-success/10 flex items-center justify-center">
                   <Award className="h-8 w-8 text-success" />
                 </div>
-                <div className="text-4xl font-bold text-success mb-2">78%</div>
+                <div className="text-4xl font-bold text-success mb-2">
+                  <CountUpValue target={78} isActive={isResultsVisible} suffix="%" locale={numberLocale} />
+                </div>
                 <p className="font-semibold">{t("landing_results_card1_title")}</p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {t("landing_results_card1_subtitle")}
@@ -769,7 +980,9 @@ export default function LandingPage() {
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
                   <DollarSign className="h-8 w-8 text-primary" />
                 </div>
-                <div className="text-4xl font-bold text-primary mb-2">₪45K</div>
+                <div className="text-4xl font-bold text-primary mb-2">
+                  <CountUpValue target={45} isActive={isResultsVisible} prefix={shekelPrefix} suffix="K" locale={numberLocale} />
+                </div>
                 <p className="font-semibold">{t("landing_results_card2_title")}</p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {t("landing_results_card2_subtitle")}
@@ -782,7 +995,9 @@ export default function LandingPage() {
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-warning/10 flex items-center justify-center">
                   <Clock className="h-8 w-8 text-warning" />
                 </div>
-                <div className="text-4xl font-bold text-warning mb-2">8h</div>
+                <div className="text-4xl font-bold text-warning mb-2">
+                  <CountUpValue target={8} isActive={isResultsVisible} suffix="h" locale={numberLocale} />
+                </div>
                 <p className="font-semibold">{t("landing_results_card3_title")}</p>
                 <p className="text-sm text-muted-foreground mt-2">
                   {t("landing_results_card3_subtitle")}
@@ -794,8 +1009,8 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="py-16 bg-muted/30" ref={el => sectionRefs.current['pricing'] = el}>
-        <div className="mx-auto max-w-7xl px-4">
+      <section id="pricing" className={cn(sectionRegularClass, "bg-muted/30")} ref={el => sectionRefs.current['pricing'] = el}>
+        <div className="mx-auto max-w-[96rem] px-4">
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
               Pricing
@@ -808,14 +1023,14 @@ export default function LandingPage() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {/* Starter */}
-            <Card className="border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
-              <CardContent className="p-7 space-y-6">
+            <Card className="h-full border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
+              <CardContent className="p-7 h-full flex flex-col gap-6">
                 <div>
                   <p className="text-sm font-semibold text-primary">Starter</p>
                   <p className="text-4xl font-bold mt-2">$0</p>
                   <p className="text-sm text-muted-foreground">Up to 150 contacts • 1 user</p>
                 </div>
-                <div className="space-y-3 text-sm text-foreground">
+                <div className="space-y-3 text-sm text-foreground flex-1">
                   {[
                     "Basic WhatsApp inbox",
                     "Automated reminders",
@@ -828,8 +1043,8 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <Link to="/signup" className="block">
-                  <Button className="w-full rounded-full" variant="outline">
+                <Link to="/signup" className="block mt-auto">
+                  <Button className="w-full rounded-full" variant="outline" size="lg">
                     Get started
                   </Button>
                 </Link>
@@ -837,17 +1052,17 @@ export default function LandingPage() {
             </Card>
 
             {/* Growth */}
-            <Card className="relative border-2 border-primary shadow-card-hover hover:shadow-card transition-all duration-300 overflow-hidden">
+            <Card className="relative h-full border-2 border-primary shadow-card-hover hover:shadow-card transition-all duration-300 overflow-hidden">
               <div className="absolute top-3 right-3 rounded-full bg-primary text-primary-foreground text-xs px-3 py-1 font-semibold shadow-sm">
                 Most popular
               </div>
-              <CardContent className="p-7 space-y-6">
+              <CardContent className="p-7 h-full flex flex-col gap-6">
                 <div>
                   <p className="text-sm font-semibold text-primary">Growth</p>
                   <p className="text-4xl font-bold mt-2">$49</p>
                   <p className="text-sm text-muted-foreground">Up to 2,000 contacts • 5 users</p>
                 </div>
-                <div className="space-y-3 text-sm text-foreground">
+                <div className="space-y-3 text-sm text-foreground flex-1">
                   {[
                     "WhatsApp automation & templates",
                     "Smart lead scoring and tags",
@@ -862,8 +1077,8 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <Link to="/signup" className="block">
-                  <Button className="w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90">
+                <Link to="/signup" className="block mt-auto">
+                  <Button className="w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
                     Start free trial
                   </Button>
                 </Link>
@@ -871,14 +1086,14 @@ export default function LandingPage() {
             </Card>
 
             {/* Scale */}
-            <Card className="border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
-              <CardContent className="p-7 space-y-6">
+            <Card className="h-full border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
+              <CardContent className="p-7 h-full flex flex-col gap-6">
                 <div>
                   <p className="text-sm font-semibold text-primary">Scale</p>
                   <p className="text-4xl font-bold mt-2">$129</p>
                   <p className="text-sm text-muted-foreground">Unlimited contacts • 20 users</p>
                 </div>
-                <div className="space-y-3 text-sm text-foreground">
+                <div className="space-y-3 text-sm text-foreground flex-1">
                   {[
                     "Advanced automations & branching",
                     "API & webhooks",
@@ -892,8 +1107,8 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <Link to="/contact" className="block">
-                  <Button className="w-full rounded-full" variant="outline">
+                <Link to="/contact" className="block mt-auto">
+                  <Button className="w-full rounded-full" variant="outline" size="lg">
                     Talk to sales
                   </Button>
                 </Link>
@@ -903,53 +1118,78 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-16 bg-muted/30">
-        <div className="mx-auto max-w-7xl px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">{t("landing_testimonials_title")}</h2>
+      {/* FAQ */}
+      <section id="faq" className={cn(sectionRegularClass)} ref={el => sectionRefs.current['faq'] = el}>
+        <div className={`mx-auto max-w-[96rem] px-4 ${fadeInUpClass('faq')}`}>
+          <div className="text-center mb-12">
+            <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
+              <MessageCircle className="h-4 w-4 ml-2" />
+              {t("landing_faq_badge")}
+            </Badge>
+            <h2 className="text-3xl md:text-4xl font-bold">{t("landing_faq_title")}</h2>
+            <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
+              {t("landing_faq_subtitle")}
+            </p>
+          </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
-            {[
-              {
-                name: t("landing_testimonial1_name"),
-                clinic: t("landing_testimonial1_clinic"),
-                text: t("landing_testimonial1_text"),
-                rating: 5
-              },
-              {
-                name: t("landing_testimonial2_name"),
-                clinic: t("landing_testimonial2_clinic"),
-                text: t("landing_testimonial2_text"),
-                rating: 5
-              }
-            ].map((testimonial, i) => (
-              <Card key={i} className="border-2">
-                <CardContent className="p-6">
-                  <div className="flex gap-1 mb-3">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-warning text-warning" />
-                    ))}
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <Card className="overflow-hidden border border-primary/20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
+              <CardContent className="p-7 sm:p-8 space-y-6">
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-bold leading-tight">
+                    {t("landing_faq_side_title")}
+                  </h3>
+                  <p className="text-sm text-primary-foreground/85">
+                    {t("landing_faq_side_subtitle")}
+                  </p>
+                </div>
+
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 p-3">
+                    <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>{t("landing_faq_side_point1")}</span>
                   </div>
-                  <p className="text-muted-foreground mb-4">"{testimonial.text}"</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">{testimonial.name}</p>
-                      <p className="text-xs text-muted-foreground">{testimonial.clinic}</p>
-                    </div>
+                  <div className="flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 p-3">
+                    <Shield className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>{t("landing_faq_side_point2")}</span>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                  <div className="flex items-start gap-3 rounded-xl border border-white/20 bg-white/10 p-3">
+                    <Users className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>{t("landing_faq_side_point3")}</span>
+                  </div>
+                </div>
+
+                <Link to="/signup" className="block">
+                  <Button className="w-full rounded-full bg-white text-primary hover:bg-white/90">
+                    {t("landing_cta_start_trial")}
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-border shadow-card">
+              <CardContent className="p-4 sm:p-6">
+                <Accordion type="single" collapsible className="w-full">
+                  {faqItems.map((item, index) => (
+                    <AccordionItem key={index} value={`faq-item-${index}`} className="border-border">
+                      <AccordionTrigger className="py-5 text-left text-base font-semibold hover:no-underline">
+                        {item.question}
+                      </AccordionTrigger>
+                      <AccordionContent className="text-sm leading-7 text-muted-foreground">
+                        {item.answer}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-16">
-        <div className="mx-auto max-w-6xl px-4">
+      <section className={cn(sectionCompactClass)}>
+        <div className="mx-auto max-w-[96rem] px-4">
           <Card className="relative overflow-hidden border border-primary/20 bg-primary text-white shadow-[0_30px_90px_-40px_rgba(0,0,0,0.6)]">
             <CardContent className="relative p-10 sm:p-12 lg:p-14">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
@@ -1000,7 +1240,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-8">
-        <div className="mx-auto max-w-7xl px-4">
+        <div className="mx-auto max-w-[96rem] px-4">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">

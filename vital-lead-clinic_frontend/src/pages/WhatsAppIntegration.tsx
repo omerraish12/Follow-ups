@@ -1,5 +1,5 @@
 // src/pages/WhatsAppIntegration.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
     MessageSquare, Phone, CheckCircle, XCircle,
     AlertCircle, Settings, Webhook, RefreshCw,
@@ -53,13 +53,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { getDefaultWhatsAppConfig, whatsappService, type WhatsAppIntegrationConfig } from "@/services/whatsappService";
 
 interface Template {
     id: string;
     name: string;
     message: string;
     usage: number;
-    successRate: string;
+    successRate: number;
     language: string;
     category: string;
 }
@@ -72,8 +73,24 @@ interface ImportHistory {
     status: 'completed' | 'processing' | 'failed';
 }
 
+interface ConnectionForm {
+    phoneNumber: string;
+    apiKey: string;
+    webhookUrl: string;
+    verificationToken: string;
+    webhookSsl: boolean;
+}
+
+interface TemplateForm {
+    name: string;
+    message: string;
+    category: string;
+    language: string;
+}
+
 export default function WhatsAppIntegration() {
     const { t, language } = useLanguage();
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
     const [showApiKey, setShowApiKey] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -81,217 +98,279 @@ export default function WhatsAppIntegration() {
     const [importing, setImporting] = useState(false);
     const [showTemplateDialog, setShowTemplateDialog] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+    const [templateForm, setTemplateForm] = useState<TemplateForm>({ name: "", message: "", category: "followup", language: "he" });
     const [templates, setTemplates] = useState<Template[]>([]);
     const [importHistory, setImportHistory] = useState<ImportHistory[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+    const [integrationUpdatedAt, setIntegrationUpdatedAt] = useState<string | null>(null);
+    const [connectionForm, setConnectionForm] = useState<ConnectionForm>({
+        phoneNumber: "",
+        apiKey: "",
+        webhookUrl: "https://api.yourclinic.com/whatsapp/webhook",
+        verificationToken: "",
+        webhookSsl: true,
+    });
     const [filterSettings, setFilterSettings] = useState({
         ignorePersonal: true,
         minMessageLength: 10,
         businessKeywords: true,
         ignoreGroups: true,
-        dateRange: '3months'
+        dateRange: '3months',
+        keywords: "appointment, treatment, quote, whitening, consultation"
     });
 
-    // Mock data - replace with actual API calls
-    useEffect(() => {
-        loadTemplates();
-        loadImportHistory();
+    const syncFromConfig = useCallback((config: WhatsAppIntegrationConfig) => {
+        setConnectionStatus(config.status);
+        setConnectionForm({
+            phoneNumber: config.phoneNumber,
+            apiKey: config.apiKey,
+            webhookUrl: config.webhookUrl,
+            verificationToken: config.verificationToken,
+            webhookSsl: config.webhookSsl,
+        });
+        setFilterSettings({
+            ignorePersonal: config.filters.ignorePersonal,
+            minMessageLength: config.filters.minMessageLength,
+            businessKeywords: config.filters.businessKeywords,
+            ignoreGroups: config.filters.ignoreGroups,
+            dateRange: config.filters.dateRange,
+            keywords: config.filters.keywords,
+        });
+        setTemplates(
+            config.templates.map((template) => ({
+                ...template,
+                successRate: Number(template.successRate) || 0,
+            }))
+        );
+        setImportHistory(config.importHistory);
+        setIntegrationUpdatedAt(config.updatedAt);
     }, []);
 
-    const loadTemplates = async () => {
+    const buildConfig = useCallback(
+        (overrides: Partial<WhatsAppIntegrationConfig> = {}): WhatsAppIntegrationConfig => ({
+            ...getDefaultWhatsAppConfig(),
+            status: connectionStatus,
+            phoneNumber: connectionForm.phoneNumber,
+            apiKey: connectionForm.apiKey,
+            webhookUrl: connectionForm.webhookUrl,
+            verificationToken: connectionForm.verificationToken,
+            webhookSsl: connectionForm.webhookSsl,
+            filters: {
+                ignorePersonal: filterSettings.ignorePersonal,
+                minMessageLength: filterSettings.minMessageLength,
+                businessKeywords: filterSettings.businessKeywords,
+                ignoreGroups: filterSettings.ignoreGroups,
+                dateRange: filterSettings.dateRange as "week" | "month" | "3months" | "6months" | "year",
+                keywords: filterSettings.keywords,
+            },
+            templates,
+            importHistory,
+            ...overrides,
+        }),
+        [connectionStatus, connectionForm, filterSettings, templates, importHistory]
+    );
+
+    const saveToBackend = useCallback(
+        async (overrides: Partial<WhatsAppIntegrationConfig> = {}, successMessage?: string) => {
+            setIsSaving(true);
+            try {
+                const saved = await whatsappService.saveConfig(buildConfig(overrides));
+                syncFromConfig(saved);
+                if (successMessage) {
+                    toast({
+                        title: t("success"),
+                        description: successMessage,
+                    });
+                }
+            } catch (error) {
+                console.error("Error saving WhatsApp config:", error);
+                toast({
+                    title: t("error"),
+                    description: t("settings_save_failed"),
+                    variant: "destructive",
+                });
+                throw error;
+            } finally {
+                setIsSaving(false);
+            }
+        },
+        [buildConfig, syncFromConfig, t]
+    );
+
+    const loadConfig = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            setTemplates([
-                {
-                    id: '1',
-                    name: t("follow_up_3_days"),
-                    message: t("hi_name_check_treatment"),
-                    usage: 45,
-                    successRate: "68%",
-                    language: "he",
-                    category: "followup"
-                },
-                {
-                    id: '2',
-                    name: t("follow_up_1_week"),
-                    message: t("hello_name_reminder"),
-                    usage: 32,
-                    successRate: "72%",
-                    language: "he",
-                    category: "followup"
-                },
-                {
-                    id: '3',
-                    name: t("follow_up_1_month"),
-                    message: t("last_treatment_how_feel"),
-                    usage: 28,
-                    successRate: "81%",
-                    language: "he",
-                    category: "followup"
-                },
-                {
-                    id: '4',
-                    name: t("lost_client_special_offer"),
-                    message: t("lost_client_offer"),
-                    usage: 56,
-                    successRate: "91%",
-                    language: "he",
-                    category: "promotion"
-                }
-            ]);
+            const config = await whatsappService.getConfig();
+            syncFromConfig(config);
         } catch (error) {
-            console.error('Error loading templates:', error);
+            console.error("Error loading WhatsApp config:", error);
             toast({
                 title: t("error"),
                 description: t("error_loading_data"),
-                variant: "destructive"
+                variant: "destructive",
             });
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [syncFromConfig, t]);
 
-    const loadImportHistory = async () => {
-        try {
-            // Simulate API call
-            setImportHistory([
-                {
-                    id: '1',
-                    filename: t("february_export"),
-                    date: '15/02/2025',
-                    messages: 1284,
-                    status: 'completed'
-                },
-                {
-                    id: '2',
-                    filename: t("january_export"),
-                    date: '10/01/2025',
-                    messages: 956,
-                    status: 'completed'
-                },
-                {
-                    id: '3',
-                    filename: t("december_export"),
-                    date: '05/12/2024',
-                    messages: 1102,
-                    status: 'completed'
-                }
-            ]);
-        } catch (error) {
-            console.error('Error loading import history:', error);
-        }
-    };
+    useEffect(() => {
+        loadConfig();
+    }, [loadConfig]);
 
     const handleConnect = async () => {
         setConnectionStatus('connecting');
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            setConnectionStatus('connected');
-            toast({
-                title: t("connection_completed"),
-                description: t("whatsapp_account_connected"),
-            });
+            await new Promise(resolve => setTimeout(resolve, 900));
+            await saveToBackend(
+                {
+                    status: "connected",
+                    lastConnectedAt: new Date().toISOString(),
+                },
+                t("whatsapp_account_connected")
+            );
         } catch (error) {
             setConnectionStatus('disconnected');
-            toast({
-                title: t("error"),
-                description: t("connection_failed"),
-                variant: "destructive"
-            });
         }
     };
 
     const handleDisconnect = async () => {
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            setConnectionStatus('disconnected');
-            toast({
-                title: t("disconnect"),
-                description: t("disconnected"),
-            });
+            await saveToBackend({ status: "disconnected" }, t("disconnected"));
         } catch (error) {
-            toast({
-                title: t("error"),
-                description: t("connection_failed"),
-                variant: "destructive"
-            });
+            setConnectionStatus("connected");
         }
     };
 
-    const handleImport = async () => {
+    const handleSaveConnectionDetails = async () => {
+        await saveToBackend({}, "WhatsApp settings saved.");
+    };
+
+    const handleSelectFile = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImport = async (file?: File) => {
         setImporting(true);
         setImportProgress(0);
+        try {
+            for (let i = 0; i <= 80; i += 20) {
+                await new Promise(resolve => setTimeout(resolve, 120));
+                setImportProgress(i);
+            }
+            const processedMessages = file
+                ? (await file.text()).split(/\r?\n/).filter(Boolean).length
+                : 1284;
+            setImportProgress(100);
 
-        // Simulate import progress
-        for (let i = 0; i <= 100; i += 10) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            setImportProgress(i);
+            const entry: ImportHistory = {
+                id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+                filename: file?.name || `import-${new Date().toISOString().slice(0, 10)}.txt`,
+                date: new Date().toISOString(),
+                messages: processedMessages,
+                status: "completed",
+            };
+            const nextHistory = [entry, ...importHistory].slice(0, 30);
+            setImportHistory(nextHistory);
+            await saveToBackend({ importHistory: nextHistory }, `Imported ${processedMessages.toLocaleString()} messages.`);
+        } finally {
+            setImporting(false);
         }
-
-        setImporting(false);
-        toast({
-            title: t("import_completed"),
-            description: t("messages_processed").replace('%s', '1,284'),
-        });
     };
 
-    const handleSaveTemplate = async (templateData: Partial<Template>) => {
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const allowed = /\.(txt|csv|json)$/i.test(file.name);
+        if (!allowed) {
+            toast({
+                title: t("error"),
+                description: "Please upload a .txt, .csv, or .json file.",
+                variant: "destructive",
+            });
+            event.target.value = "";
+            return;
+        }
+        await handleImport(file);
+        event.target.value = "";
+    };
+
+    const handleSaveFilterSettings = async () => {
+        await saveToBackend({}, "Filter settings saved.");
+    };
+
+    const handleOpenCreateTemplate = () => {
+        setEditingTemplate(null);
+        setTemplateForm({ name: "", message: "", category: "followup", language: "he" });
+        setShowTemplateDialog(true);
+    };
+
+    const handleOpenEditTemplate = (template: Template) => {
+        setEditingTemplate(template);
+        setTemplateForm({
+            name: template.name,
+            message: template.message,
+            category: template.category,
+            language: template.language,
+        });
+        setShowTemplateDialog(true);
+    };
+
+    const handleSaveTemplate = async () => {
+        const templateData: Partial<Template> = {
+            name: templateForm.name.trim(),
+            message: templateForm.message.trim(),
+            category: templateForm.category,
+            language: templateForm.language,
+        };
+        if (!templateData.name || !templateData.message) {
+            toast({
+                title: t("error"),
+                description: "Template name and message are required.",
+                variant: "destructive",
+            });
+            return;
+        }
         try {
+            let nextTemplates: Template[];
             if (editingTemplate) {
-                // Update existing template
-                setTemplates(prev => prev.map(t =>
+                nextTemplates = templates.map(t =>
                     t.id === editingTemplate.id ? { ...t, ...templateData } : t
-                ));
-                toast({
-                    title: t("rule_updated"),
-                    description: t("rule_updated_successfully"),
-                });
+                );
             } else {
-                // Create new template
                 const newTemplate: Template = {
-                    id: Date.now().toString(),
+                    id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
                     name: templateData.name || t("template_name"),
                     message: templateData.message || '',
                     usage: 0,
-                    successRate: "0%",
-                    language: "he",
+                    successRate: 0,
+                    language: templateData.language || "he",
                     category: templateData.category || 'followup'
                 };
-                setTemplates(prev => [newTemplate, ...prev]);
-                toast({
-                    title: t("rule_created"),
-                    description: t("rule_created_successfully"),
-                });
+                nextTemplates = [newTemplate, ...templates];
             }
+            setTemplates(nextTemplates);
+            await saveToBackend(
+                { templates: nextTemplates },
+                editingTemplate ? t("rule_updated_successfully") : t("rule_created_successfully")
+            );
         } catch (error) {
-            toast({
-                title: t("error"),
-                description: t("error_loading_data"),
-                variant: "destructive"
-            });
+            // handled in saveToBackend
         } finally {
             setShowTemplateDialog(false);
             setEditingTemplate(null);
+            setTemplateForm({ name: "", message: "", category: "followup", language: "he" });
         }
     };
 
     const handleDeleteTemplate = async (id: string) => {
         try {
-            setTemplates(prev => prev.filter(t => t.id !== id));
-            toast({
-                title: t("rule_deleted"),
-                description: t("rule_removed_successfully"),
-            });
+            const nextTemplates = templates.filter(t => t.id !== id);
+            setTemplates(nextTemplates);
+            await saveToBackend({ templates: nextTemplates }, t("rule_removed_successfully"));
         } catch (error) {
-            toast({
-                title: t("error"),
-                description: t("error_loading_data"),
-                variant: "destructive"
-            });
+            // handled in saveToBackend
         }
     };
 
@@ -301,9 +380,64 @@ export default function WhatsAppIntegration() {
         { id: 3, name: t("mom"), phone: "054-9876543", lastMessage: t("how_are_you_today"), type: "personal", date: "2025-02-20", status: "ignore" },
         { id: 4, name: "משה גולן", phone: "053-4567890", lastMessage: t("whitening_appointment"), type: "business", date: "2025-02-18", status: "hot" },
     ];
+    const previewChats = mockChats.filter((chat) => {
+        const keywords = filterSettings.keywords
+            .split(",")
+            .map((item) => item.trim().toLowerCase())
+            .filter(Boolean);
+        if (filterSettings.ignorePersonal && chat.type === "personal") return false;
+        if (filterSettings.ignoreGroups && chat.type === "group") return false;
+        if (chat.lastMessage.length < filterSettings.minMessageLength) return false;
+        if (!filterSettings.businessKeywords || keywords.length === 0) return true;
+        const text = `${chat.name} ${chat.lastMessage}`.toLowerCase();
+        return keywords.some((keyword) => text.includes(keyword));
+    });
+    const totalImportedMessages = useMemo(
+        () => importHistory.reduce((sum, item) => sum + item.messages, 0),
+        [importHistory]
+    );
+    const importedToday = useMemo(() => {
+        const today = new Date().toISOString().slice(0, 10);
+        return importHistory
+            .filter((item) => item.date.slice(0, 10) === today)
+            .reduce((sum, item) => sum + item.messages, 0);
+    }, [importHistory]);
+    const averageTemplateSuccessRate = useMemo(() => {
+        if (templates.length === 0) {
+            return 0;
+        }
+        const total = templates.reduce((sum, template) => sum + template.successRate, 0);
+        return Math.round(total / templates.length);
+    }, [templates]);
+    const setupProgress = useMemo(() => {
+        let points = 0;
+        if (connectionForm.phoneNumber.trim()) points += 20;
+        if (connectionForm.apiKey.trim()) points += 25;
+        if (connectionForm.webhookUrl.trim()) points += 15;
+        if (connectionStatus === "connected") points += 20;
+        if (templates.length > 0) points += 10;
+        if (importHistory.length > 0) points += 10;
+        return points;
+    }, [connectionForm, connectionStatus, templates.length, importHistory.length]);
+    const formatDateTime = useCallback(
+        (value: string | null) => {
+            if (!value) return "-";
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return "-";
+            return date.toLocaleString(language === "he" ? "he-IL" : "en-US");
+        },
+        [language]
+    );
 
     return (
         <div className="space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.json,text/plain,text/csv,application/json"
+                className="hidden"
+                onChange={handleFileChange}
+            />
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
@@ -357,7 +491,8 @@ export default function WhatsAppIntegration() {
                                         placeholder="972501234567"
                                         dir="ltr"
                                         className="rounded-xl"
-                                        defaultValue="972501234567"
+                                        value={connectionForm.phoneNumber}
+                                        onChange={(event) => setConnectionForm({ ...connectionForm, phoneNumber: event.target.value })}
                                     />
                                 </div>
 
@@ -370,7 +505,8 @@ export default function WhatsAppIntegration() {
                                             placeholder={t("api_key")}
                                             dir="ltr"
                                             className="rounded-xl pl-10"
-                                            defaultValue="sk_live_123456789"
+                                            value={connectionForm.apiKey}
+                                            onChange={(event) => setConnectionForm({ ...connectionForm, apiKey: event.target.value })}
                                         />
                                         <button
                                             type="button"
@@ -391,8 +527,8 @@ export default function WhatsAppIntegration() {
                                     <div className="flex gap-2">
                                         <Input
                                             id="webhook"
-                                            defaultValue="https://api.yourclinic.com/whatsapp/webhook"
-                                            readOnly
+                                            value={connectionForm.webhookUrl}
+                                            onChange={(event) => setConnectionForm({ ...connectionForm, webhookUrl: event.target.value })}
                                             dir="ltr"
                                             className="rounded-xl font-mono text-sm"
                                         />
@@ -401,7 +537,7 @@ export default function WhatsAppIntegration() {
                                             size="icon"
                                             className="rounded-xl shrink-0"
                                             onClick={() => {
-                                                navigator.clipboard.writeText("https://api.yourclinic.com/whatsapp/webhook");
+                                                navigator.clipboard.writeText(connectionForm.webhookUrl);
                                                 setCopied(true);
                                                 setTimeout(() => setCopied(false), 2000);
                                                 toast({
@@ -422,7 +558,8 @@ export default function WhatsAppIntegration() {
                                     <Label htmlFor="verify">{t('verification_token')}</Label>
                                     <Input
                                         id="verify"
-                                        defaultValue="your_verification_token_here"
+                                        value={connectionForm.verificationToken}
+                                        onChange={(event) => setConnectionForm({ ...connectionForm, verificationToken: event.target.value })}
                                         type="password"
                                         dir="ltr"
                                         className="rounded-xl"
@@ -430,22 +567,35 @@ export default function WhatsAppIntegration() {
                                 </div>
 
                                 <div className="flex items-center gap-2 pt-4">
-                                    <Switch id="webhook_ssl" defaultChecked />
+                                    <Switch
+                                        id="webhook_ssl"
+                                        checked={connectionForm.webhookSsl}
+                                        onCheckedChange={(checked) => setConnectionForm({ ...connectionForm, webhookSsl: checked })}
+                                    />
                                     <Label htmlFor="webhook_ssl">{t("enable_ssl_verification")}</Label>
                                 </div>
                             </CardContent>
-                            <CardFooter className="flex justify-between border-t border-border pt-4">
+                            <CardFooter className="flex flex-wrap justify-between gap-2 border-t border-border pt-4">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-xl"
+                                    onClick={handleSaveConnectionDetails}
+                                    disabled={isSaving}
+                                >
+                                    {isSaving && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                                    {t("save") || "Save"}
+                                </Button>
                                 <Button
                                     variant="outline"
                                     className="rounded-xl"
                                     onClick={handleDisconnect}
-                                    disabled={connectionStatus !== 'connected'}
+                                    disabled={connectionStatus !== 'connected' || isSaving}
                                 >
                                     {t("disconnect")}
                                 </Button>
                                 <Button
                                     onClick={handleConnect}
-                                    disabled={connectionStatus === 'connected'}
+                                    disabled={connectionStatus === 'connected' || isSaving}
                                     className="rounded-xl bg-whatsapp hover:bg-whatsapp/90"
                                 >
                                     {connectionStatus === 'connected' ? t('connected') : t('connect')}
@@ -460,9 +610,7 @@ export default function WhatsAppIntegration() {
                             <CardContent className="space-y-4">
                                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
                                     <span className="text-sm">{t("webhook_url")}</span>
-                                    <Badge variant="outline" className="bg-success/10 text-success">
-                                        {t("active")}
-                                    </Badge>
+                                    <Badge variant="outline" className={cn( connectionStatus === "connected" && "bg-success/10 text-success", connectionStatus === "connecting" && "bg-warning/10 text-warning", connectionStatus === "disconnected" && "bg-destructive/10 text-destructive" )}>`n                                        {connectionStatus === "connected" ? t("active") : connectionStatus}`n                                    </Badge>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
                                     <span className="text-sm">{t("messages_received_today") || "הודעות שהתקבלו היום"}</span>
@@ -473,8 +621,7 @@ export default function WhatsAppIntegration() {
                                     <span className="font-bold">250</span>
                                 </div>
                                 <div className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                                    <span className="text-sm">{t("daily_quota") || "מכסה יומית"}</span>
-                                    <span className="font-bold">1,000 / 10,000</span>
+                                    <span className="text-sm">{t("last_update") || "Last update"}</span>`n                                    <span className="font-bold text-xs">`n                                        {integrationUpdatedAt ? new Date(integrationUpdatedAt).toLocaleString(language === "he" ? "he-IL" : "en-US") : "-"}`n                                    </span>
                                 </div>
                                 <div className="mt-4">
                                     <Progress value={10} className="h-2" />
@@ -544,7 +691,7 @@ export default function WhatsAppIntegration() {
                                 <p className="text-xs text-muted-foreground mt-1">
                                     {t("file_format_support") || "תמיכה בקבצי .txt, .csv, .json עד 50MB"}
                                 </p>
-                                <Button variant="outline" className="mt-4 rounded-xl">
+                                <Button variant="outline" className="mt-4 rounded-xl" onClick={handleSelectFile}>
                                     {t("select_file") || "בחר קובץ"}
                                 </Button>
                             </div>
@@ -563,7 +710,7 @@ export default function WhatsAppIntegration() {
                             )}
 
                             <Button
-                                onClick={handleImport}
+                                onClick={handleSelectFile}
                                 disabled={importing}
                                 className="w-full rounded-xl"
                             >
@@ -691,7 +838,8 @@ export default function WhatsAppIntegration() {
                                     <Textarea
                                         placeholder={t("keyword_placeholder") || "טיפול, תור, מרפאה, שיניים, הלבנה, ייעוץ, מחיר, עלות, המלצה"}
                                         className="rounded-xl min-h-[100px]"
-                                        defaultValue={t("keyword_default") || "טיפול, תור, מרפאה, שיניים, הלבנה, ייעוץ, מחיר, עלות, המלצה"}
+                                        value={filterSettings.keywords}
+                                        onChange={(event) => setFilterSettings({ ...filterSettings, keywords: event.target.value })}
                                     />
                                 </div>
                             </CardContent>
@@ -706,7 +854,7 @@ export default function WhatsAppIntegration() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                                    {mockChats.map((chat) => (
+                                    {previewChats.map((chat) => (
                                         <div
                                             key={chat.id}
                                             className={cn(
@@ -947,3 +1095,10 @@ export default function WhatsAppIntegration() {
         </div>
     );
 }
+
+
+
+
+
+
+

@@ -32,3 +32,9 @@ export interface AutomationPerformanceResponse {
     active_count: number;
   };
 }
+
+export interface SeedDefaultAutomationsResponse {
+  created: Automation[];
+  createdCount: number;
+  message: string;
+}

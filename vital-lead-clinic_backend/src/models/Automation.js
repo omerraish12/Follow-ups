@@ -1,5 +1,32 @@
 const { query } = require('../config/database');
 
+const DEFAULT_AUTOMATIONS = Object.freeze([
+    {
+        name: '3-Day Follow-up',
+        triggerDays: [3],
+        message: 'Hi {name}, we wanted to check in about {service}. Reply here and we can help you book an appointment.',
+        targetStatus: 'NEW',
+        notifyOnReply: true,
+        personalization: ['name', 'service']
+    },
+    {
+        name: '7-Day Reminder',
+        triggerDays: [7],
+        message: 'Hi {name}, this is a friendly reminder about {service}. We still have appointments available this week.',
+        targetStatus: 'NEW',
+        notifyOnReply: true,
+        personalization: ['name', 'service']
+    },
+    {
+        name: '14-Day Win-back',
+        triggerDays: [14],
+        message: 'Hi {name}, we would love to welcome you back for {service}. Reply to this message and we will assist right away.',
+        targetStatus: 'LOST',
+        notifyOnReply: true,
+        personalization: ['name', 'service']
+    }
+]);
+
 class Automation {
     static async findAll(clinicId) {
         const result = await query(
@@ -29,6 +56,41 @@ class Automation {
             [name, triggerDays, message, targetStatus, notifyOnReply, personalization, clinicId]
         );
         return result.rows[0];
+    }
+
+    static getDefaultAutomationPayloads() {
+        return DEFAULT_AUTOMATIONS.map((automation) => ({
+            ...automation,
+            triggerDays: [...automation.triggerDays],
+            personalization: [...automation.personalization]
+        }));
+    }
+
+    static async seedDefaults(clinicId) {
+        const existingResult = await query(
+            `SELECT LOWER(name) as name FROM automations WHERE clinic_id = $1`,
+            [clinicId]
+        );
+
+        const existingNames = new Set(existingResult.rows.map((row) => row.name));
+        const defaultsToCreate = this.getDefaultAutomationPayloads().filter(
+            (automation) => !existingNames.has(automation.name.toLowerCase())
+        );
+
+        if (!defaultsToCreate.length) {
+            return [];
+        }
+
+        const created = [];
+        for (const automation of defaultsToCreate) {
+            const inserted = await this.create({
+                ...automation,
+                clinicId
+            });
+            created.push(inserted);
+        }
+
+        return created;
     }
 
     static async update(id, clinicId, automationData) {

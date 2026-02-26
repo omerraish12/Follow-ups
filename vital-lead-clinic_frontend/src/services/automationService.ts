@@ -1,5 +1,9 @@
 import api from './api';
-import type { Automation, AutomationPerformanceResponse } from "@/types/automation";
+import type {
+    Automation,
+    AutomationPerformanceResponse,
+    SeedDefaultAutomationsResponse
+} from "@/types/automation";
 
 export const automationService = {
     // Get all automations
@@ -41,6 +45,12 @@ export const automationService = {
     // Get performance stats
     getPerformanceStats: async (): Promise<AutomationPerformanceResponse> => {
         const response = await api.get('/automations/stats/performance');
+        return response.data;
+    },
+
+    // Seed default automation rules
+    seedDefaultAutomations: async (): Promise<SeedDefaultAutomationsResponse> => {
+        const response = await api.post('/automations/defaults');
         return response.data;
     }
 };

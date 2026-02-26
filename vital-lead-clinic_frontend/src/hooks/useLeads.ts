@@ -59,7 +59,7 @@ export const useLeads = (initialFilters: Filters = {}) => {
 
   const addLead = async (leadData: Omit<Lead, 'id'>): Promise<Lead> => {
     try {
-      const newLead = await leadService.createLead(leadData as any);
+      const newLead = await leadService.createLead(leadData);
       setLeads(prev => [newLead, ...prev]);
       toast({
         title: "Lead added",
@@ -75,7 +75,7 @@ export const useLeads = (initialFilters: Filters = {}) => {
 
   const updateLead = async (id: string, leadData: Partial<Lead>): Promise<Lead> => {
     try {
-      const updated = await leadService.updateLead(id, leadData as any);
+      const updated = await leadService.updateLead(id, leadData);
       setLeads(prev => prev.map(l => l.id === id ? updated : l));
       toast({
         title: "Lead updated",

@@ -20,7 +20,7 @@ export interface SettingsResponse {
     role: string;
     createdAt: string;
   };
-  integrations: Record<string, { status: string }>;
+  integrations: Record<string, { status: string; [key: string]: unknown }>;
   backupSettings: {
     autoBackup: boolean;
     backupFrequency: string;
@@ -74,8 +74,8 @@ export const settingsService = {
     return response.data;
   },
 
-  updateIntegration: async (type: string, status: string) => {
-    const response = await api.post("/settings/integrations", { type, status });
+  updateIntegration: async (type: string, status: string, data: Record<string, unknown> = {}) => {
+    const response = await api.post("/settings/integrations", { type, status, data });
     return response.data;
   },
 

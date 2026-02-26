@@ -14,6 +14,39 @@ const getAutomations = async (req, res) => {
     }
 };
 
+// @desc    Seed default automations for clinic
+// @route   POST /api/automations/defaults
+const seedDefaultAutomations = async (req, res) => {
+    try {
+        const created = await Automation.seedDefaults(req.user.clinic_id);
+
+        if (created.length > 0) {
+            await Notification.create({
+                type: 'system',
+                title: 'Default automations added',
+                message: `${created.length} default automation rules were added to your clinic.`,
+                priority: 'low',
+                actionLabel: 'View automations',
+                actionLink: '/automations',
+                metadata: { createdCount: created.length },
+                userId: req.user.id,
+                clinicId: req.user.clinic_id
+            });
+        }
+
+        res.status(created.length > 0 ? 201 : 200).json({
+            created,
+            createdCount: created.length,
+            message: created.length > 0
+                ? 'Default automations created successfully'
+                : 'Default automations already configured'
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 // @desc    Get single automation
 // @route   GET /api/automations/:id
 const getAutomation = async (req, res) => {
@@ -182,6 +215,7 @@ const getPerformanceStats = async (req, res) => {
 
 module.exports = {
     getAutomations,
+    seedDefaultAutomations,
     getAutomation,
     createAutomation,
     updateAutomation,

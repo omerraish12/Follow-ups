@@ -68,12 +68,24 @@ class Lead {
     }
 
     static async create(leadData) {
-        const { name, phone, email, service, source, value, notes, assignedToId, clinicId } = leadData;
+        const {
+            name,
+            phone,
+            email,
+            service,
+            status = 'NEW',
+            source,
+            value,
+            notes,
+            nextFollowUp,
+            assignedToId,
+            clinicId
+        } = leadData;
         const result = await query(
-            `INSERT INTO leads (name, phone, email, service, source, value, notes, assigned_to_id, clinic_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+            `INSERT INTO leads (name, phone, email, service, status, source, value, notes, next_follow_up, assigned_to_id, clinic_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING *`,
-            [name, phone, email, service, source, value, notes, assignedToId, clinicId]
+            [name, phone, email, service, status, source, value, notes, nextFollowUp || null, assignedToId, clinicId]
         );
         return result.rows[0];
     }
@@ -88,6 +100,7 @@ class Lead {
                 let dbKey = key;
                 if (key === 'assignedToId') dbKey = 'assigned_to_id';
                 if (key === 'lastContacted') dbKey = 'last_contacted';
+                if (key === 'nextFollowUp') dbKey = 'next_follow_up';
 
                 fields.push(`${dbKey} = $${paramIndex}`);
                 values.push(value);

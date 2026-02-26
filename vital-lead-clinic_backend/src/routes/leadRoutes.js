@@ -23,8 +23,15 @@ router.get('/:id', getLead);
 router.post(
     '/',
     [
-        body('name').notEmpty(),
-        body('phone').notEmpty()
+        body('name').trim().notEmpty(),
+        body('phone').trim().notEmpty(),
+        body('email').optional({ checkFalsy: true }).isEmail(),
+        body('status')
+            .optional({ checkFalsy: true })
+            .isString()
+            .customSanitizer((value) => String(value).toUpperCase())
+            .isIn(['NEW', 'HOT', 'CLOSED', 'LOST']),
+        body('nextFollowUp').optional({ checkFalsy: true }).isISO8601()
     ],
     createLead
 );

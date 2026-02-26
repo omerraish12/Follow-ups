@@ -1,5 +1,5 @@
 // src/components/AppLayout.tsx (updated with auth)
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, useLocation, Link, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -23,7 +23,9 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LanguageSwitcher from "./LanguageSwitcher";
+import ThemeToggle from "./ThemeToggle";
 import { useNotifications } from "@/hooks/useNotifications";
+import { leadService } from "@/services/leadService";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,19 +49,34 @@ const navItemsConfig = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [leadsNeedingFollowup, setLeadsNeedingFollowup] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { t, language } = useLanguage();
   const { unreadCount, refreshUnreadCount } = useNotifications({ autoFetch: false });
-
-  // Mock data for badges
   const notificationCount = unreadCount;
-  const leadsNeedingFollowup = 5;
+
+  const refreshLeadsNeedingFollowup = useCallback(async () => {
+    try {
+      const leads = await leadService.getFollowupNeeded();
+      setLeadsNeedingFollowup(Array.isArray(leads) ? leads.length : 0);
+    } catch (err) {
+      console.error("Error fetching leads needing follow-up:", err);
+    }
+  }, []);
 
   useEffect(() => {
     refreshUnreadCount();
-  }, [refreshUnreadCount]);
+    refreshLeadsNeedingFollowup();
+
+    const intervalId = window.setInterval(() => {
+      refreshUnreadCount();
+      refreshLeadsNeedingFollowup();
+    }, 60000);
+
+    return () => window.clearInterval(intervalId);
+  }, [refreshUnreadCount, refreshLeadsNeedingFollowup]);
 
   const handleLogout = () => {
     logout();
@@ -91,13 +108,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex h-full flex-col">
           {/* Logo */}
           <div className="flex items-center gap-3 border-b border-border px-5 py-5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 shadow-lg">
-              <Phone className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-base font-semibold text-foreground truncate font-display">{t("app_title")}</h1>
-              <p className="text-[11px] text-muted-foreground">{t("app_subtitle")}</p>
-            </div>
+            <Link
+              to="/dashboard"
+              onClick={() => setSidebarOpen(false)}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-xl outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary/70 shadow-lg">
+                <Phone className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-base font-semibold text-foreground truncate font-display">{t("app_title")}</h1>
+                <p className="text-[11px] text-muted-foreground">{t("app_subtitle")}</p>
+              </div>
+            </Link>
             <button
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden text-muted-foreground hover:text-foreground"
@@ -239,6 +262,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Language Switcher */}
+          <ThemeToggle />
+
           <LanguageSwitcher />
 
           {/* Notifications button */}

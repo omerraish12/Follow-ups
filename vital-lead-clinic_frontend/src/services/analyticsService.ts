@@ -3,7 +3,7 @@ import api from "./api";
 export const analyticsService = {
     getKPI: async (period = 'month') => {
         const response = await api.get(`/analytics/kpi?period=${period}`);
-        return response;
+        return response.data;
     },
 
     getStatusDistribution: async () => {
@@ -21,8 +21,13 @@ export const analyticsService = {
         return response.data;
     },
 
-    getTeamPerformace: async () => {
+    getTeamPerformance: async () => {
         const response = await api.get('/analytics/team-performance');
         return response.data;
+    },
+
+    // Backward-compatible alias for existing callsites.
+    getTeamPerformace: async () => {
+        return analyticsService.getTeamPerformance();
     }
 };

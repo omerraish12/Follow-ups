@@ -1,6 +1,7 @@
 const express = require('express');
 const {
     getAutomations,
+    seedDefaultAutomations,
     getAutomation,
     createAutomation,
     updateAutomation,
@@ -16,6 +17,7 @@ router.use(protect);
 
 router.get('/', getAutomations);
 router.get('/stats/performance', getPerformanceStats);
+router.post('/defaults', seedDefaultAutomations);
 router.get('/:id', getAutomation);
 router.post('/', createAutomation);
 router.put('/:id', updateAutomation);

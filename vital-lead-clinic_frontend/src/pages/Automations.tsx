@@ -1,7 +1,7 @@
 // src/pages/Automations.tsx
 import {
   Zap, Clock, MessageSquare, ToggleLeft, ToggleRight, Trash2, Info,
-  Users, AlertCircle, CheckCircle, TrendingUp, Bell
+  Users, AlertCircle, CheckCircle, TrendingUp, Bell, Rocket, ArrowRight
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
-import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -43,10 +42,11 @@ export default function Automations() {
     deleteAutomation,
     fetchAutomations,
     fetchStats
-  } = useAutomations();
+  } = useAutomations({ seedDefaultsOnEmpty: true });
 
   const [rules, setRules] = useState<ExtendedAutomationRule[]>([]);
   const [followupNeeded, setFollowupNeeded] = useState<{ leadId: string; leadName: string; days: number }[]>([]);
+  const [activeTab, setActiveTab] = useState("rules");
 
   // Map backend automations into UI-friendly objects
   useEffect(() => {
@@ -67,11 +67,11 @@ export default function Automations() {
     const loadFollowups = async () => {
       try {
         const leads = await leadService.getFollowupNeeded();
-        const mapped = leads.map((lead: any) => {
+        const mapped = leads.map((lead: { id: string | number; name?: string; last_contacted?: string | null }) => {
           const days = lead.last_contacted
             ? Math.floor((Date.now() - new Date(lead.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
             : 0;
-          return { leadId: lead.id, leadName: lead.name, days };
+          return { leadId: String(lead.id), leadName: lead.name || "Unknown lead", days };
         });
         setFollowupNeeded(mapped);
       } catch (err) {
@@ -133,6 +133,54 @@ export default function Automations() {
     }
   ]), [t, totalExecutions, totalReplies, avgSuccessRate, activeCount, followupNeeded.length, stats?.totals?.active_count]);
 
+  const showcaseStats = useMemo(() => ([
+    {
+      value: "78%",
+      label: t("landing_stat_return_rate"),
+      icon: CheckCircle,
+      iconClass: "bg-success/10 text-success",
+    },
+    {
+      value: "45K",
+      label: t("landing_stat_monthly_revenue"),
+      icon: TrendingUp,
+      iconClass: "bg-primary/10 text-primary",
+    },
+    {
+      value: "24/7",
+      label: t("landing_stat_auto_followup"),
+      icon: Clock,
+      iconClass: "bg-warning/10 text-warning",
+    },
+    {
+      value: "3.2x",
+      label: t("landing_stat_roi"),
+      icon: Zap,
+      iconClass: "bg-primary/10 text-primary",
+    }
+  ]), [t]);
+
+  const setupSteps = useMemo(() => ([
+    {
+      icon: MessageSquare,
+      title: t("landing_how_step1_title"),
+      desc: t("landing_how_step1_desc"),
+      stats: t("landing_how_step1_stats")
+    },
+    {
+      icon: Zap,
+      title: t("landing_how_step2_title"),
+      desc: t("landing_how_step2_desc"),
+      stats: t("landing_how_step2_stats")
+    },
+    {
+      icon: Rocket,
+      title: t("landing_how_step3_title"),
+      desc: t("landing_how_step3_desc"),
+      stats: t("landing_how_step3_stats")
+    }
+  ]), [t]);
+
   return (
     <div className="space-y-5 lg:space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
       {/* Header */}
@@ -167,7 +215,82 @@ export default function Automations() {
         ))}
       </div>
 
-      <Tabs defaultValue="rules" className="space-y-4">
+      <section className="relative overflow-hidden rounded-[30px] border border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-7 lg:p-9 shadow-card">
+        <div className="pointer-events-none absolute -left-16 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -right-16 h-64 w-64 rounded-full bg-warning/10 blur-3xl" />
+
+        <div className="relative space-y-8">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {showcaseStats.map((item) => (
+              <Card key={item.label} className="rounded-2xl border border-border/70 bg-card/90 shadow-sm">
+                <CardContent className="p-4 text-center sm:p-5">
+                  <div className={cn("mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl", item.iconClass)}>
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-foreground sm:text-3xl">{item.value}</div>
+                  <p className="mt-2 text-xs text-muted-foreground sm:text-sm">{item.label}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="text-center">
+            <Badge
+              variant="outline"
+              className="rounded-full border-primary/20 bg-primary/10 px-4 py-1.5 text-[11px] font-semibold tracking-wide text-primary"
+            >
+              {t("landing_how_badge")}
+            </Badge>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              {t("landing_how_title")}
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
+              {t("landing_how_subtitle")}
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {setupSteps.map((step, index) => (
+              <Card
+                key={step.title}
+                className="relative overflow-hidden rounded-2xl border border-border/80 bg-card/95 transition-all duration-300 hover:-translate-y-1 hover:shadow-card-hover"
+              >
+                <CardContent className="p-5 sm:p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <step.icon className="h-6 w-6" />
+                    </div>
+                    <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.desc}</p>
+                  <Badge variant="secondary" className="mt-5 bg-primary/10 text-primary hover:bg-primary/15">
+                    {step.stats}
+                  </Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button onClick={() => setActiveTab("rules")} className="rounded-full gradient-primary text-primary-foreground shadow-card">
+              {t("rules")}
+              <ArrowRight className={cn("h-4 w-4", language === "he" ? "mr-2" : "ml-2")} />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setActiveTab("insights")}
+              className="rounded-full border-primary/30 bg-card/80 hover:bg-card"
+            >
+              {t("insights")}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid grid-cols-3 max-w-md">
           <TabsTrigger value="rules">{t("rules")}</TabsTrigger>
           <TabsTrigger value="followups">{t("followups")}</TabsTrigger>

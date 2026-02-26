@@ -19,6 +19,8 @@ export interface Lead {
   value?: number;
   created_at?: string;
   last_contacted?: string;
+  next_follow_up?: string;
+  nextFollowUp?: string;
   notes?: string;
   assigned_to?: string;
   assigned_to_name?: string;

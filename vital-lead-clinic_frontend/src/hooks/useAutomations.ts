@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { automationService } from "@/services/automationService";
 import { toast } from "@/hooks/use-toast";
 import type { Automation, AutomationPerformanceResponse } from "@/types/automation";
@@ -7,17 +7,37 @@ interface ErrorResponse {
   response?: { data?: { message?: string } };
 }
 
-export const useAutomations = () => {
+interface UseAutomationsOptions {
+  seedDefaultsOnEmpty?: boolean;
+}
+
+export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOptions = {}) => {
   const [automations, setAutomations] = useState<Automation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<AutomationPerformanceResponse | null>(null);
 
-  const fetchAutomations = async () => {
+  const fetchAutomations = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await automationService.getAutomations();
+      if (seedDefaultsOnEmpty && data.length === 0) {
+        try {
+          const seeded = await automationService.seedDefaultAutomations();
+          if (seeded.created?.length) {
+            setAutomations(seeded.created);
+            toast({
+              title: "Default automations added",
+              description: `${seeded.created.length} automation message rules were created.`,
+            });
+            return;
+          }
+        } catch (seedError) {
+          console.error("Error seeding default automations:", seedError);
+        }
+      }
+
       setAutomations(data);
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || "Unable to load automations.";
@@ -26,21 +46,25 @@ export const useAutomations = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [seedDefaultsOnEmpty]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const data = await automationService.getPerformanceStats();
       setStats(data);
     } catch (err) {
       console.error("Error fetching stats:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAutomations();
-    fetchStats();
-  }, []);
+    const loadInitialData = async () => {
+      await fetchAutomations();
+      await fetchStats();
+    };
+
+    loadInitialData();
+  }, [fetchAutomations, fetchStats]);
 
   const getAutomation = async (id: string) => {
     try {

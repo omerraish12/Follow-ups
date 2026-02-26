@@ -9,18 +9,33 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
+import type { LeadStatus } from "@/types/leads";
 
 interface AddLeadDialogProps {
   onSuccess?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  trigger?: React.ReactNode;
 }
 
 const sources = ["WhatsApp", "Website", "Instagram", "Referral", "Google Ads"];
 const services = ["Dental Cleaning", "Orthodontics", "Root Canal", "Implants", "Cosmetic Dentistry", "Check-up"];
 
-export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold text-foreground">{label}</Label>
+      {children}
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigger = false, trigger }: AddLeadDialogProps) {
   const { t } = useLanguage();
   const { addLead } = useLeads();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -28,18 +43,27 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
     email: "",
     service: "",
     source: "",
-    status: "new",
+    status: "NEW" as LeadStatus,
     notes: "",
     value: "",
     nextFollowUp: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const isControlled = typeof open === "boolean";
+  const dialogOpen = isControlled ? open : internalOpen;
+
+  const setDialogOpen = (nextOpen: boolean) => {
+    if (!isControlled) {
+      setInternalOpen(nextOpen);
+    }
+    onOpenChange?.(nextOpen);
+  };
 
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = t("name_required") || "Name is required";
     if (!form.phone.trim()) errs.phone = t("phone_required") || "Phone number is required";
-    else if (!/^(\+972|0)[\d\-]{8,12}$/.test(form.phone.replace(/\s/g, "")))
+    else if (!/^\+?[0-9()\-\s]{7,20}$/.test(form.phone.trim()))
       errs.phone = t("invalid_phone") || "Invalid phone number";
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       errs.email = t("invalid_email") || "Invalid email address";
@@ -63,36 +87,43 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
         status: form.status,
         notes: form.notes.trim(),
         value: Number(form.value) || 0,
+        nextFollowUp: form.nextFollowUp || undefined,
       });
 
       // Reset form
-      setForm({ name: "", phone: "", email: "", service: "", source: "", status: "new", notes: "", value: "", nextFollowUp: "" });
+      setForm({ name: "", phone: "", email: "", service: "", source: "", status: "NEW", notes: "", value: "", nextFollowUp: "" });
       setErrors({});
-      setOpen(false);
+      setDialogOpen(false);
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const serverMessage =
+        (error as { response?: { data?: { message?: string; errors?: Array<{ msg?: string }> } } })?.response?.data?.message ||
+        (error as { response?: { data?: { errors?: Array<{ msg?: string }> } } })?.response?.data?.errors?.[0]?.msg ||
+        t("error_loading_leads");
+
+      toast({
+        title: t("error"),
+        description: serverMessage,
+        variant: "destructive",
+      });
       console.error('Error adding lead:', error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const Field = ({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-semibold text-foreground">{label}</Label>
-      {children}
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
-    </div>
-  );
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gradient-primary border-0 text-primary-foreground gap-2 rounded-xl shadow-lg hover:opacity-90 transition-opacity">
-          <Plus className="h-4 w-4" />
-          {t("add_lead")}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button className="gradient-primary border-0 text-primary-foreground gap-2 rounded-xl shadow-lg hover:opacity-90 transition-opacity">
+              <Plus className="h-4 w-4" />
+              {t("add_lead")}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg font-extrabold">{t("add_new_lead")}</DialogTitle>
@@ -127,13 +158,13 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
             </Select>
           </Field>
           <Field label={t("status")}>
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })} disabled={isSubmitting}>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as LeadStatus })} disabled={isSubmitting}>
               <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="new">{t("status_new")}</SelectItem>
-                <SelectItem value="hot">{t("status_hot")}</SelectItem>
-                <SelectItem value="closed">{t("status_closed")}</SelectItem>
-                <SelectItem value="lost">{t("status_lost")}</SelectItem>
+                <SelectItem value="NEW">{t("status_new")}</SelectItem>
+                <SelectItem value="HOT">{t("status_hot")}</SelectItem>
+                <SelectItem value="CLOSED">{t("status_closed")}</SelectItem>
+                <SelectItem value="LOST">{t("status_lost")}</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -147,7 +178,7 @@ export default function AddLeadDialog({ onSuccess }: AddLeadDialogProps) {
           </div>
         </div>
         <div className="flex gap-3 mt-5 justify-end">
-          <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl" disabled={isSubmitting}>{t("cancel")}</Button>
+          <Button variant="outline" onClick={() => setDialogOpen(false)} className="rounded-xl" disabled={isSubmitting}>{t("cancel")}</Button>
           <Button onClick={handleSubmit} className="gradient-primary border-0 text-primary-foreground rounded-xl gap-2" disabled={isSubmitting}>
             {isSubmitting ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />

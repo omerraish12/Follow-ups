@@ -20,15 +20,17 @@ interface AutomationRuleDialogProps {
 export default function AutomationRuleDialog({ rule, onSuccess, trigger }: AutomationRuleDialogProps) {
   const { t } = useLanguage();
   const { addAutomation, updateAutomation } = useAutomations();
+  const ALL_STATUSES = "ALL";
   const isEdit = !!rule;
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  type AutomationTargetStatus = LeadStatus | typeof ALL_STATUSES;
   const [form, setForm] = useState({
     name: rule?.name || "",
     trigger: (rule as any)?.trigger || "",
     delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
     message: rule?.message || "",
-    targetStatus: ((rule?.target_status as LeadStatus) || "NEW") as LeadStatus,
+    targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
     active: rule?.active ?? true,
   });
 
@@ -51,7 +53,7 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
         name: form.name.trim(),
         triggerDays: [Number(form.delayDays) || 0],
         message: form.message.trim(),
-        targetStatus: form.targetStatus,
+        targetStatus: form.targetStatus === ALL_STATUSES ? null : form.targetStatus,
         active: form.active,
       };
 
@@ -76,7 +78,7 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
       trigger: (rule as any)?.trigger || "",
       delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
       message: rule?.message || "",
-      targetStatus: ((rule?.target_status as LeadStatus) || "NEW") as LeadStatus,
+      targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
       active: rule?.active ?? true,
     });
   };
@@ -146,13 +148,14 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
             <Label className="text-xs font-semibold">{t("target_status")}</Label>
             <Select
               value={form.targetStatus}
-              onValueChange={(v) => setForm({ ...form, targetStatus: v as LeadStatus })}
+              onValueChange={(v) => setForm({ ...form, targetStatus: v as AutomationTargetStatus })}
               disabled={isSubmitting}
             >
               <SelectTrigger className="rounded-xl">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={ALL_STATUSES}>{t("all_leads")}</SelectItem>
                 <SelectItem value="NEW">{t("status_new")}</SelectItem>
                 <SelectItem value="HOT">{t("status_hot")}</SelectItem>
                 <SelectItem value="CLOSED">{t("status_closed")}</SelectItem>

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { ThemeProvider } from "@/components/theme-provider";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -41,132 +42,134 @@ const queryClient = new QueryClient({
 const App = () => {
   return (
     <LanguageProvider>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AuthProvider>
-            <TooltipProvider>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange storageKey="clinic-ui-theme">
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthProvider>
+              <TooltipProvider>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<Signup />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* Protected Routes */}
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <Dashboard />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  {/* Protected Routes */}
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <Dashboard />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/leads"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <Leads />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/leads"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <Leads />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/automations"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <Automations />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/automations"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <Automations />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/analytics"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <Analytics />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/analytics"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <Analytics />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/whatsapp"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <WhatsAppIntegration />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/whatsapp"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <WhatsAppIntegration />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/team"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <TeamManagement />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/team"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <TeamManagement />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/notifications"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <NotificationsCenter />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/notifications"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <NotificationsCenter />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout>
-                      <ErrorBoundary>
-                        <SettingsPage />
-                      </ErrorBoundary>
-                    </AppLayout>
-                  </ProtectedRoute>
-                }
-              />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <SettingsPage />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
 
-              {/* 404 Route */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <Toaster />
-            <Sonner />
-            </TooltipProvider>
-          </AuthProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
+                  {/* 404 Route */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+                <Toaster />
+                <Sonner />
+              </TooltipProvider>
+            </AuthProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </ThemeProvider>
     </LanguageProvider>
   );
 };
