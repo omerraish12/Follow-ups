@@ -5,20 +5,21 @@ import {
   ArrowLeft, Sparkles, Rocket, Target, HeartHandshake,
   Activity, TrendingUp, Calendar, MessageCircle,
   Award, Download, Play, Pause, RotateCcw, Bell,
-  PhoneCall, Video, MoreVertical, Send, Smile, Paperclip
+  PhoneCall, Video, MoreVertical, Send, Smile, Paperclip,
+  Badge
 } from "lucide-react";
 import { Grid, Instagram, Linkedin, Mail, Slack } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LogoMark from "@/assets/logo.png";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "next-themes";
+import { Card, CardContent } from "@/components/ui/card";
 
 type CountUpValueProps = {
   target: number;
@@ -79,6 +80,7 @@ function CountUpValue({
 export default function LandingPage() {
   const { t, language, setLanguage } = useLanguage();
   const { setTheme, theme, resolvedTheme } = useTheme();
+  const { user } = useAuth();
   const [isVisible, setIsVisible] = useState({});
   const [activeChat, setActiveChat] = useState<'old' | 'new' | 'both' | null>(null);
   const [chatMessages, setChatMessages] = useState({
@@ -317,7 +319,7 @@ export default function LandingPage() {
     { href: "#how", label: t("landing_nav_how") },
     { href: "#demo", label: t("landing_nav_demo") },
     { href: "#results", label: t("landing_nav_results") },
-    { href: "#pricing", label: t("landing_footer_product_pricing") },
+    { href: "#pricing", label: t("landing_nav_pricing") },
     { href: "#faq", label: t("landing_nav_faq") },
   ];
   const numberLocale = language === "he" ? "he-IL" : "en-US";
@@ -326,6 +328,9 @@ export default function LandingPage() {
   const isResultsVisible = Boolean(isVisible["results"]);
   const languageCode = language === "he" ? "HE" : "EN";
   const toggleLanguage = () => setLanguage(language === "en" ? "he" : "en");
+
+  const userDisplayName = (user?.name || user?.email || "").split("@")[0];
+  const isAuthenticated = Boolean(user);
 
   return (
     <div className="relative min-h-screen bg-background font-sans">
@@ -355,19 +360,22 @@ export default function LandingPage() {
         )}
       >
         <div className="mx-auto flex max-w-[96rem] items-center justify-between px-4 py-2 sm:py-3">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className={cn(
-              "flex h-11 w-11 items-center justify-center transition-transform duration-300 overflow-hidden",
-              isNavScrolled ? "" : ""
-            )}>
-              <img src={LogoMark} alt="FollowUp Flow" className="h-11 w-11 object-contain" />
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-gradient-to-br from-white/20 to-white/5 shadow-lg shadow-white/20">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.5em] text-white">FU</span>
+              <span className="absolute inset-0 rounded-full border border-white/30 opacity-40 animate-ping" />
             </div>
-            <span className={cn(
-              "hidden sm:block text-sm sm:text-base md:text-lg font-bold tracking-tight truncate max-w-[170px] drop-shadow-[0_2px_8px_rgba(0,0,0,0.2)]",
-              isNavScrolled ? "text-foreground" : "text-blue-50"
+            <div className={cn(
+              "flex flex-col leading-tight",
+              isNavScrolled ? "text-foreground" : "text-white"
             )}>
-              FollowUp
-            </span>
+              <span className="text-base sm:text-lg md:text-xl font-black tracking-tight bg-gradient-to-r from-[#f565bc] to-[#60a5fa] bg-clip-text text-transparent animate-[pulse_2s_ease-in-out_infinite]">
+                Follow-ups
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.5em] text-white/70">
+                {t("landing_nav_brand_hint")}
+              </span>
+            </div>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm">
@@ -380,7 +388,7 @@ export default function LandingPage() {
               <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
             <a href="#pricing" className={navLinkClass}>
-              Pricing
+              {t("landing_nav_pricing")}
               <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
             <a href="#results" className={navLinkClass}>
@@ -393,42 +401,61 @@ export default function LandingPage() {
             </a>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={toggleLanguage}
-              className={cn(
-                "text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full border transition-all duration-300",
-                isNavScrolled
-                  ? "border-border text-muted-foreground hover:text-foreground hover:border-primary/50"
-                  : "border-white/40 text-white hover:border-white hover:bg-white/10"
-              )}
               aria-label={`Switch language (current ${languageCode})`}
+              className={cn(
+                "flex h-11 w-11 items-center justify-center rounded-full border-2 transition-all duration-300 shadow-lg",
+                isNavScrolled
+                  ? "border-border/60 bg-card/60 text-muted-foreground shadow-card"
+                  : "border-white/60 bg-white/20 text-white shadow-white/40"
+              )}
             >
-              {languageCode}
+              <span className="text-[11px] font-semibold tracking-[0.35em] uppercase">{languageCode}</span>
             </button>
-            <Link
-              to="/login"
-              className={cn(
-                "hidden sm:block text-xs sm:text-sm font-medium transition-all duration-300 hover:scale-105",
-                isNavScrolled
-                  ? "text-muted-foreground hover:text-foreground"
-                  : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)] hover:text-white"
-              )}
-            >
-              {t("landing_nav_login")}
-            </Link>
-            <Link
-              to="/signup"
-              className={cn(
-                "rounded-full px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg",
-                isNavScrolled
-                  ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:shadow-primary/30"
-                  : "bg-white/20 text-white border border-white/30 hover:bg-white/25"
-              )}
-            >
-              {t("landing_nav_start_now")}
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                to="/dashboard"
+                className={cn(
+                  "hidden sm:flex h-12 items-center rounded-3xl border border-white/30 bg-white/10 px-4 py-2 text-left shadow-[0_12px_40px_rgba(30,64,175,0.3)] transition-all duration-300 hover:-translate-y-[1px] hover:border-white/70",
+                  isNavScrolled ? "backdrop-blur-sm bg-white/10 border-border/40 text-foreground" : "text-white"
+                )}
+              >
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[10px] uppercase tracking-[0.35em] text-white/80">
+                    {t("landing_nav_signed_in_as")}
+                  </span>
+                  <span className="text-sm font-semibold">{userDisplayName || t("landing_nav_dashboard")}</span>
+                </div>
+              </Link>
+            ) : (
+              <div className="flex gap-3">
+                <Link
+                  to="/login"
+                  className={cn(
+                    "hidden sm:inline-flex text-xs sm:text-sm font-medium transition-all duration-300 hover:scale-105",
+                    isNavScrolled
+                      ? "text-muted-foreground hover:text-foreground"
+                      : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)] hover:text-white"
+                  )}
+                >
+                  {t("landing_nav_login")}
+                </Link>
+                <Link
+                  to="/signup"
+                  className={cn(
+                    "rounded-full px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg",
+                    isNavScrolled
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:shadow-primary/30"
+                      : "bg-white/20 text-white border border-white/30 hover:bg-white/25"
+                  )}
+                >
+                  {t("landing_nav_start_now")}
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 
@@ -592,11 +619,6 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-        <div className="mt-10 text-center">
-          <Link to="/contact" className="inline-flex items-center justify-center rounded-full border border-primary/40 bg-white px-8 py-3 text-base font-semibold text-primary transition-all hover:border-primary hover:text-primary-focus">
-            Contact us
-          </Link>
-        </div>
       </section>
 
       {/* How it Works */}
@@ -646,11 +668,6 @@ export default function LandingPage() {
                 </CardContent>
               </Card>
             ))}
-          </div>
-          <div className="mt-8 flex justify-center">
-            <Link to="/contact" className="inline-flex items-center justify-center rounded-full border border-primary/40 bg-white px-8 py-3 text-base font-semibold text-primary transition-all hover:border-primary hover:text-primary-focus">
-              Contact us
-            </Link>
           </div>
 
         </div>
@@ -977,98 +994,92 @@ export default function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {/* Starter */}
-            <Card className="h-full border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
-              <CardContent className="p-7 h-full flex flex-col gap-6">
-                <div>
-                  <p className="text-sm font-semibold text-primary">Starter</p>
-                  <p className="text-4xl font-bold mt-2">$0</p>
-                  <p className="text-sm text-muted-foreground">Up to 150 contacts • 1 user</p>
-                </div>
-                <div className="space-y-3 text-sm text-foreground flex-1">
-                  {[
-                    "Basic WhatsApp inbox",
-                    "Automated reminders",
-                    "Email support",
-                    "1 landing form"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
-                      <span>{item}</span>
+            {[ 
+              {
+                id: "starter",
+                title: t("plan_starter"),
+                price: "$0",
+                limit: t("landing_pricing_starter_limit"),
+                features: [
+                  t("landing_pricing_starter_feature_inbox"),
+                  t("landing_pricing_starter_feature_reminders"),
+                  t("landing_pricing_starter_feature_email_support"),
+                  t("landing_pricing_starter_feature_landing_form"),
+                ],
+                button: t("landing_pricing_starter_cta"),
+                variant: "outline",
+                highlight: false,
+                style: "border-2 shadow-card-hover",
+              },
+              {
+                id: "growth",
+                title: t("plan_growth"),
+                price: "$49",
+                limit: t("landing_pricing_growth_limit"),
+                features: [
+                  t("landing_pricing_growth_feature_whatsapp_templates"),
+                  t("landing_pricing_growth_feature_lead_scoring"),
+                  t("landing_pricing_growth_feature_two_way"),
+                  t("landing_pricing_growth_feature_custom_landing"),
+                  t("landing_pricing_growth_feature_team_inbox"),
+                  t("landing_pricing_growth_feature_priority_chat"),
+                ],
+                button: t("landing_pricing_growth_cta"),
+                variant: "primary",
+                highlight: true,
+                style: "border-2 border-primary shadow-card-hover",
+              },
+              {
+                id: "scale",
+                title: t("plan_scale"),
+                price: "$129",
+                limit: t("landing_pricing_scale_limit"),
+                features: [
+                  t("landing_pricing_scale_feature_automations"),
+                  t("landing_pricing_scale_feature_api"),
+                  t("landing_pricing_scale_feature_success_manager"),
+                  t("landing_pricing_scale_feature_reporting"),
+                  t("landing_pricing_scale_feature_sla"),
+                ],
+                button: t("landing_pricing_scale_cta"),
+                variant: "outline",
+                highlight: false,
+                style: "border-2 shadow-card-hover",
+              },
+            ].map((plan) => (
+              <Card key={plan.id} className={cn("h-full relative rounded-3xl transition-all duration-300", plan.style)}>
+                <CardContent className="p-7 h-full flex flex-col gap-6">
+                  {plan.highlight && (
+                    <div className="absolute right-6 top-6 rounded-full bg-primary text-primary-foreground px-4 py-1 text-xs font-semibold shadow-sm">
+                      {t("most_popular")}
                     </div>
-                  ))}
-                </div>
-                <Link to="/dashboard" className="block mt-auto">
-                  <Button className="w-full rounded-full" variant="outline" size="lg">
-                    Get started
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Growth */}
-            <Card className="relative h-full border-2 border-primary shadow-card-hover hover:shadow-card transition-all duration-300 overflow-hidden">
-              <div className="absolute top-3 right-3 rounded-full bg-primary text-primary-foreground text-xs px-3 py-1 font-semibold shadow-sm">
-                Most popular
-              </div>
-              <CardContent className="p-7 h-full flex flex-col gap-6">
-                <div>
-                  <p className="text-sm font-semibold text-primary">Growth</p>
-                  <p className="text-4xl font-bold mt-2">$49</p>
-                  <p className="text-sm text-muted-foreground">Up to 2,000 contacts • 5 users</p>
-                </div>
-                <div className="space-y-3 text-sm text-foreground flex-1">
-                  {[
-                    "WhatsApp automation & templates",
-                    "Smart lead scoring and tags",
-                    "Two-way SMS & email reminders",
-                    "Custom landing pages",
-                    "Team inbox & roles",
-                    "Priority chat support"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link to="/dashboard" className="block mt-auto">
-                  <Button className="w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
-                    Start free trial
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Scale */}
-            <Card className="h-full border-2 shadow-card-hover hover:shadow-card transition-all duration-300">
-              <CardContent className="p-7 h-full flex flex-col gap-6">
-                <div>
-                  <p className="text-sm font-semibold text-primary">Scale</p>
-                  <p className="text-4xl font-bold mt-2">$129</p>
-                  <p className="text-sm text-muted-foreground">Unlimited contacts • 20 users</p>
-                </div>
-                <div className="space-y-3 text-sm text-foreground flex-1">
-                  {[
-                    "Advanced automations & branching",
-                    "API & webhooks",
-                    "Dedicated success manager",
-                    "Custom reporting & exports",
-                    "SLA + phone support"
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 text-success mt-0.5" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-                <Link to="/dashboard" className="block mt-auto">
-                  <Button className="w-full rounded-full" variant="outline" size="lg">
-                    Talk to sales
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+                  )}
+                  <div>
+                    <p className="text-sm font-semibold text-primary">{plan.title}</p>
+                    <p className="text-4xl font-bold mt-2">{plan.price}</p>
+                    <p className="text-sm text-muted-foreground">{plan.limit}</p>
+                  </div>
+                  <div className="space-y-3 text-sm text-foreground flex-1">
+                    {plan.features.map((feature, index) => (
+                      <div key={feature + index} className="flex items-start gap-2">
+                        <CheckCircle className="h-4 w-4 text-success mt-0.5" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                    <Link to="/dashboard" className="block mt-auto">
+                      <Button
+                        className={cn("w-full rounded-full text-base transition-all duration-200", plan.variant === "primary"
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "border border-primary/20 bg-card text-foreground/80 hover:text-foreground hover:border-primary/50")}
+                        size="lg"
+                      >
+                        {plan.button}
+                      </Button>
+                    </Link>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
           <div className="mt-12 space-y-4 rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card/60 to-primary/10 p-8 text-center shadow-xl shadow-primary/20">
@@ -1156,48 +1167,95 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-card py-8">
-        <div className="mx-auto max-w-[96rem] px-4">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Phone className="h-5 w-5 text-primary" />
-                <span className="font-bold">{t("app_title")}</span>
+      <footer className="relative border-t border-white/10 bg-gradient-to-br from-[#050c2a] via-[#09124f] to-[#0f1b5c] text-white">
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/40 to-transparent blur-3xl" />
+        <div className="relative mx-auto max-w-[96rem] px-4 py-12 space-y-10">
+          <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr_1fr]">
+            <div className="space-y-5">
+              <p className="text-xs uppercase tracking-[0.4em] text-primary/80">{t("landing_footer_cta_tag")}</p>
+              <h3 className="text-3xl font-bold leading-tight">{t("landing_footer_cta_title")}</h3>
+              <p className="text-sm text-white/80 max-w-xl">{t("landing_footer_cta_subtitle")}</p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-primary transition hover:bg-white/90"
+                >
+                  {t("landing_footer_cta_button")}
+                </Link>
+                <Link
+                  to="/demo"
+                  className="inline-flex items-center justify-center rounded-full border border-white/50 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white/90 transition hover:border-white hover:text-white"
+                >
+                  {t("landing_footer_cta_secondary")}
+                </Link>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {t("landing_footer_description")}
-              </p>
+              <div className="grid grid-cols-2 gap-3 text-sm text-white/80">
+                <div className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.3em] text-white/50">{t("landing_footer_phone_label")}</p>
+                  <p className="font-semibold">{t("landing_footer_contact_phone")}</p>
+                </div>
+                <div className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.3em] text-white/50">{t("landing_footer_email_label")}</p>
+                  <p className="font-semibold">{t("landing_footer_contact_email")}</p>
+                </div>
+              </div>
+              <p className="text-xs text-white/60">{t("landing_footer_cta_note")}</p>
             </div>
 
-            <div>
-              <h4 className="font-bold mb-3">{t("landing_footer_product_title")}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#features" className="hover:text-foreground">{t("landing_footer_product_features")}</a></li>
-                <li><a href="#pricing" className="hover:text-foreground">{t("landing_footer_product_pricing")}</a></li>
-                <li><a href="#demo" className="hover:text-foreground">{t("landing_footer_product_demo")}</a></li>
-              </ul>
+            <div className="grid gap-6">
+              <div>
+                <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">{t("landing_footer_product_title")}</h4>
+                <ul className="mt-4 space-y-2 text-sm text-white/70">
+                  <li><a href="#features" className="hover:text-white">{t("landing_footer_product_features")}</a></li>
+                  <li><a href="#pricing" className="hover:text-white">{t("landing_footer_product_pricing")}</a></li>
+                  <li><a href="#demo" className="hover:text-white">{t("landing_footer_product_demo")}</a></li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">{t("landing_footer_company_title")}</h4>
+                <ul className="mt-4 space-y-2 text-sm text-white/70">
+                  <li><a href="#about" className="hover:text-white">{t("landing_footer_company_about")}</a></li>
+                  <li><a href="#blog" className="hover:text-white">{t("landing_footer_company_blog")}</a></li>
+                  <li><a href="#contact" className="hover:text-white">{t("landing_footer_company_contact")}</a></li>
+                </ul>
+              </div>
             </div>
 
-            <div>
-              <h4 className="font-bold mb-3">{t("landing_footer_company_title")}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#about" className="hover:text-foreground">{t("landing_footer_company_about")}</a></li>
-                <li><a href="#blog" className="hover:text-foreground">{t("landing_footer_company_blog")}</a></li>
-                <li><a href="#contact" className="hover:text-foreground">{t("landing_footer_company_contact")}</a></li>
+            <div className="space-y-4">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">{t("landing_footer_contact_title")}</h4>
+              <ul className="space-y-3 text-sm text-white/80">
+                <li className="flex items-start gap-3">
+                  <Phone className="h-5 w-5 text-primary" />
+                  <span>{t("landing_footer_contact_phone")}</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Mail className="h-5 w-5 text-primary" />
+                  <span>{t("landing_footer_contact_email")}</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Users className="h-5 w-5 text-primary" />
+                  <span>{t("landing_footer_contact_address")}</span>
+                </li>
               </ul>
-            </div>
-
-            <div>
-              <h4 className="font-bold mb-3">{t("landing_footer_contact_title")}</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li>{t("landing_footer_contact_phone")}</li>
-                <li>{t("landing_footer_contact_email")}</li>
-                <li>{t("landing_footer_contact_address")}</li>
-              </ul>
+              <div className="space-y-2 text-xs uppercase tracking-[0.4em] text-white/50">
+                <p>{t("landing_footer_social_tag")}</p>
+                <p className="text-white/60">{t("landing_footer_follow_us")}</p>
+              </div>
+              <div className="flex items-center gap-3 text-white/80">
+                <a href="https://www.instagram.com" className="rounded-full border border-white/20 p-2 text-white/70 transition hover:border-white hover:text-white" aria-label="Instagram">
+                  <Instagram className="h-4 w-4" />
+                </a>
+                <a href="https://www.linkedin.com" className="rounded-full border border-white/20 p-2 text-white/70 transition hover:border-white hover:text-white" aria-label="LinkedIn">
+                  <Linkedin className="h-4 w-4" />
+                </a>
+                <a href="mailto:hello@clinicgrowth.com" className="rounded-full border border-white/20 p-2 text-white/70 transition hover:border-white hover:text-white" aria-label="Email">
+                  <Mail className="h-4 w-4" />
+                </a>
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-border mt-8 pt-8 text-center text-sm text-muted-foreground">
+          <div className="border-t border-white/10 pt-6 text-center text-xs uppercase tracking-[0.4em] text-white/70">
             <p>{t("landing_footer_copyright")}</p>
           </div>
         </div>

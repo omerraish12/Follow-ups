@@ -98,6 +98,46 @@ interface Clinic {
     conversion: string;
 }
 
+interface PermissionFlags {
+    leads: boolean;
+    analytics: boolean;
+    team: boolean;
+    settings: boolean;
+}
+
+const initialPermissionFlags: PermissionFlags = {
+    leads: false,
+    analytics: false,
+    team: false,
+    settings: false,
+};
+
+const permissionListToFlags = (permissions: string[]): PermissionFlags => ({
+    leads: permissions.includes("all") || permissions.includes("leads"),
+    analytics: permissions.includes("all") || permissions.includes("analytics"),
+    team: permissions.includes("all") || permissions.includes("team"),
+    settings: permissions.includes("all") || permissions.includes("settings"),
+});
+
+const permissionFlagsToList = (flags: PermissionFlags): string[] => {
+    const entries: string[] = [];
+    if (flags.leads) entries.push("leads");
+    if (flags.analytics) entries.push("analytics");
+    if (flags.team) entries.push("team");
+    if (flags.settings) entries.push("settings");
+    if (entries.length === 4) {
+        return ["all"];
+    }
+    return entries;
+};
+
+const permissionOptions: Array<{ key: keyof PermissionFlags; label: string; description: string }> = [
+    { key: "leads", label: "permission_leads_label", description: "permission_leads_description" },
+    { key: "analytics", label: "permission_analytics_label", description: "permission_analytics_description" },
+    { key: "team", label: "permission_team_label", description: "permission_team_description" },
+    { key: "settings", label: "permission_settings_label", description: "permission_settings_description" },
+];
+
 export default function TeamManagement() {
     const { user } = useAuth();
     const { t, language } = useLanguage();
@@ -113,6 +153,11 @@ export default function TeamManagement() {
     const [isSaving, setIsSaving] = useState(false);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [clinics, setClinics] = useState<Clinic[]>([]);
+    const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+    const [permissionMember, setPermissionMember] = useState<TeamMember | null>(null);
+    const [permissionFlags, setPermissionFlags] = useState<PermissionFlags>(initialPermissionFlags);
+    const [showClinicDialog, setShowClinicDialog] = useState(false);
+    const [activeClinic, setActiveClinic] = useState<Clinic | null>(null);
 
     const [newMember, setNewMember] = useState({
         name: '',
@@ -368,6 +413,78 @@ export default function TeamManagement() {
                 title: t("error"),
                 description: t("update_failed"),
                 variant: "destructive"
+            });
+        }
+    };
+
+    const openPermissionDialog = (member: TeamMember) => {
+        setPermissionMember(member);
+        setPermissionFlags(permissionListToFlags(member.permissions));
+        setShowPermissionDialog(true);
+    };
+
+    const closePermissionDialog = () => {
+        setShowPermissionDialog(false);
+        setPermissionMember(null);
+        setPermissionFlags(initialPermissionFlags);
+    };
+
+    const handleSavePermissions = () => {
+        if (!permissionMember) return;
+        const permissions = permissionFlagsToList(permissionFlags);
+        setTeamMembers((prev) =>
+            prev.map((m) =>
+                m.id === permissionMember.id ? { ...m, permissions } : m
+            )
+        );
+        toast({
+            title: t("permissions_updated"),
+            description: t("permissions_updated_description"),
+        });
+        closePermissionDialog();
+    };
+
+    const openClinicDialog = (clinic: Clinic) => {
+        setActiveClinic(clinic);
+        setShowClinicDialog(true);
+    };
+
+    const closeClinicDialog = () => {
+        setShowClinicDialog(false);
+        setActiveClinic(null);
+    };
+
+    const fallbackCopy = (value: string) => {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.style.position = "fixed";
+        textarea.style.top = "-9999px";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+    };
+
+    const handleCopyValue = async (value: string, label: string) => {
+        if (!value) return;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(value);
+            } else if (typeof document !== "undefined") {
+                fallbackCopy(value);
+            } else {
+                throw new Error("Clipboard not supported");
+            }
+            toast({
+                title: t("copied"),
+                description: t("copied_to_clipboard").replace('%s', label),
+            });
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("clipboard_copy_failed"),
+                variant: "destructive",
             });
         }
     };
@@ -634,7 +751,13 @@ export default function TeamManagement() {
                                                     <Key className="h-4 w-4 ml-2" />
                                                     {t("reset_password")}
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem className="cursor-pointer">
+                                                <DropdownMenuItem
+                                                    className="cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openPermissionDialog(member);
+                                                    }}
+                                                >
                                                     <Shield className="h-4 w-4 ml-2" />
                                                     {t("manage_permissions")}
                                                 </DropdownMenuItem>
@@ -718,7 +841,11 @@ export default function TeamManagement() {
                                                 <p className="text-sm text-muted-foreground">{t("conversion_rate")}</p>
                                                 <p className="text-2xl font-bold text-success">{clinic.conversion}</p>
                                             </div>
-                                            <Button variant="outline" className="rounded-xl">
+                                            <Button
+                                                variant="outline"
+                                                className="rounded-xl"
+                                                onClick={() => openClinicDialog(clinic)}
+                                            >
                                                 {t("manage_clinic")}
                                             </Button>
                                         </div>
@@ -1044,6 +1171,115 @@ export default function TeamManagement() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Permissions Dialog */}
+            <Dialog open={showPermissionDialog} onOpenChange={(open) => !open && closePermissionDialog()}>
+                <DialogContent className="max-w-md rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{t("permissions_dialog_title")}</DialogTitle>
+                        <DialogDescription>
+                            {t("permissions_dialog_description")}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        {permissionOptions.map(({ key, label, description }) => (
+                            <div key={key} className="flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">{t(label)}</p>
+                                    <p className="text-xs text-muted-foreground">{t(description)}</p>
+                                </div>
+                                <Switch
+                                    checked={permissionFlags[key]}
+                                    onCheckedChange={(checked) =>
+                                        setPermissionFlags((prev) => ({ ...prev, [key]: checked }))
+                                    }
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    <DialogFooter className={language === 'he' ? 'flex-row-reverse' : ''}>
+                        <Button variant="outline" onClick={closePermissionDialog} className="rounded-xl">
+                            {t("cancel")}
+                        </Button>
+                        <Button onClick={handleSavePermissions} className="rounded-xl">
+                            {t("save_changes")}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Clinic Dialog */}
+            <Dialog open={showClinicDialog} onOpenChange={(open) => !open && closeClinicDialog()}>
+                <DialogContent className="max-w-md rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{t("clinic_overview_title")}</DialogTitle>
+                        <DialogDescription>
+                            {t("clinic_overview_description").replace('%s', activeClinic?.name || "")}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {activeClinic && (
+                        <div className="space-y-4 py-4">
+                            <div>
+                                <h3 className="text-xl font-semibold text-foreground">{activeClinic.name}</h3>
+                                <p className="text-sm text-muted-foreground">{activeClinic.address}</p>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+                                <Button
+                                    variant="outline"
+                                    className="w-full rounded-xl"
+                                    onClick={() => handleCopyValue(activeClinic.phone, t("phone"))}
+                                >
+                                    {t("clinic_copy_phone")}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="w-full rounded-xl"
+                                    onClick={() => handleCopyValue(activeClinic.email, t("email"))}
+                                >
+                                    {t("clinic_copy_email")}
+                                </Button>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+                                <Button
+                                    asChild
+                                    variant="secondary"
+                                    className="w-full rounded-xl"
+                                >
+                                    <a href={`tel:${activeClinic.phone.replace(/[^\d+]/g, "")}`}>
+                                        {t("clinic_call_phone")}
+                                    </a>
+                                </Button>
+                                <Button
+                                    asChild
+                                    variant="secondary"
+                                    className="w-full rounded-xl"
+                                >
+                                    <a href={`mailto:${activeClinic.email}`}>{t("clinic_view_email")}</a>
+                                </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
+                                <div>
+                                    <p className="text-xs uppercase tracking-[0.3em]">{t("team_members")}</p>
+                                    <p className="text-lg font-semibold text-foreground">{activeClinic.members}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs uppercase tracking-[0.3em]">{t("active_leads")}</p>
+                                    <p className="text-lg font-semibold text-foreground">{activeClinic.leads}</p>
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <p className="text-xs uppercase tracking-[0.3em]">{t("conversion_rate")}</p>
+                                    <p className="text-lg font-semibold text-success">{activeClinic.conversion}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className={language === 'he' ? 'flex-row-reverse' : ''}>
+                        <Button variant="outline" onClick={closeClinicDialog} className="rounded-xl">
+                            {t("close")}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { cn } from "@/lib/utils";
+import { contactService } from "@/services/contactService";
 
 const initialFormState = {
   name: "",
@@ -54,7 +55,7 @@ export default function ContactPage() {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!agreed) {
       toast({
@@ -66,15 +67,30 @@ export default function ContactPage() {
     }
 
     setSubmitting(true);
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      await contactService.sendContactMessage({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        message: form.message.trim(),
+        agreement: agreed,
+      });
       toast({
         title: t("contact_success_title"),
         description: t("contact_success_description"),
       });
       setForm(initialFormState);
       setAgreed(false);
-    }, 700);
+    } catch (error) {
+      const description = error instanceof Error ? error.message : t("contact_form_error");
+      toast({
+        title: t("error"),
+        description,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

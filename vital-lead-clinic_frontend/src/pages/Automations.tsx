@@ -1,7 +1,7 @@
 // src/pages/Automations.tsx
 import {
   Zap, Clock, MessageSquare, ToggleLeft, ToggleRight, Trash2, Info,
-  Users, AlertCircle, CheckCircle, TrendingUp, Bell, Rocket, ArrowRight
+  Users, AlertCircle, CheckCircle, TrendingUp, Bell, Rocket, ArrowRight, Phone
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useAutomations } from "@/hooks/useAutomations";
 import { leadService } from "@/services/leadService";
 import type { Automation } from "@/types/automation";
@@ -47,6 +51,12 @@ export default function Automations() {
   const [rules, setRules] = useState<ExtendedAutomationRule[]>([]);
   const [followupNeeded, setFollowupNeeded] = useState<{ leadId: string; leadName: string; days: number }[]>([]);
   const [activeTab, setActiveTab] = useState("rules");
+  const [templateName, setTemplateName] = useState("");
+  const [templateMessage, setTemplateMessage] = useState("");
+  const [includeMedia, setIncludeMedia] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [selectedTriggers, setSelectedTriggers] = useState<string[]>(["new_lead"]);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   // Map backend automations into UI-friendly objects
   useEffect(() => {
@@ -100,6 +110,37 @@ export default function Automations() {
       setRules((prev) => prev.filter((r) => r.id !== id));
       fetchStats();
     } catch (_) { /* toast handled */ }
+  };
+
+  const handleToggleTrigger = (key: string) => {
+    setSelectedTriggers((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  };
+
+  const handleCreateTemplate = () => {
+    if (!templateName.trim() || !templateMessage.trim()) {
+      toast({
+        title: t("template_error_required_title"),
+        description: t("template_error_required_description"),
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSavingTemplate(true);
+    setTimeout(() => {
+      toast({
+        title: t("template_saved_title"),
+        description: t("template_saved_description").replace('%s', selectedTriggers.length.toString())
+      });
+      setTemplateName("");
+      setTemplateMessage("");
+      setIncludeMedia(false);
+      setMediaUrl("");
+      setSelectedTriggers(["new_lead"]);
+      setIsSavingTemplate(false);
+    }, 800);
   };
 
   const cards = useMemo(() => ([
@@ -214,6 +255,131 @@ export default function Automations() {
           </Card>
         ))}
       </div>
+
+      <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card/90 to-card p-6 shadow-xl shadow-primary/20">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-1">
+            <Badge variant="outline" className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold text-primary">
+              WhatsApp
+            </Badge>
+            <h3 className="text-2xl font-bold text-foreground">{t("whatsapp_builder_title")}</h3>
+            <p className="text-sm text-muted-foreground max-w-2xl">
+              {t("whatsapp_builder_subtitle")}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Phone className="h-5 w-5 text-primary" />
+            <p className="text-xs uppercase tracking-[0.3em] text-primary/80">
+              {t("whatsapp_builder_tag")}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">{t("template_name_label")}</p>
+              <Input
+                placeholder={t("template_name_placeholder")}
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                className="rounded-2xl bg-card"
+              />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">{t("template_message_label")}</p>
+              <Textarea
+                placeholder={t("template_message_placeholder")}
+                value={templateMessage}
+                onChange={(e) => setTemplateMessage(e.target.value)}
+                className="rounded-2xl bg-card"
+                rows={5}
+              />
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                {t("template_triggers_label")}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  { key: "new_lead", label: t("template_trigger_new_lead") },
+                  { key: "missing_reply", label: t("template_trigger_missing_reply") },
+                  { key: "appointment_missed", label: t("template_trigger_appointment_missed") },
+                  { key: "high_value", label: t("template_trigger_high_value") }
+                ].map((trigger) => {
+                  const active = selectedTriggers.includes(trigger.key);
+                  return (
+                    <Button
+                      key={trigger.key}
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "rounded-full px-4 py-1 text-xs uppercase tracking-[0.25em] transition",
+                        active
+                          ? "bg-primary text-white"
+                          : "bg-muted/30 text-muted-foreground hover:bg-primary/10"
+                      )}
+                      onClick={() => handleToggleTrigger(trigger.key)}
+                    >
+                      {trigger.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">{t("template_media_label")}</p>
+              <Switch checked={includeMedia} onCheckedChange={setIncludeMedia} />
+            </div>
+            {includeMedia && (
+              <Input
+                placeholder={t("template_media_placeholder")}
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value)}
+                className="rounded-2xl bg-card"
+              />
+            )}
+            <Button
+              size="lg"
+              className="w-full rounded-2xl"
+              onClick={handleCreateTemplate}
+              disabled={isSavingTemplate}
+            >
+              {t("template_create_button")}
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-border/70 bg-white/90 p-6 text-sm text-foreground space-y-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("template_preview_title")}</span>
+              <Badge variant="outline" className="rounded-full text-[10px] text-primary">
+                {t("template_preview_channel")}
+              </Badge>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {templateName || t("template_preview_placeholder_name")}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                {templateMessage || t("template_preview_placeholder_message")}
+              </p>
+            </div>
+            <div className="space-y-1 text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              <p>{t("template_variables_label")}</p>
+              <div className="flex flex-wrap gap-2">
+                {["{name}", "{service}", "{appointment_date}"].map((token) => (
+                  <span key={token} className="rounded-full bg-muted/20 px-3 py-1 text-[11px] font-semibold">
+                    {token}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">{t("template_preview_footer").replace('%s', selectedTriggers.length.toString())}</div>
+          </div>
+        </div>
+      </section>
 
       <section className="relative overflow-hidden rounded-[30px] border border-primary/15 bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-7 lg:p-9 shadow-card">
         <div className="pointer-events-none absolute -left-16 -top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
