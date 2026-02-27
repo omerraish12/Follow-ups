@@ -465,9 +465,9 @@ export default function Leads() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("all_leads")}</SelectItem>
-              <SelectItem value="וואטסאפ">WhatsApp</SelectItem>
-              <SelectItem value="פייסבוק">Facebook</SelectItem>
-              <SelectItem value="אינסטגרם">Instagram</SelectItem>
+              <SelectItem value="וואטסאפ">{t("source_whatsapp")}</SelectItem>
+              <SelectItem value="פייסבוק">{t("source_facebook")}</SelectItem>
+              <SelectItem value="אינסטגרם">{t("source_instagram")}</SelectItem>
               <SelectItem value="המלצה">{t("smile_recommendation")}</SelectItem>
             </SelectContent>
           </Select>

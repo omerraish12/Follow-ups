@@ -8,7 +8,7 @@ import {
   PhoneCall, Video, MoreVertical, Send, Smile, Paperclip
 } from "lucide-react";
 import { Grid, Instagram, Linkedin, Mail, Slack } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LogoMark from "@/assets/logo.png";
+import { useTheme } from "next-themes";
 
 type CountUpValueProps = {
   target: number;
@@ -77,6 +78,7 @@ function CountUpValue({
 
 export default function LandingPage() {
   const { t, language, setLanguage } = useLanguage();
+  const { setTheme, theme, resolvedTheme } = useTheme();
   const [isVisible, setIsVisible] = useState({});
   const [activeChat, setActiveChat] = useState<'old' | 'new' | 'both' | null>(null);
   const [chatMessages, setChatMessages] = useState({
@@ -89,14 +91,17 @@ export default function LandingPage() {
   const [headerHeight, setHeaderHeight] = useState(76);
   const sectionRefs = useRef({});
   const navRef = useRef<HTMLElement | null>(null);
-  const chatPreviewMessages = [
-    { time: "2m", name: "Yossi Cohen", text: "Hi, I wanted to ask about your prices.", avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#111827", color: "#ffffff" },
-    { time: "5m", name: "Michal Levi", text: "Thank you very much for the excellent service!", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80", icon: MessageCircle, bg: "#25D366", color: "#ffffff" },
-    { time: "8m", name: "Danny Abraham", text: "Is it possible to receive a detailed quote?", avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80&sat=-30", icon: Mail, bg: "#EA4335", color: "#ffffff" },
-    { time: "12m", name: "Noa Shimon", text: "Interested in a consultation, when is it possible?", avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80&sat=-20", icon: Instagram, bg: "#F56040", color: "#ffffff" },
-    { time: "15m", name: "Alon Peretz", text: "...ed the message, I will get back to you as soon as possible.", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80", icon: Linkedin, bg: "#0A66C2", color: "#ffffff" },
-    { time: "18m", name: "Eden Tal", text: "Quick sync about the onboarding plan.", avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80", icon: Slack, bg: "#4A154B", color: "#ffffff" },
-  ];
+  const chatPreviewMessages = useMemo(
+    () => [
+      { time: "2m", name: "Yossi Cohen", text: t("landing_hero_chat_msg1"), avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#111827", color: "#ffffff" },
+      { time: "5m", name: "Michal Levi", text: t("landing_hero_chat_msg2"), avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80", icon: MessageCircle, bg: "#25D366", color: "#ffffff" },
+      { time: "8m", name: "Danny Abraham", text: t("landing_hero_chat_msg3"), avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80&sat=-30", icon: Mail, bg: "#EA4335", color: "#ffffff" },
+      { time: "12m", name: "Noa Shimon", text: t("landing_hero_chat_msg4"), avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80&sat=-20", icon: Instagram, bg: "#F56040", color: "#ffffff" },
+      { time: "15m", name: "Alon Peretz", text: t("landing_hero_chat_msg5"), avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80", icon: Linkedin, bg: "#0A66C2", color: "#ffffff" },
+      { time: "18m", name: "Eden Tal", text: t("landing_hero_chat_msg6"), avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80", icon: Slack, bg: "#4A154B", color: "#ffffff" },
+    ],
+    [t, language]
+  );
 
   // דמו מונפש - הודעות לדוגמה
   const demoScenarios = [
@@ -168,6 +173,12 @@ export default function LandingPage() {
     { id: 6, type: 'received', text: t("landing_chat_new_6"), delay: 8000, status: 'sent' },
     { id: 7, type: 'system', text: t("landing_chat_new_7"), delay: 8500, status: 'alert' },
   ];
+
+  useEffect(() => {
+    const initialTheme = resolvedTheme || theme || "light";
+    setTheme("light");
+    return () => setTheme(initialTheme);
+  }, [resolvedTheme, setTheme, theme]);
 
   useEffect(() => {
     const observers = {};
@@ -380,10 +391,6 @@ export default function LandingPage() {
               {t("landing_nav_faq")}
               <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
             </a>
-            <a href="#why" className={navLinkClass}>
-              {t("landing_nav_why")}
-              <span className={cn("absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full", isNavScrolled ? "bg-primary" : "bg-white")}></span>
-            </a>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -585,6 +592,11 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
+        <div className="mt-10 text-center">
+          <Link to="/contact" className="inline-flex items-center justify-center rounded-full border border-primary/40 bg-white px-8 py-3 text-base font-semibold text-primary transition-all hover:border-primary hover:text-primary-focus">
+            Contact us
+          </Link>
+        </div>
       </section>
 
       {/* How it Works */}
@@ -635,6 +647,12 @@ export default function LandingPage() {
               </Card>
             ))}
           </div>
+          <div className="mt-8 flex justify-center">
+            <Link to="/contact" className="inline-flex items-center justify-center rounded-full border border-primary/40 bg-white px-8 py-3 text-base font-semibold text-primary transition-all hover:border-primary hover:text-primary-focus">
+              Contact us
+            </Link>
+          </div>
+
         </div>
       </section>
 
@@ -712,8 +730,8 @@ export default function LandingPage() {
               {/* Chat Mockups */}
               <div className="grid sm:grid-cols-2 gap-4">
                 {/* Old Client Chat */}
-                <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-2">
-                  <div className="flex flex-col h-[520px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
+                <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-1">
+                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
                     {/* Top bar */}
                     <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
@@ -770,7 +788,7 @@ export default function LandingPage() {
                       )}
                     </div>
                     {/* Input */}
-                    <div className="bg-white/95 border-t border-black/5 px-3 py-2 flex items-center gap-2">
+                    <div className="bg-white/95 border-t border-black/5 px-3 py-1.5 flex items-center gap-2">
                       <Smile className="h-5 w-5 text-gray-500" />
                       <Paperclip className="h-5 w-5 text-gray-500" />
                       <input
@@ -784,8 +802,8 @@ export default function LandingPage() {
                 </div>
 
                 {/* New Client Chat */}
-                <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-2">
-                  <div className="flex flex-col h-[520px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
+                <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-1">
+                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
                     <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
                         <Rocket className="h-4 w-4" />
@@ -839,7 +857,7 @@ export default function LandingPage() {
                         </div>
                       )}
                     </div>
-                    <div className="bg-white/95 border-t border-black/5 px-3 py-2 flex items-center gap-2">
+                    <div className="bg-white/95 border-t border-black/5 px-3 py-1.5 flex items-center gap-2">
                       <Smile className="h-5 w-5 text-gray-500" />
                       <Paperclip className="h-5 w-5 text-gray-500" />
                       <input
@@ -878,6 +896,7 @@ export default function LandingPage() {
               </CardContent>
             </Card>
           </div>
+
         </div>
       </section>
 
@@ -979,7 +998,7 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <Link to="/signup" className="block mt-auto">
+                <Link to="/dashboard" className="block mt-auto">
                   <Button className="w-full rounded-full" variant="outline" size="lg">
                     Get started
                   </Button>
@@ -1013,7 +1032,7 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <Link to="/signup" className="block mt-auto">
+                <Link to="/dashboard" className="block mt-auto">
                   <Button className="w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90" size="lg">
                     Start free trial
                   </Button>
@@ -1043,7 +1062,7 @@ export default function LandingPage() {
                     </div>
                   ))}
                 </div>
-                <Link to="/contact" className="block mt-auto">
+                <Link to="/dashboard" className="block mt-auto">
                   <Button className="w-full rounded-full" variant="outline" size="lg">
                     Talk to sales
                   </Button>
@@ -1051,6 +1070,19 @@ export default function LandingPage() {
               </CardContent>
             </Card>
           </div>
+
+          <div className="mt-12 space-y-4 rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card/60 to-primary/10 p-8 text-center shadow-xl shadow-primary/20">
+            <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
+              {t("landing_pricing_contact_cta")}
+            </p>
+            <Link
+              to="/contact"
+              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-primary to-primary/90 px-10 py-3 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/40 transition hover:shadow-primary/60"
+            >
+              {t("contact_us")}
+            </Link>
+          </div>
+
         </div>
       </section>
 

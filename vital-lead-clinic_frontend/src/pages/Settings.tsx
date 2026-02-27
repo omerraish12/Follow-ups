@@ -35,7 +35,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { settingsService } from "@/services/settingsService";
 import {
   AlertDialog,
@@ -81,7 +81,7 @@ interface Integration {
 
 export default function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
-  const { t, language } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const isRTL = language === 'he' || language === 'ar';
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -98,9 +98,16 @@ export default function SettingsPage() {
     phone: '09-1234567',
     address: t('herzliya_address'),
     timezone: 'Asia/Jerusalem',
-    language: 'he',
+    language,
     currency: 'ILS'
   });
+
+  const actionAlignment = isRTL ? "mr-auto" : "ml-auto";
+
+  const languageOptions: Array<{ value: Language; label: string }> = [
+    { value: "he", label: t("hebrew") },
+    { value: "en", label: t("english") },
+  ];
 
   // User profile
   const [profile, setProfile] = useState<UserProfile>({
@@ -187,6 +194,7 @@ export default function SettingsPage() {
       const data = await settingsService.getSettings();
 
       if (data?.clinic) {
+        const safeLanguage: Language = data.clinic.language === "he" ? "he" : "en";
         setClinicSettings({
           id: data.clinic.id,
           name: data.clinic.name,
@@ -195,9 +203,10 @@ export default function SettingsPage() {
           address: data.clinic.address,
           logo: data.clinic.logo || undefined,
           timezone: data.clinic.timezone,
-          language: data.clinic.language,
+          language: safeLanguage,
           currency: data.clinic.currency,
         });
+        setLanguage(safeLanguage);
       }
 
       if (data?.profile) {
@@ -261,6 +270,36 @@ export default function SettingsPage() {
     }, 800);
     return () => clearTimeout(timeout);
   }, [backupSettings, hasLoadedSettings, t]);
+
+  const handleLanguageSelect = (value: string) => {
+    const nextLanguage: Language = value === "he" ? "he" : "en";
+    setClinicSettings((prev) => ({ ...prev, language: nextLanguage }));
+    setLanguage(nextLanguage);
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!clinicSettings.logo) return;
+    setIsSaving(true);
+    try {
+      const updated = await settingsService.updateClinic({ logo: null });
+      setClinicSettings((prev) => ({
+        ...prev,
+        logo: updated.logo || undefined,
+      }));
+      toast({
+        title: t("settings_saved"),
+        description: t("logo_removed"),
+      });
+    } catch (error) {
+      toast({
+        title: t("error"),
+        description: t("logo_remove_failed"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSaveClinic = async () => {
     setIsSaving(true);
@@ -495,7 +534,7 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
+      <div className="space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
@@ -508,7 +547,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-5 lg:space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
+    <div className="space-y-5 lg:space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       <div>
         <h1 className="text-2xl font-semibold text-foreground font-display">Settings</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -596,7 +635,8 @@ export default function SettingsPage() {
                         variant="ghost"
                         size="sm"
                         className="rounded-lg text-destructive"
-                        onClick={() => setClinicSettings((prev) => ({ ...prev, logo: undefined }))}
+                        onClick={handleRemoveLogo}
+                        disabled={isSaving}
                       >
                         {t("delete")}
                       </Button>
@@ -666,15 +706,16 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="language">{t("language")}</Label>
-                  <Select value={clinicSettings.language} onValueChange={(v) => setClinicSettings({ ...clinicSettings, language: v })}>
+                  <Select value={clinicSettings.language} onValueChange={handleLanguageSelect}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="he">{t("hebrew")}</SelectItem>
-                      <SelectItem value="en">{t("english")}</SelectItem>
-                      <SelectItem value="ru">{t("russian")}</SelectItem>
-                      <SelectItem value="ar">{t("arabic")}</SelectItem>
+                      {languageOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -694,7 +735,7 @@ export default function SettingsPage() {
               </div>
             </CardContent>
             <CardFooter className="border-t pt-4">
-              <Button onClick={handleSaveClinic} disabled={isSaving} className={language === 'he' ? 'mr-auto' : 'ml-auto'}>
+              <Button onClick={handleSaveClinic} disabled={isSaving} className={actionAlignment}>
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 ml-2 animate-spin" />
@@ -879,7 +920,7 @@ export default function SettingsPage() {
               </div>
             </CardContent>
             <CardFooter className="border-t pt-4">
-              <Button onClick={handleSaveProfile} disabled={isSaving} className={language === 'he' ? 'mr-auto' : 'ml-auto'}>
+              <Button onClick={handleSaveProfile} disabled={isSaving} className={actionAlignment}>
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 ml-2 animate-spin" />
@@ -951,7 +992,7 @@ export default function SettingsPage() {
               </div>
             </CardContent>
             <CardFooter className="border-t pt-4">
-              <Button onClick={handleChangePassword} disabled={isSaving} className={language === 'he' ? 'mr-auto' : 'ml-auto'}>
+              <Button onClick={handleChangePassword} disabled={isSaving} className={actionAlignment}>
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 ml-2 animate-spin" />
@@ -1092,7 +1133,7 @@ export default function SettingsPage() {
               </div>
             </CardContent>
             <CardFooter className="border-t pt-4">
-              <Button onClick={handleSaveNotifications} disabled={isSaving} className={language === 'he' ? 'mr-auto' : 'ml-auto'}>
+              <Button onClick={handleSaveNotifications} disabled={isSaving} className={actionAlignment}>
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 ml-2 animate-spin" />
@@ -1327,7 +1368,7 @@ export default function SettingsPage() {
               {t("delete_account_confirmation")}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className={language === 'he' ? 'flex-row-reverse' : ''}>
+          <AlertDialogFooter className={isRTL ? 'flex-row-reverse' : undefined}>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive">
               {t("permanently_delete")}

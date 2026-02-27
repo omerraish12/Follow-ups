@@ -8,6 +8,10 @@ export interface NotificationMetadata {
   [key: string]: any;
 }
 
+export interface MarkAsReadOptions {
+  silent?: boolean;
+}
+
 // Raw API shape from backend (snake_case)
 export interface NotificationRecord {
   id: string | number;
@@ -46,7 +50,7 @@ export interface NotificationsState {
   unreadCount: number;
   fetchNotifications: () => Promise<void>;
   refreshUnreadCount: () => Promise<void>;
-  markAsRead: (id: string) => Promise<void>;
+  markAsRead: (id: string, options?: MarkAsReadOptions) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
   clearAll: () => Promise<void>;

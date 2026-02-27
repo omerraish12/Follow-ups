@@ -1,5 +1,14 @@
 import api from "./api";
 
+export interface BankTransferDetails {
+  bankName: string;
+  accountName: string;
+  iban: string;
+  swift?: string;
+  reference?: string;
+  instructions?: string;
+}
+
 export interface PricingPlan {
   id: string;
   name: string; // translation key
@@ -11,6 +20,8 @@ export interface PricingPlan {
   highlight: boolean;
   features: string[]; // translation keys
   cta: string; // translation key
+  paymentMethod?: "bank_transfer";
+  bankTransferDetails?: BankTransferDetails;
 }
 
 export const pricingService = {

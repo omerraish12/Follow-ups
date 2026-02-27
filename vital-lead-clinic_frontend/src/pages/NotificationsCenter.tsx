@@ -1,5 +1,5 @@
 // src/pages/NotificationsCenter.tsx
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     Bell, BellRing, CheckCheck, X, Clock,
     AlertCircle, CheckCircle, Info, AlertTriangle,
@@ -45,6 +45,7 @@ import type { NotificationItem } from "@/types/notifications";
 import { formatDistanceToNow } from "date-fns";
 import { he, enUS } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
+import { translateAutomationName } from "@/lib/automationNames";
 
 const notificationIcons = {
     lead: MessageSquare,
@@ -64,6 +65,7 @@ const notificationColors = {
 
 export default function NotificationsCenter() {
     const { t, language } = useLanguage();
+    const isRTL = language === "he";
     const navigate = useNavigate();
     const [filter, setFilter] = useState('all');
     const {
@@ -85,6 +87,73 @@ export default function NotificationsCenter() {
         dailyDigest: false,
         marketingAlerts: false
     });
+
+    const formatTemplate = (key: string, values: Record<string, string | number>) => {
+        let template = t(key);
+        Object.entries(values).forEach(([param, value]) => {
+            template = template.replace(`{${param}}`, String(value));
+        });
+        return template;
+    };
+
+    const formatNotificationMessage = useCallback((notification: NotificationItem) => {
+        const message = notification.message || "";
+        const automationMetadataName = notification.metadata?.automationName;
+
+        const enabledMatch = message.match(/Automation "([^"]+)" was enabled\\./i);
+        if (enabledMatch) {
+            return formatTemplate("notifications_automation_enabled", {
+                name: translateAutomationName(automationMetadataName || enabledMatch[1], t)
+            });
+        }
+
+        const disabledMatch = message.match(/Automation "([^"]+)" was disabled\\./i);
+        if (disabledMatch) {
+            return formatTemplate("notifications_automation_disabled", {
+                name: translateAutomationName(automationMetadataName || disabledMatch[1], t)
+            });
+        }
+
+        const createdMatch = message.match(/Automation "([^"]+)" was created\\./i);
+        if (createdMatch) {
+            return formatTemplate("notifications_automation_created", {
+                name: translateAutomationName(automationMetadataName || createdMatch[1], t)
+            });
+        }
+
+        const runMatch = message.match(/Automation "([^"]+)" ran for lead (.+)\\./i)
+            || message.match(/Automation "([^"]+)" executed for lead (.+)\\./i);
+        if (runMatch) {
+            return formatTemplate("notifications_automation_run", {
+                automationName: translateAutomationName(automationMetadataName || runMatch[1], t),
+                leadName: notification.metadata?.leadName || runMatch[2]
+            });
+        }
+
+        const defaultAddedMatch = message.match(/(\\d+) default automation rules were added to your clinic\\./i);
+        if (defaultAddedMatch) {
+            return formatTemplate("notifications_default_automations_added", {
+                count: defaultAddedMatch[1]
+            });
+        }
+
+        const followupMatch = message.match(/Lead (.+) needs follow-up/i);
+        if (followupMatch) {
+            return formatTemplate("notifications_followup_needed", {
+                leadName: notification.metadata?.leadName || followupMatch[1]
+            });
+        }
+
+        const messageReceivedMatch = message.match(/Message from (.+?): (.+)/i);
+        if (messageReceivedMatch) {
+            return formatTemplate("notifications_message_received", {
+                leadName: notification.metadata?.leadName || messageReceivedMatch[1],
+                message: messageReceivedMatch[2]
+            });
+        }
+
+        return message;
+    }, [t]);
 
     useEffect(() => {
         (async () => {
@@ -132,6 +201,27 @@ export default function NotificationsCenter() {
             });
         }
     };
+
+    const markNotificationSilentRead = useCallback(async (notification: NotificationItem) => {
+        if (notification.read) return;
+        try {
+            await markAsRead(notification.id, { silent: true });
+        } catch (error) {
+            console.error("Unable to mark notification read:", error);
+        }
+    }, [markAsRead]);
+
+    const handleNotificationActionClick = useCallback(async (notification: NotificationItem) => {
+        await markNotificationSilentRead(notification);
+        if (notification.actionLink) {
+            window.location.href = notification.actionLink;
+            return;
+        }
+        const leadId = notification.metadata?.leadId;
+        if (leadId) {
+            navigate(`/leads/${leadId}`);
+        }
+    }, [markNotificationSilentRead, navigate]);
 
     const filteredNotifications: NotificationItem[] = notifications.filter(n => {
         if (filter === 'unread') return !n.read;
@@ -231,7 +321,7 @@ export default function NotificationsCenter() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                                 className="cursor-pointer text-destructive"
-                                onClick={clearAll}
+                                onClick={async () => await clearAll()}
                             >
                                 <Trash2 className="h-4 w-4 ml-2" />
                                 {t("clear_all")}
@@ -312,12 +402,13 @@ export default function NotificationsCenter() {
                             return (
                                 <div
                                     key={notification.id}
-                                    className={cn(
-                                        "relative rounded-2xl border p-4 transition-all",
-                                        notification.read ? "border-border bg-card" : "border-primary/20 bg-primary/5",
-                                        notification.priority === 'high' && !notification.read &&
-                                        (language === 'he' ? "border-r-4 border-r-destructive" : "border-l-4 border-l-destructive")
-                                    )}
+                                className={cn(
+                                    "relative rounded-2xl border p-4 transition-all cursor-pointer",
+                                    notification.read ? "border-border bg-card" : "border-primary/20 bg-primary/5",
+                                    notification.priority === 'high' && !notification.read &&
+                                    (language === 'he' ? "border-r-4 border-r-destructive" : "border-l-4 border-l-destructive")
+                                )}
+                                onClick={() => markNotificationSilentRead(notification)}
                                 >
                                     <div className="flex gap-4">
                                         <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", notificationColors[notification.type])}>
@@ -333,7 +424,7 @@ export default function NotificationsCenter() {
                                                         )}
                                                     </h4>
                                                     <p className="text-sm text-muted-foreground mt-1">
-                                                        {notification.message}
+                                                        {formatNotificationMessage(notification)}
                                                     </p>
                                                     {notification.metadata?.value && (
                                                         <p className="text-xs font-bold text-success mt-2">
@@ -352,14 +443,14 @@ export default function NotificationsCenter() {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align={language === 'he' ? 'start' : 'end'} className="rounded-xl">
-                                                            <DropdownMenuItem onClick={() => markAsRead(notification.id)} className="cursor-pointer">
-                                                                <CheckCheck className="h-4 w-4 ml-2" />
-                                                                {t("mark_as_read")}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => deleteNotification(notification.id)} className="cursor-pointer text-destructive">
-                                                                <Trash2 className="h-4 w-4 ml-2" />
-                                                                {t("delete")}
-                                                            </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={async () => await markAsRead(notification.id)} className="cursor-pointer">
+                                                        <CheckCheck className="h-4 w-4 ml-2" />
+                                                        {t("mark_as_read")}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={async () => await deleteNotification(notification.id)} className="cursor-pointer text-destructive">
+                                                        <Trash2 className="h-4 w-4 ml-2" />
+                                                        {t("delete")}
+                                                    </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>
@@ -370,15 +461,9 @@ export default function NotificationsCenter() {
                                                         size="sm"
                                                         variant="outline"
                                                         className="rounded-lg h-8 text-xs"
-                                                        onClick={() => {
-                                                            if (notification.actionLink) {
-                                                                window.location.href = notification.actionLink;
-                                                                return;
-                                                            }
-                                                            const leadId = notification.metadata?.leadId;
-                                                            if (leadId) {
-                                                                navigate(`/leads/${leadId}`);
-                                                            }
+                                                        onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            handleNotificationActionClick(notification);
                                                         }}
                                                     >
                                                         {notification.actionLabel || t("view_lead")}
@@ -412,10 +497,10 @@ export default function NotificationsCenter() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("lead_alerts")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("new_leads_and_messages")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("lead_alerts")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("new_leads_and_messages")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.leadAlerts}
@@ -425,10 +510,10 @@ export default function NotificationsCenter() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("system_alerts")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("system_and_automation_updates")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("system_alerts")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("system_and_automation_updates")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.systemAlerts}
@@ -438,10 +523,10 @@ export default function NotificationsCenter() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("marketing_alerts")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("promotions_and_updates")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("marketing_alerts")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("promotions_and_updates")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.marketingAlerts}
@@ -451,10 +536,10 @@ export default function NotificationsCenter() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("sound_alerts")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("play_sound_on_new_notification")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("sound_alerts")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("play_sound_on_new_notification")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.soundAlerts}
@@ -464,10 +549,10 @@ export default function NotificationsCenter() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("desktop_notifications")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("receive_notifications_in_browser")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("desktop_notifications")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("receive_notifications_in_browser")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.desktopNotifications}
@@ -477,10 +562,10 @@ export default function NotificationsCenter() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("daily_digest")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("receive_daily_summary_email")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("daily_digest")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("receive_daily_summary_email")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.dailyDigest}
@@ -490,10 +575,10 @@ export default function NotificationsCenter() {
                                 />
                             </div>
 
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between" dir={isRTL ? "ltr" : undefined}>
                                 <div>
-                                    <p className="font-medium">{t("email_notifications")}</p>
-                                    <p className="text-xs text-muted-foreground">{t("receive_email_copy")}</p>
+                                    <p className={cn("font-medium", isRTL && "text-right")}>{t("email_notifications")}</p>
+                                    <p className={cn("text-xs text-muted-foreground", isRTL && "text-right")}>{t("receive_email_copy")}</p>
                                 </div>
                                 <Switch
                                     checked={settings.emailNotifications}

@@ -1,45 +1,34 @@
-# Clinic CRM Frontend
+# Clinic CRM Frontend (FollowUps)
 
-Vite + React + TypeScript + Tailwind UI for the clinic platform (dashboard, leads, automations, WhatsApp integration, settings, pricing).
+React/Vite application for the clinic UI (dashboard, leads, automations, notifications, pricing). Connects to the backend via the REST API described in the backend README.
 
 ## Prerequisites
-- Node 18+ (22.x works)
-- npm
+- Node 18+
+- npm (or yarn/pnpm if preferred)
 
 ## Setup
-1) Copy `.env.sample` to `.env.local` (or `.env`) and set:
-```
-VITE_API_URL=http://localhost:5000/api
-```
-2) Install deps:
-```bash
-npm install
-```
-3) Run dev server:
-```bash
-npm run dev
-```
-4) Build:
-```bash
-npm run build
-```
-Preview build: `npm run preview`
+1. Copy `.env.sample` → `.env` and update the values (`VITE_API_URL` should point to your backend, e.g., `http://localhost:5000/api`).
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+   Build for production with `npm run build` and serve via `npm run preview` or your preferred static host.
 
-## Environment
-- `VITE_API_URL` – backend base URL (include `/api`)
-- Optional analytics (if used): `VITE_SENTRY_DSN`, `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST`
+## Environment reference
+- `VITE_API_URL` – base URL for the backend API (`http://localhost:5000/api` during development).
+- `VITE_SENTRY_DSN` – Optional (uncomment if you use Sentry for errors).
+- `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` – Optional PostHog config if you track events.
+- `VITE_FEATURE_FLAGS` – Optional comma-separated list of feature flags for toggling UI sections.
 
-## Useful paths
-- Services: `src/services/*` (API clients)
-- Contexts: `src/contexts/*` (auth, language)
-- Pages: `src/pages/*`
-- UI components: `src/components/*`
+## Scripts
+- `npm run dev` – local dev server with HMR on `http://localhost:5173`
+- `npm run build` – static production build (`dist/`)
+- `npm run preview` – serve the production build locally
 
-## Scripts (package.json)
-- `dev` – start Vite dev server
-- `build` – production build
-- `preview` – serve build locally
-- `test` / `lint` – if enabled
-
-## Linking to backend
-Set `VITE_API_URL` to your running backend (e.g., `http://localhost:5000/api` for local dev or your deployed API URL in production).
+## Notes
+- The frontend automatically reads the user's language preference from `localStorage`. To force a language in development, set `localStorage.setItem("language", "he")` in the console.
+- Toggle the WhatsApp and notification UI by ensuring the backend has the required API keys configured (`WHATSAPP_*` in the backend `.env`).

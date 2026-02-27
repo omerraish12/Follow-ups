@@ -1,50 +1,57 @@
 # Clinic CRM Backend
 
-Express/Node API for the clinic platform (auth, leads, automations, notifications, WhatsApp, settings, pricing). Uses PostgreSQL (Supabase-friendly) and JWT auth.
+Express/Node API for the clinic platform (auth, leads, automations, notifications, WhatsApp, settings, pricing). Uses PostgreSQL (Supabase-friendly) plus JWT auth and configurable cron jobs.
 
 ## Prerequisites
-- Node 18+ (22.x works)
+- Node 18+ (22.x is also supported)
 - npm
-- PostgreSQL or Supabase connection string
+- PostgreSQL (Supabase/Neon pooled URLs or any direct connection string)
 
-## Setup
-1) Copy `.env.sample` to `.env` and fill values (at minimum set one of `POSTGRES_URL`/`DATABASE_URL`/`SUPABASE_DB_URL`, `JWT_SECRET`, `FRONTEND_URL`).
-2) Install deps:
-```bash
-npm install
-```
-3) Initialize DB (idempotent):
-```bash
-npm run db:init
-```
-4) Run dev server:
-```bash
-npm run dev
-```
-   Prod: `npm start`
+## Quickstart
+1. Copy `.env.sample` → `.env` and fill the required values (`POSTGRES_*`, `JWT_SECRET`, `FRONTEND_URL`, WhatsApp keys once available).
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Initialize/migrate the database (safe to rerun):
+   ```bash
+   npm run db:init
+   ```
+4. Start the dev server:
+   ```bash
+   npm run dev
+   ```
+   Production: `npm start`
 
-## Environment keys (summary)
-- DB: `POSTGRES_URL` / `DATABASE_URL` / `SUPABASE_DB_URL` (preferred pooled URLs). Fallback parts: `POSTGRES_HOST`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`.
-- JWT: `JWT_SECRET`, `JWT_EXPIRE`
-- Email: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`
-- Frontend: `FRONTEND_URL` (CORS + email links)
-- WhatsApp Cloud: `META_APP_ID`, `META_APP_SECRET`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_WEBHOOK_CALLBACK`
-- Pool tuning: `DB_POOL_MAX`, `DB_IDLE_TIMEOUT`, `DB_CONNECTION_TIMEOUT`, `DB_QUERY_RETRIES`
+## Environment reference
+- **Server**: `PORT`, `NODE_ENV`
+- **Database**: Preferred pooled URLs (`POSTGRES_URL`, `DATABASE_URL`, `SUPABASE_DB_URL`); fallback pieces (`POSTGRES_HOST`, `POSTGRES_DATABASE`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`). Tune pools with `DB_POOL_MAX`, `DB_IDLE_TIMEOUT`, `DB_CONNECTION_TIMEOUT`, `DB_QUERY_RETRIES`.
+- **JWT**: `JWT_SECRET`, `JWT_EXPIRE`
+- **Email/SMTP**: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`
+- **Frontend**: `FRONTEND_URL` (CORS + link generation)
+- **WhatsApp Cloud**: `META_APP_ID`, `META_APP_SECRET`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_WEBHOOK_CALLBACK`, plus `WHATSAPP_API_VERSION`/`WHATSAPP_GRAPH_BASE`
+- **Deployment**: `VERCEL` / `AWS_LAMBDA_FUNCTION_NAME` (set when running in serverless)
 
 ## API highlights
-- Auth: `/api/auth/*` (signup/login/reset)
-- Leads: `/api/leads`
-- Automations & cron: `/api/automations`, scheduled via `src/utils/cronJobs.js`
-- Notifications: `/api/notifications`
-- Settings: `/api/settings` (clinic/profile/password/backup/integrations/exports/uploads)
-- WhatsApp: `/api/whatsapp`
-- Pricing: `/api/pricing`
+- `POST /api/auth/*` – auth, registration, password reset
+- `GET/POST /api/leads` – contacts CRUD, follow-up helpers
+- `GET /api/automations` – automation rules, plus cron job entrypoints (`src/utils/cronJobs.js`)
+- `/api/notifications` – notification feed + actions
+- `/api/settings` – clinic/profile/password/backup/integrations/uploads
+- `/api/pricing` – pricing catalog used by the frontend
+- `/api/whatsapp` – WhatsApp connection, message dispatch, webhooks
+
+## WhatsApp checklist
+1. Create a Meta app and enable WhatsApp.
+2. Copy the provided phone number ID and account ID into `.env`.
+3. Exchange the short-lived token for a long-lived access token and paste it into `WHATSAPP_ACCESS_TOKEN`.
+4. Set `WHATSAPP_WEBHOOK_CALLBACK` (e.g., `https://example.com/api/whatsapp/webhook`) and configure Meta’s webhook URL to match.
 
 ## Scripts
-- `npm run dev` – nodemon dev server
-- `npm start` – production start
-- `npm run db:init` – create/update schema (safe to rerun)
+- `npm run dev` – dev server with nodemon
+- `npm start` – production mode
+- `npm run db:init` – create/update schema (no-op if already applied)
 
 ## Notes
-- SSL is auto-enabled when using URL-based DB vars (Supabase/Neon poolers).
-- Cron jobs start with the server (`src/server.js`). If deploying serverless, schedule equivalent tasks externally.
+- Cron jobs start with `src/server.js`; if you move to serverless, schedule equivalent tasks externally.
+- SSL is automatically handled when using Supabase/Neon connection strings.

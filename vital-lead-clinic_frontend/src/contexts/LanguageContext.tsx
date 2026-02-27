@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import enTranslations from "../locales/en.json";
 import heTranslations from "../locales/he.json";
 
-type Language = "en" | "he";
+export type Language = "en" | "he";
 
 interface LanguageContextType {
   language: Language;

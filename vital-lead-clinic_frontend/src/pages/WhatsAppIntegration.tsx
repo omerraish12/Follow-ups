@@ -269,7 +269,7 @@ export default function WhatsAppIntegration() {
     };
 
     const handleSaveConnectionDetails = async () => {
-        await saveToBackend({}, "WhatsApp settings saved.");
+        await saveToBackend({}, t("whatsapp_settings_saved"));
     };
 
     const handleSelectFile = () => {
@@ -298,7 +298,8 @@ export default function WhatsAppIntegration() {
             };
             const nextHistory = [entry, ...importHistory].slice(0, 30);
             setImportHistory(nextHistory);
-            await saveToBackend({ importHistory: nextHistory }, `Imported ${processedMessages.toLocaleString()} messages.`);
+            const successMessage = t("imported_messages_success").replace("{count}", processedMessages.toLocaleString());
+            await saveToBackend({ importHistory: nextHistory }, successMessage);
         } finally {
             setImporting(false);
         }
@@ -311,7 +312,7 @@ export default function WhatsAppIntegration() {
         if (!allowed) {
             toast({
                 title: t("error"),
-                description: "Please upload a .txt, .csv, or .json file.",
+                description: t("upload_file_format_error"),
                 variant: "destructive",
             });
             event.target.value = "";
@@ -322,7 +323,7 @@ export default function WhatsAppIntegration() {
     };
 
     const handleSaveFilterSettings = async () => {
-        await saveToBackend({}, "Filter settings saved.");
+        await saveToBackend({}, t("filter_settings_saved"));
     };
 
     const handleOpenCreateTemplate = () => {
@@ -352,7 +353,7 @@ export default function WhatsAppIntegration() {
         if (!templateData.name || !templateData.message) {
             toast({
                 title: t("error"),
-                description: "Template name and message are required.",
+                description: t("template_validation_required"),
                 variant: "destructive",
             });
             return;
@@ -466,9 +467,9 @@ export default function WhatsAppIntegration() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-semibold text-foreground font-display">WhatsApp Engagement</h1>
+                    <h1 className="text-2xl font-semibold text-foreground font-display">{t("whatsapp_engagement_title")}</h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Connect your WhatsApp Business account to centralize conversations and automate follow‑ups.
+                        {t("whatsapp_engagement_description")}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -679,8 +680,8 @@ export default function WhatsAppIntegration() {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="he">Hebrew (he)</SelectItem>
-                                                <SelectItem value="en">English (en)</SelectItem>
+                                                <SelectItem value="he">{`${t("hebrew")} (he)`}</SelectItem>
+                                                <SelectItem value="en">{`${t("english")} (en)`}</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>

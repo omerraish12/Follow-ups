@@ -71,7 +71,7 @@ export default function Automations() {
           const days = lead.last_contacted
             ? Math.floor((Date.now() - new Date(lead.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
             : 0;
-          return { leadId: String(lead.id), leadName: lead.name || "Unknown lead", days };
+          return { leadId: String(lead.id), leadName: lead.name || t("unknown_lead"), days };
         });
         setFollowupNeeded(mapped);
       } catch (err) {
@@ -79,7 +79,7 @@ export default function Automations() {
       }
     };
     loadFollowups();
-  }, []);
+  }, [t]);
 
   const activeCount = rules.filter((r) => r.active).length;
   const totalExecutions = stats?.totals?.total_executions ?? rules.reduce((sum, r) => sum + (r.totalExecutions || 0), 0);
@@ -186,9 +186,9 @@ export default function Automations() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground font-display">Automation Studio</h1>
+          <h1 className="text-2xl font-semibold text-foreground font-display">{t("automations_title")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Build follow‑ups that feel personal and run on time, every time.
+            {t("automations_subtitle")}
           </p>
         </div>
         <AutomationRuleDialog onSuccess={() => { fetchAutomations(); fetchStats(); }} />
@@ -276,7 +276,7 @@ export default function Automations() {
 
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Button onClick={() => setActiveTab("rules")} className="rounded-full gradient-primary text-primary-foreground shadow-card">
-              {t("rules")}
+              {t("automations_tab_rules")}
               <ArrowRight className={cn("h-4 w-4", language === "he" ? "mr-2" : "ml-2")} />
             </Button>
             <Button
@@ -284,7 +284,7 @@ export default function Automations() {
               onClick={() => setActiveTab("insights")}
               className="rounded-full border-primary/30 bg-card/80 hover:bg-card"
             >
-              {t("insights")}
+              {t("automations_tab_insights")}
             </Button>
           </div>
         </div>
@@ -292,9 +292,9 @@ export default function Automations() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid grid-cols-3 max-w-md">
-          <TabsTrigger value="rules">{t("rules")}</TabsTrigger>
-          <TabsTrigger value="followups">{t("followups")}</TabsTrigger>
-          <TabsTrigger value="insights">{t("insights")}</TabsTrigger>
+          <TabsTrigger value="rules">{t("automations_tab_rules")}</TabsTrigger>
+          <TabsTrigger value="followups">{t("automations_tab_followups")}</TabsTrigger>
+          <TabsTrigger value="insights">{t("automations_tab_insights")}</TabsTrigger>
         </TabsList>
 
         {/* Rules tab */}
@@ -338,14 +338,14 @@ export default function Automations() {
                   <p className="text-sm leading-relaxed text-muted-foreground">{rule.message}</p>
 
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
+                    <Zap className="h-3 w-3" /> {t("auto_followups")}
+                  </span>
+                  {rule.notifyOnReply && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
-                      <Zap className="h-3 w-3" /> {t("auto_followups")}
+                      <Bell className="h-3 w-3" /> {t("notify_on_reply")}
                     </span>
-                    {rule.notifyOnReply && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
-                        <Bell className="h-3 w-3" /> {t("notify_on_reply")}
-                      </span>
-                    )}
+                  )}
                   </div>
 
                   <div className="grid grid-cols-3 gap-3 text-center text-xs">

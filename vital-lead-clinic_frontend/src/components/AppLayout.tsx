@@ -25,6 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import ThemeToggle from "./ThemeToggle";
 import { useNotifications } from "@/hooks/useNotifications";
+import { usePermissions } from "@/hooks/usePermissions";
 import { leadService } from "@/services/leadService";
 import {
   DropdownMenu,
@@ -38,14 +39,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import BrandLogo from "./BrandLogo";
 
 const navItemsConfig = [
-  { to: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard" },
-  { to: "/leads", icon: Users, labelKey: "leads" },
-  { to: "/automations", icon: Zap, labelKey: "automations" },
-  { to: "/analytics", icon: BarChart3, labelKey: "analytics" },
-  { to: "/whatsapp", icon: Globe, labelKey: "whatsapp" },
-  { to: "/team", icon: UserCog, labelKey: "team" },
-  { to: "/notifications", icon: AlertCircle, labelKey: "notifications" },
-  { to: "/settings", icon: Settings, labelKey: "settings" },
+  { to: "/dashboard", icon: LayoutDashboard, labelKey: "dashboard", permission: "dashboard" },
+  { to: "/leads", icon: Users, labelKey: "leads", permission: "leads" },
+  { to: "/automations", icon: Zap, labelKey: "automations", permission: "automations" },
+  { to: "/analytics", icon: BarChart3, labelKey: "analytics", permission: "analytics" },
+  { to: "/whatsapp", icon: Globe, labelKey: "whatsapp", permission: "whatsapp" },
+  { to: "/team", icon: UserCog, labelKey: "team", permission: "team" },
+  { to: "/notifications", icon: AlertCircle, labelKey: "notifications", permission: "notifications" },
+  { to: "/settings", icon: Settings, labelKey: "settings", permission: "settings" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -56,7 +57,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const { unreadCount, refreshUnreadCount } = useNotifications({ autoFetch: false });
+  const { hasPermission } = usePermissions();
   const notificationCount = unreadCount;
+  const visibleNavItems = navItemsConfig.filter((item) => hasPermission(item.permission));
 
   const refreshLeadsNeedingFollowup = useCallback(async () => {
     try {
@@ -155,7 +158,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
             <div className="h-px bg-border my-2" />
 
-            {navItemsConfig.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive = location.pathname === item.to;
               return (
                 <NavLink

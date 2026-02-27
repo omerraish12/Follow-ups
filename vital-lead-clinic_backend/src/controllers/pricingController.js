@@ -50,7 +50,16 @@ const plans = [
       'plan_custom_reports',
       'plan_sla_support'
     ],
-    cta: 'talk_to_sales'
+    cta: 'talk_to_sales',
+    paymentMethod: 'bank_transfer',
+    bankTransferDetails: {
+      bankName: 'Bank Hapoalim',
+      accountName: 'FollowUp Clinics Ltd.',
+      iban: 'IL62 1234 5678 9012 3456 789',
+      swift: 'POALILIT',
+      reference: 'FOLLOWUP-SCALE',
+      instructions: 'שלחו את הקבלה ל-accounting@followup.app ברגע שמבוצע התשלום ונא סיימו תיאום משלב החיבור הראשוני.'
+    }
   }
 ];
 

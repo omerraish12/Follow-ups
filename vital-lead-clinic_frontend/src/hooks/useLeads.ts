@@ -26,7 +26,7 @@ export const useLeads = (initialFilters: Filters = {}) => {
     setError(null);
     try {
       const data = await leadService.getLeads(filters);
-      setLeads(data);
+      setLeads(data); 
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || 'Unable to load leads.';
       setError(msg);

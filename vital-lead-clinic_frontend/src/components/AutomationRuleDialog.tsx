@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,25 +25,29 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   type AutomationTargetStatus = LeadStatus | typeof ALL_STATUSES;
-  const [form, setForm] = useState({
+  const triggerOptions = useMemo(() => [
+    { value: "lead_created", label: t("lead_created") },
+    { value: "no_response", label: t("no_response") },
+    { value: "status_changed_hot", label: t("status_changed_to_hot") },
+    { value: "no_contact_days", label: t("no_contact_days") },
+    { value: "appointment_booked", label: t("appointment_booked") },
+  ], [t]);
+
+  const defaultTriggerValue = triggerOptions[0]?.value || "lead_created";
+
+  const buildFormState = () => ({
     name: rule?.name || "",
-    trigger: (rule as any)?.trigger || "",
+    trigger: rule?.trigger || defaultTriggerValue,
     delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
     message: rule?.message || "",
     targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
     active: rule?.active ?? true,
   });
 
-  const triggerOptions = [
-    { value: "lead_created", label: t("lead_created") },
-    { value: "no_response", label: t("no_response") },
-    { value: "status_changed_hot", label: t("status_changed_to_hot") },
-    { value: "no_contact_days", label: t("no_contact_days") },
-    { value: "appointment_booked", label: t("appointment_booked") },
-  ];
+  const [form, setForm] = useState(buildFormState);
 
   const handleSubmit = async () => {
-    if (!form.name.trim() || !form.trigger || !form.message.trim()) {
+    if (!form.name.trim() || !form.message.trim()) {
       return;
     }
 

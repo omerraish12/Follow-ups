@@ -17,6 +17,7 @@ import Login from "@/pages/auth/Login";
 import Signup from "@/pages/auth/Signup";
 import ResetPassword from "@/pages/auth/ResetPassword";
 import Pricing from "@/pages/Pricing";
+import ContactPage from "@/pages/ContactPage";
 import Profile from "@/pages/Profile";
 
 // Protected pages
@@ -57,12 +58,13 @@ const App = () => {
                   <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/pricing" element={<Pricing />} />
+                  <Route path="/contact" element={<ContactPage />} />
 
                   {/* Protected Routes */}
                   <Route
                     path="/dashboard"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="dashboard">
                         <AppLayout>
                           <ErrorBoundary>
                             <Dashboard />
@@ -75,7 +77,7 @@ const App = () => {
                   <Route
                     path="/leads"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="leads">
                         <AppLayout>
                           <ErrorBoundary>
                             <Leads />
@@ -88,7 +90,7 @@ const App = () => {
                   <Route
                     path="/automations"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="automations">
                         <AppLayout>
                           <ErrorBoundary>
                             <Automations />
@@ -101,7 +103,7 @@ const App = () => {
                   <Route
                     path="/analytics"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="analytics">
                         <AppLayout>
                           <ErrorBoundary>
                             <Analytics />
@@ -114,7 +116,7 @@ const App = () => {
                   <Route
                     path="/whatsapp"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="whatsapp">
                         <AppLayout>
                           <ErrorBoundary>
                             <WhatsAppIntegration />
@@ -127,7 +129,7 @@ const App = () => {
                   <Route
                     path="/team"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="team">
                         <AppLayout>
                           <ErrorBoundary>
                             <TeamManagement />
@@ -140,7 +142,7 @@ const App = () => {
                   <Route
                     path="/notifications"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="notifications">
                         <AppLayout>
                           <ErrorBoundary>
                             <NotificationsCenter />
@@ -153,7 +155,7 @@ const App = () => {
                   <Route
                     path="/settings"
                     element={
-                      <ProtectedRoute>
+                      <ProtectedRoute permission="settings">
                         <AppLayout>
                           <ErrorBoundary>
                             <SettingsPage />

@@ -1,11 +1,13 @@
 // src/types/auth.ts
+import type { UserRole } from "@/lib/roles";
+
 export interface User {
     id: string;
     email: string;
     name: string;
     clinicName?: string;
     phone?: string;
-    role: 'admin' | 'manager' | 'staff';
+    role: UserRole;
     emailVerified: boolean;
     createdAt: string;
 }

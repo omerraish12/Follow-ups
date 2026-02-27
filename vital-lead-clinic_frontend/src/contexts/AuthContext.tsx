@@ -1,8 +1,29 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '@/services/authService';
 import { toast } from '@/hooks/use-toast';
+import type { User, LoginCredentials, SignupCredentials } from '@/types/auth';
+import { normalizeRole } from '@/lib/roles';
 
-const AuthContext = createContext(undefined);
+type AuthContextValue = {
+    user: User | null;
+    isLoading: boolean;
+    error: string | null;
+    login: (credentials: LoginCredentials) => Promise<any>;
+    signup: (userData: SignupCredentials) => Promise<any>;
+    logout: () => void;
+    refreshUser: () => Promise<User | null>;
+    clearError: () => void;
+};
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+const normalizeUserRecord = (user?: Partial<User> | null): User | null => {
+    if (!user) return null;
+    return {
+        ...user,
+        role: normalizeRole(user.role),
+    } as User;
+};
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -12,22 +33,24 @@ export const useAuth = () => {
     return context;
 };
 
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+    const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        checkUser();
-    }, []);
+    const applyUser = (raw?: Partial<User> | null) => {
+        const normalized = normalizeUserRecord(raw);
+        setUser(normalized);
+        return normalized;
+    };
 
     const checkUser = async () => {
         try {
             const token = localStorage.getItem('auth_token');
             const storedUser = localStorage.getItem('user');
-
             if (token && storedUser) {
-                setUser(JSON.parse(storedUser));
+                const parsed = JSON.parse(storedUser);
+                applyUser(parsed);
             }
         } catch (error) {
             console.error('Error checking user:', error);
@@ -36,15 +59,23 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const login = async (credentials) => {
+    useEffect(() => {
+        checkUser();
+    }, []);
+
+    const login = async (credentials: LoginCredentials) => {
         setIsLoading(true);
         setError(null);
         try {
             const data = await authService.login(credentials);
-            setUser(data.user);
+            const normalized = applyUser(data?.user);
+            if (normalized) {
+                localStorage.setItem('user', JSON.stringify(normalized));
+                data.user = normalized;
+            }
             toast({
                 title: "Signed in",
-                description: `Welcome back, ${data.user.name}!`,
+                description: `Welcome back, ${normalized?.name || 'user'}!`,
             });
             return data;
         } catch (error) {
@@ -59,12 +90,15 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const signup = async (userData) => {
+    const signup = async (userData: SignupCredentials) => {
         setIsLoading(true);
         setError(null);
         try {
             const data = await authService.signup(userData);
-            setUser(data.user);
+            const normalized = applyUser(data?.user);
+            if (normalized) {
+                localStorage.setItem('user', JSON.stringify(normalized));
+            }
             toast({
                 title: "Account created",
                 description: "Your account is ready. You can sign in now.",
@@ -85,9 +119,11 @@ export const AuthProvider = ({ children }) => {
     const refreshUser = async () => {
         try {
             const data = await authService.getCurrentUser();
-            setUser(data);
-            localStorage.setItem('user', JSON.stringify(data));
-            return data;
+            const normalized = applyUser(data);
+            if (normalized) {
+                localStorage.setItem('user', JSON.stringify(normalized));
+            }
+            return normalized;
         } catch (error) {
             console.error('Error refreshing user:', error);
             return null;
@@ -116,7 +152,7 @@ export const AuthProvider = ({ children }) => {
             signup,
             logout,
             refreshUser,
-            clearError
+            clearError,
         }}>
             {children}
         </AuthContext.Provider>

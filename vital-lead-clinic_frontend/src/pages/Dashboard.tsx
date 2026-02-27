@@ -51,6 +51,7 @@ import { useLeads } from "@/hooks/useLeads";
 import { useAutomations } from "@/hooks/useAutomations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "@/hooks/use-toast";
+import { translateAutomationName } from "@/lib/automationNames";
 
 // Types
 interface Activity {
@@ -154,11 +155,19 @@ export default function Dashboard() {
     setPeriod
   } = useAnalytics(timeRange);
 
-  const { leads, getFollowupNeeded, fetchLeads, isLoading: leadsLoading } = useLeads();
+  const {
+    leads,
+    filters,
+    setFilters,
+    getFollowupNeeded,
+    fetchLeads,
+    isLoading: leadsLoading
+  } = useLeads();
   const { stats: automationStats, fetchAutomations, fetchStats, isLoading: automationsLoading } = useAutomations();
 
   const [followupLeads, setFollowupLeads] = useState<FollowupLead[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>(() => filters.status || "all");
 
   const loadFollowupLeads = useCallback(async () => {
     try {
@@ -174,9 +183,29 @@ export default function Dashboard() {
     loadFollowupLeads();
   }, [loadFollowupLeads]);
 
+  const normalizedStatusFilter = statusFilter === "followup" ? "followup" : statusFilter?.toUpperCase();
+
+  const displayLeads = useMemo(() => {
+    if (normalizedStatusFilter === "followup") {
+      return followupLeads;
+    }
+
+    if (!normalizedStatusFilter || normalizedStatusFilter === "ALL") {
+      return leads;
+    }
+
+    return leads.filter((lead) => (lead.status || "").toUpperCase() === normalizedStatusFilter);
+  }, [normalizedStatusFilter, followupLeads, leads]);
+
+  useEffect(() => {
+    if (statusFilter === "followup") {
+      loadFollowupLeads();
+    }
+  }, [statusFilter, loadFollowupLeads]);
+
   // Generate recent activity from leads data
   useEffect(() => {
-    if (leads?.length) {
+    if (displayLeads?.length) {
       const descriptionSets = language === "he"
         ? [
             "ליד חדש נוסף למערכת",
@@ -208,7 +237,7 @@ export default function Dashboard() {
 
       const types: Activity['type'][] = ['new', 'hot', 'followup', 'closed', 'return'];
 
-      const activities: Activity[] = leads.slice(0, 5).map((lead, index) => ({
+      const activities: Activity[] = displayLeads.slice(0, 5).map((lead, index) => ({
         id: lead.id,
         type: types[index % types.length],
         name: lead.name,
@@ -219,12 +248,25 @@ export default function Dashboard() {
 
       setRecentActivity(activities);
     }
-  }, [leads, language, t]);
+  }, [displayLeads, language, t]);
 
   const handleTimeRangeChange = useCallback((value: string) => {
     setTimeRange(value);
     setPeriod(value);
   }, [setPeriod]);
+
+  const handleStatusFilterChange = useCallback((filterKey: string) => {
+    setStatusFilter(filterKey);
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (filterKey === "all" || filterKey === "followup") {
+        delete next.status;
+      } else {
+        next.status = filterKey;
+      }
+      return next;
+    });
+  }, [setFilters]);
 
   const handleRefresh = useCallback(async () => {
     await Promise.all([
@@ -239,6 +281,70 @@ export default function Dashboard() {
   const isLoading = analyticsLoading || leadsLoading || automationsLoading;
 
   // Prepare chart data from API responses with useMemo for performance
+  const statusCounts = useMemo(() => {
+    const distributionMap: Record<string, number> = {
+      ALL: kpi?.totalLeads || leads.length || 0,
+      NEW: 0,
+      HOT: 0,
+      CLOSED: 0,
+      LOST: 0
+    };
+
+    statusDistribution?.forEach(item => {
+      const key = (item.status || "").toUpperCase();
+      const count = typeof item.count === "string" ? parseInt(item.count, 10) : item.count || 0;
+      distributionMap[key] = Math.max(distributionMap[key] || 0, count || 0);
+    });
+
+    if (!distributionMap.ALL) {
+      const fallbackTotal = Object.entries(distributionMap).reduce((sum, [key, value]) => {
+        if (key === "ALL") return sum;
+        return sum + (value || 0);
+      }, 0);
+      if (fallbackTotal) {
+        distributionMap.ALL = fallbackTotal;
+      }
+    }
+
+    return distributionMap;
+  }, [statusDistribution, kpi?.totalLeads, leads.length]);
+
+  const statusFilterOptions = useMemo(() => {
+    const options = [
+      {
+        key: "all",
+        label: statusNames.ALL,
+        count: statusCounts.ALL || kpi?.totalLeads || leads.length
+      },
+      {
+        key: "NEW",
+        label: statusNames.NEW,
+        count: statusCounts.NEW
+      },
+      {
+        key: "HOT",
+        label: statusNames.HOT,
+        count: statusCounts.HOT
+      },
+      {
+        key: "CLOSED",
+        label: statusNames.CLOSED,
+        count: statusCounts.CLOSED
+      },
+      {
+        key: "LOST",
+        label: statusNames.LOST,
+        count: statusCounts.LOST
+      },
+      {
+        key: "followup",
+        label: t("needs_followup_clock"),
+        count: followupLeads.length
+      }
+    ];
+    return options;
+  }, [statusCounts, statusNames, kpi?.totalLeads, leads.length, followupLeads.length, t]);
+
   const statusChartData = useMemo((): StatusData[] => {
     if (!statusDistribution?.length) return [];
 
@@ -410,7 +516,7 @@ export default function Dashboard() {
 
       rows.push(toCsvRow([t("recent_leads_title")]));
       rows.push(toCsvRow([t("full_name"), t("status"), t("source"), t("value_shekels")]));
-      leads.slice(0, 20).forEach((lead) => {
+      displayLeads.slice(0, 20).forEach((lead) => {
         rows.push(toCsvRow([lead.name || "-", lead.status || "-", lead.source || "-", lead.value || 0]));
       });
 
@@ -501,6 +607,29 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {t("dashboard_subtitle")}
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {statusFilterOptions.map((option) => {
+              const isActive = statusFilter === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => handleStatusFilterChange(option.key)}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all duration-200",
+                    isActive
+                      ? "border-primary bg-primary/10 text-primary shadow-sm"
+                      : "border-border bg-muted/10 text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5"
+                  )}
+                >
+                  <span>{option.label}</span>
+                  {typeof option.count === "number" && (
+                    <span className="text-[11px] text-muted-foreground">{option.count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Select value={timeRange} onValueChange={handleTimeRangeChange}>
@@ -944,10 +1073,10 @@ export default function Dashboard() {
                   .slice(0, 5)
                   .map((rule) => (
                     <div key={rule.id} className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="truncate max-w-[150px]">{rule.name}</span>
-                        <span className="text-success">{Math.round(rule.successRate || 0)}%</span>
-                      </div>
+                        <div className="flex justify-between text-sm">
+                      <span className="truncate max-w-[150px]">{translateAutomationName(rule.name, t)}</span>
+                          <span className="text-success">{Math.round(rule.successRate || 0)}%</span>
+                        </div>
                       <Progress value={rule.successRate || 0} className="h-2" />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{t("sent_messages_month")}: {rule.totalExecutions || 0}</span>
@@ -993,8 +1122,8 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {leads?.length ? (
-                leads.slice(0, 5).map((lead) => {
+              {displayLeads?.length ? (
+                displayLeads.slice(0, 5).map((lead) => {
                   const daysSinceLastContact = lead.last_contacted
                     ? Math.floor((new Date().getTime() - new Date(lead.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
                     : 0;

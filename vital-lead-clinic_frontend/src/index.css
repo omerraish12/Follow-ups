@@ -180,6 +180,13 @@
     z-index: 1;
   }
 
+  .landing-surface {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 248, 255, 0.92));
+    box-shadow: 0 25px 60px rgba(15, 23, 42, 0.15);
+    border-radius: 30px;
+    backdrop-filter: blur(18px);
+  }
+
   .floating-anchor {
     animation-duration: 6.4s;
     animation-timing-function: ease-in-out;
@@ -345,6 +352,67 @@
   .theme-orb.is-dark .theme-orb-icon {
     color: hsl(220 30% 95%);
   }
+
+  .hero-ambient {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: 999px;
+    opacity: 0.5;
+    filter: blur(40px);
+    animation: hero-pulse 12s ease-in-out infinite;
+  }
+
+  .hero-ambient-one {
+    background: radial-gradient(circle, rgba(30,144,255,0.35), transparent 55%);
+    transform: translate(-10%, -20%) scale(0.95);
+  }
+
+  .hero-ambient-two {
+    background: radial-gradient(circle, rgba(14,165,233,0.35), transparent 65%);
+    transform: translate(18%, 12%) scale(0.85);
+    animation-delay: 3s;
+  }
+
+  .hero-spark {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%);
+    box-shadow: 0 0 20px rgba(255,255,255,0.9);
+    animation: hero-sparkle 6s linear infinite;
+  }
+
+  .hero-spark-one {
+    top: 28%;
+    left: 30%;
+    animation-delay: 0s;
+  }
+
+  .hero-spark-two {
+    bottom: 16%;
+    right: 24%;
+    animation-delay: 2s;
+  }
+
+  @keyframes hero-pulse {
+    0%, 100% {
+      transform: scale(0.95) translateY(0);
+      opacity: 0.6;
+    }
+    50% {
+      transform: scale(1.05) translateY(-10px);
+      opacity: 0.9;
+    }
+  }
+
+  @keyframes hero-sparkle {
+    0% { transform: translate(0, 0) scale(1); opacity: 0.8; }
+    50% { transform: translate(-6px, -12px) scale(1.2); opacity: 1; }
+    100% { transform: translate(3px, 9px) scale(0.8); opacity: 0.6; }
+  }
+
 
   .dark .section-pro-bg::before {
     background:
