@@ -81,6 +81,7 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
       const newAutomation = await automationService.createAutomation(automationData);
       setAutomations((prev) => [newAutomation, ...prev]);
       toast({ title: "Automation created", description: "Automation was created successfully." });
+      await fetchStats();
       return newAutomation;
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || "Unable to create automation.";
@@ -94,6 +95,7 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
       const updated = await automationService.updateAutomation(id, automationData);
       setAutomations((prev) => prev.map((a) => (a.id === id ? updated : a)));
       toast({ title: "Automation updated", description: "Automation was updated successfully." });
+      await fetchStats();
       return updated;
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || "Unable to update automation.";
@@ -107,6 +109,7 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
       await automationService.deleteAutomation(id);
       setAutomations((prev) => prev.filter((a) => a.id !== id));
       toast({ title: "Automation deleted", description: "Automation was deleted successfully." });
+      await fetchStats();
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || "Unable to delete automation.";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -122,6 +125,7 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
         title: updated.active ? "Automation enabled" : "Automation disabled",
         description: "Update saved successfully.",
       });
+      await fetchStats();
       return updated;
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || "Unable to update status.";

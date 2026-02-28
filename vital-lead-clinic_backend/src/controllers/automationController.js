@@ -80,13 +80,21 @@ const createAutomation = async (req, res) => {
             message,
             targetStatus,
             notifyOnReply,
-            personalization
+            personalization,
+            templateName,
+            templateLanguage,
+            mediaUrl,
+            components
         } = req.body;
 
         const automation = await Automation.create({
             name,
             triggerDays: triggerDays || [3, 7, 14],
             message,
+            templateName,
+            templateLanguage,
+            mediaUrl,
+            components,
             targetStatus,
             notifyOnReply: notifyOnReply !== undefined ? notifyOnReply : true,
             personalization: personalization || ['name'],
@@ -123,7 +131,11 @@ const updateAutomation = async (req, res) => {
             targetStatus,
             active,
             notifyOnReply,
-            personalization
+            personalization,
+            templateName,
+            templateLanguage,
+            mediaUrl,
+            components
         } = req.body;
 
         const automation = await Automation.findById(req.params.id, req.user.clinic_id);
@@ -139,7 +151,11 @@ const updateAutomation = async (req, res) => {
             targetStatus,
             active,
             notifyOnReply,
-            personalization
+            personalization,
+            templateName,
+            templateLanguage,
+            mediaUrl,
+            components
         });
 
         res.json(updated);
@@ -206,9 +222,21 @@ const getPerformanceStats = async (req, res) => {
         const stats = await Automation.getPerformanceStats(req.user.clinic_id);
         const totals = await Automation.getTotals(req.user.clinic_id);
 
-        res.json({ stats, totals });
-    } catch (error) {
+    res.json({ stats, totals });
+  } catch (error) {
         console.error(error);
+        res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// @desc    Get recent automation replies
+// @route   GET /api/automations/replies/recent
+const getRecentReplies = async (req, res) => {
+    try {
+        const replies = await Execution.findRecentReplies(req.user.clinic_id, 6);
+        res.json(replies);
+    } catch (error) {
+        console.error('Error fetching recent replies:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };
@@ -221,5 +249,6 @@ module.exports = {
     updateAutomation,
     deleteAutomation,
     toggleAutomation,
-    getPerformanceStats
+    getPerformanceStats,
+    getRecentReplies
 };

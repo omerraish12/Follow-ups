@@ -52,5 +52,11 @@ export const automationService = {
     seedDefaultAutomations: async (): Promise<SeedDefaultAutomationsResponse> => {
         const response = await api.post('/automations/defaults');
         return response.data;
+    },
+
+    // Get recent automation replies
+    getRecentReplies: async (): Promise<any[]> => {
+        const response = await api.get('/automations/replies/recent');
+        return response.data;
     }
 };

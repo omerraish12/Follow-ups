@@ -127,11 +127,15 @@ async function initializeDatabase() {
 
         // Create automations table
         await query(`
-      CREATE TABLE IF NOT EXISTS automations (
+        CREATE TABLE IF NOT EXISTS automations (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         trigger_days INTEGER[] DEFAULT '{3,7,14}',
         message TEXT NOT NULL,
+        template_name VARCHAR(255),
+        template_language VARCHAR(10) DEFAULT 'en',
+        media_url TEXT,
+        components JSONB DEFAULT '[]'::jsonb,
         target_status lead_status,
         active BOOLEAN DEFAULT true,
         notify_on_reply BOOLEAN DEFAULT true,
@@ -145,6 +149,12 @@ async function initializeDatabase() {
         clinic_id INTEGER REFERENCES clinics(id) ON DELETE CASCADE
       );
     `);
+
+        // Ensure automations columns exist
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_name VARCHAR(255);`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_language VARCHAR(10) DEFAULT 'en';`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS media_url TEXT;`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS components JSONB DEFAULT '[]'::jsonb;`);
 
         // Create executions table
         await query(`
@@ -184,6 +194,19 @@ async function initializeDatabase() {
         metadata JSONB,
         read BOOLEAN DEFAULT false,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        clinic_id INTEGER REFERENCES clinics(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+        // Integration log table
+        await query(`
+      CREATE TABLE IF NOT EXISTS integration_logs (
+        id SERIAL PRIMARY KEY,
+        type VARCHAR(128) NOT NULL,
+        level VARCHAR(32) DEFAULT 'error',
+        message TEXT NOT NULL,
+        metadata JSONB,
         clinic_id INTEGER REFERENCES clinics(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );

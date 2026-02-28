@@ -20,9 +20,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useAutomations } from "@/hooks/useAutomations";
 import { leadService } from "@/services/leadService";
+import { useIntegrationLogs } from "@/hooks/useIntegrationLogs";
+import { useAutomationReplies } from "@/hooks/useAutomationReplies";
 import type { Automation } from "@/types/automation";
 import type { LeadStatus } from "@/types/leads";
 
@@ -45,8 +48,11 @@ export default function Automations() {
     toggleAutomation,
     deleteAutomation,
     fetchAutomations,
-    fetchStats
+    fetchStats,
+    addAutomation
   } = useAutomations({ seedDefaultsOnEmpty: true });
+  const { logs, isLoading: logsLoading, error: logsError, refreshLogs } = useIntegrationLogs(5);
+  const { replies, isLoading: repliesLoading, error: repliesError, refresh: refreshReplies } = useAutomationReplies(5);
 
   const [rules, setRules] = useState<ExtendedAutomationRule[]>([]);
   const [followupNeeded, setFollowupNeeded] = useState<{ leadId: string; leadName: string; days: number }[]>([]);
@@ -56,6 +62,7 @@ export default function Automations() {
   const [includeMedia, setIncludeMedia] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>(["new_lead"]);
+  const [templateLanguage, setTemplateLanguage] = useState("en");
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   // Map backend automations into UI-friendly objects
@@ -118,7 +125,14 @@ export default function Automations() {
     );
   };
 
-  const handleCreateTemplate = () => {
+  const triggerDayMap: Record<string, number> = {
+    new_lead: 0,
+    missing_reply: 3,
+    appointment_missed: 5,
+    high_value: 1
+  };
+
+  const handleCreateTemplate = async () => {
     if (!templateName.trim() || !templateMessage.trim()) {
       toast({
         title: t("template_error_required_title"),
@@ -129,18 +143,40 @@ export default function Automations() {
     }
 
     setIsSavingTemplate(true);
-    setTimeout(() => {
-      toast({
-        title: t("template_saved_title"),
-        description: t("template_saved_description").replace('%s', selectedTriggers.length.toString())
+    try {
+      const triggerDays = Array.from(
+        new Set(
+          selectedTriggers.map((trigger) => triggerDayMap[trigger] ?? 3)
+        )
+      );
+      const messageText = templateMessage.trim();
+      const componentsPayload = [...selectedTriggers];
+
+      await addAutomation({
+        name: templateName.trim(),
+        templateName: templateName.trim(),
+        templateLanguage,
+        mediaUrl: includeMedia ? mediaUrl.trim() : null,
+        components: componentsPayload,
+        message: messageText,
+        triggerDays,
+        targetStatus: "NEW",
+        personalization: ["name", "service", "appointment_date"],
+        notifyOnReply: true,
+        active: true
       });
+
       setTemplateName("");
       setTemplateMessage("");
       setIncludeMedia(false);
       setMediaUrl("");
       setSelectedTriggers(["new_lead"]);
+      setTemplateLanguage("en");
+    } catch {
+      // addAutomation already surfaces errors via toast
+    } finally {
       setIsSavingTemplate(false);
-    }, 800);
+    }
   };
 
   const cards = useMemo(() => ([
@@ -277,14 +313,29 @@ export default function Automations() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
           <div className="space-y-5">
-            <div className="space-y-2">
-              <p className="text-sm font-semibold text-foreground">{t("template_name_label")}</p>
-              <Input
-                placeholder={t("template_name_placeholder")}
-                value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
-                className="rounded-2xl bg-card"
-              />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground">{t("template_name_label")}</p>
+                <Input
+                  placeholder={t("template_name_placeholder")}
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  className="rounded-2xl bg-card"
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground">{t("template_language_label")}</p>
+                <Select value={templateLanguage} onValueChange={setTemplateLanguage}>
+                  <SelectTrigger className="rounded-2xl bg-card">
+                    <SelectValue placeholder={t("template_language_placeholder")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">{t("english")}</SelectItem>
+                    <SelectItem value="he">{t("hebrew")}</SelectItem>
+                    <SelectItem value="es">Español</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
               <p className="text-sm font-semibold text-foreground">{t("template_message_label")}</p>
@@ -640,6 +691,92 @@ export default function Automations() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-card/90 to-card p-6 shadow-xl shadow-primary/20">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("recent_replies_tag")}</p>
+            <h3 className="text-xl font-semibold text-foreground">{t("recent_replies_title")}</h3>
+            <p className="text-sm text-muted-foreground">{t("recent_replies_subtitle")}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            onClick={refreshReplies}
+            disabled={repliesLoading}
+          >
+            {repliesLoading ? t("loading") : t("recent_replies_refresh")}
+          </Button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {repliesLoading && (
+            <p className="text-sm text-muted-foreground">{t("loading")}</p>
+          )}
+          {repliesError && (
+            <p className="text-sm text-destructive">{repliesError}</p>
+          )}
+          {!repliesLoading && !replies.length && (
+            <p className="text-sm text-muted-foreground">{t("recent_replies_empty")}</p>
+          )}
+          {!repliesLoading && replies.map((item) => (
+            <div key={item.id} className="rounded-2xl border border-border/60 bg-white/80 p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                <span>{item.automation_name}</span>
+                <span>{new Date(item.replied_at).toLocaleString()}</span>
+              </div>
+              <p className="mt-2 text-sm text-foreground">{item.lead_name}</p>
+              <p className="text-xs text-muted-foreground">{item.message}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-card/80 to-card p-6 shadow-xl shadow-primary/20">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("system_logs_tag")}</p>
+            <h3 className="text-xl font-semibold text-foreground">{t("system_logs_title")}</h3>
+            <p className="text-sm text-muted-foreground">{t("system_logs_subtitle")}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            onClick={refreshLogs}
+            disabled={logsLoading}
+          >
+            {logsLoading ? t("loading") : t("system_logs_refresh")}
+          </Button>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {logsLoading && (
+            <p className="text-sm text-muted-foreground">{t("loading")}</p>
+          )}
+          {logsError && (
+            <p className="text-sm text-destructive">{logsError}</p>
+          )}
+          {!logsLoading && !logs.length && (
+            <p className="text-sm text-muted-foreground">{t("system_logs_empty")}</p>
+          )}
+          {!logsLoading && logs.map((log) => (
+            <div key={log.id} className="rounded-2xl border border-border/60 bg-white/80 p-4 shadow-sm transition hover:border-primary/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                <span>{log.type.replace(/_/g, " ")}</span>
+                <span>{new Date(log.created_at).toLocaleString()}</span>
+              </div>
+              <p className="mt-2 text-sm text-foreground">{log.message}</p>
+              {log.metadata && (
+                <pre className="mt-3 overflow-x-auto text-[11px] text-muted-foreground">
+                  {JSON.stringify(log.metadata, null, 2)}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

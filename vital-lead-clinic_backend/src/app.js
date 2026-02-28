@@ -13,6 +13,8 @@ const teamRoutes = require('./routes/teamRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
 const pricingRoutes = require('./routes/pricingRoutes');
+const logRoutes = require('./routes/logRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 
 const app = express();
 
@@ -63,6 +65,8 @@ app.use('/api/team', teamRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/pricing', pricingRoutes);
+app.use('/api/contact', contactRoutes);
+app.use('/api/logs', logRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

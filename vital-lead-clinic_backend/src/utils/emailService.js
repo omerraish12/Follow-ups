@@ -41,6 +41,41 @@ class EmailService {
 
     await this.transporter.sendMail(mailOptions);
   }
+
+  async sendContactNotification(payload = {}) {
+    const to = process.env.CONTACT_NOTIFICATION_EMAIL || process.env.EMAIL_USER;
+    if (!to) {
+      console.warn('Contact notification email not configured, skipping message');
+      return;
+    }
+
+    const { name, email, phone, message, clinic } = payload;
+    const clinicName = clinic?.name ? clinic.name : 'Clinic';
+    const formattedMessage = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h3 style="color: #1f4ef7;">New contact form submission</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Phone:</strong> ${phone}</p>
+        ${email ? `<p><strong>Email:</strong> ${email}</p>` : ''}
+        <p><strong>Clinic:</strong> ${clinicName}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message}</p>
+      </div>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to,
+      subject: `New contact from ${name}`,
+      html: formattedMessage
+    };
+
+    if (email) {
+      mailOptions.replyTo = email;
+    }
+
+    await this.transporter.sendMail(mailOptions);
+  }
 }
 
 module.exports = new EmailService();

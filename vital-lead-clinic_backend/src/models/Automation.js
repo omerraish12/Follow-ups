@@ -64,12 +64,38 @@ class Automation {
     }
 
     static async create(automationData) {
-        const { name, triggerDays, message, targetStatus, notifyOnReply, personalization, clinicId } = automationData;
+        const {
+            name,
+            triggerDays,
+            message,
+            targetStatus,
+            notifyOnReply,
+            personalization,
+            templateName,
+            templateLanguage,
+            mediaUrl,
+            components,
+            clinicId
+        } = automationData;
+
         const result = await query(
-            `INSERT INTO automations (name, trigger_days, message, target_status, notify_on_reply, personalization, clinic_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+            `INSERT INTO automations 
+            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING *`,
-            [name, triggerDays, message, targetStatus, notifyOnReply, personalization, clinicId]
+            [
+                name,
+                triggerDays,
+                message,
+                templateName,
+                templateLanguage || 'en',
+                mediaUrl,
+                components || [],
+                targetStatus,
+                notifyOnReply,
+                personalization,
+                clinicId
+            ]
         );
         return result.rows[0];
     }
@@ -120,6 +146,10 @@ class Automation {
                 if (key === 'triggerDays') dbKey = 'trigger_days';
                 if (key === 'targetStatus') dbKey = 'target_status';
                 if (key === 'notifyOnReply') dbKey = 'notify_on_reply';
+                if (key === 'templateName') dbKey = 'template_name';
+                if (key === 'templateLanguage') dbKey = 'template_language';
+                if (key === 'mediaUrl') dbKey = 'media_url';
+                if (key === 'components') dbKey = 'components';
 
                 fields.push(`${dbKey} = $${paramIndex}`);
                 values.push(value);
@@ -173,6 +203,15 @@ class Automation {
        SET total_executions = total_executions + 1,
            last_executed = CURRENT_TIMESTAMP 
        WHERE id = $1`,
+            [id]
+        );
+    }
+
+    static async incrementReplyCount(id) {
+        await query(
+            `UPDATE automations 
+        SET reply_count = COALESCE(reply_count, 0) + 1
+        WHERE id = $1`,
             [id]
         );
     }

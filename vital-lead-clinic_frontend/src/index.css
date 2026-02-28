@@ -586,21 +586,3 @@
   opacity: 0.32;
 }
 
-.light-line {
-  position: absolute;
-  width: 140%;
-  height: 2px;
-  left: -20%;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.22) 12%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.22) 88%, transparent 100%);
-  filter: blur(1px);
-  mix-blend-mode: screen;
-  animation: line-move 14s linear infinite;
-  opacity: 0.5;
-}
-.line-1 { top: 18%; }
-.line-2 { top: 62%; animation-duration: 18s; animation-delay: 3s; }
-
-@keyframes line-move {
-  0% { transform: translateX(-4%); }
-  100% { transform: translateX(12%); }
-}

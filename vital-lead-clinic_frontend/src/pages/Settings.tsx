@@ -549,10 +549,8 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5 lg:space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="text-2xl font-semibold text-foreground font-display">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Keep your clinic profile, preferences, and integrations up to date.
-        </p>
+        <h1 className="text-2xl font-semibold text-foreground font-display">{t("settings_title")}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{t("settings_description")}</p>
       </div>
 
       <Tabs defaultValue="general" className="space-y-4">

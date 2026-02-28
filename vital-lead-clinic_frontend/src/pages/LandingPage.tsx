@@ -177,8 +177,8 @@ export default function LandingPage() {
   ];
 
   useEffect(() => {
-    const initialTheme = resolvedTheme || theme || "light";
-    setTheme("light");
+    const initialTheme = resolvedTheme || theme || "dark";
+    setTheme("dark");
     return () => setTheme(initialTheme);
   }, [resolvedTheme, setTheme, theme]);
 
@@ -307,8 +307,37 @@ export default function LandingPage() {
   const navLinkClass = cn(
     "text-sm font-semibold tracking-tight transition-all duration-300 hover:-translate-y-[1px] relative group",
     isNavScrolled
-      ? "text-foreground/80 hover:text-foreground"
+      ? "text-white shadow-[0_1px_2px_rgba(0,0,0,0.4)] hover:text-blue-300"
       : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)]"
+  );
+
+  const navBaseClass = "sticky top-0 z-50 transition-all duration-300";
+  const navDefaultClass = "bg-transparent text-white border-none shadow-none";
+  const navScrolledVisualClass =
+    "bg-gradient-to-b from-[#02061b]/95 via-[#030822]/90 to-[#050b2a]/95 border-b border-white/10 text-white shadow-[0_10px_35px_rgba(2,6,15,0.55)] supports-[backdrop-filter]:backdrop-blur-md backdrop-blur-md";
+  const navActionPanelClass = cn(
+    "flex items-center gap-3 rounded-full border px-3 py-1.5 transition-all duration-300",
+    isNavScrolled
+      ? "border-border/60 bg-white/80 text-white shadow-sm"
+      : "border-white/40 bg-transparent text-white/90 shadow-none"
+  );
+  const navLogoClass = cn(
+    "text-3xl sm:text-4xl font-display font-extrabold tracking-[0.05em] uppercase leading-tight transition-colors duration-200 text-white"
+  );
+  const navLanguageClass = cn(
+    "flex h-12 w-12 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.35em] uppercase transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+    isNavScrolled
+      ? "border-border/70 bg-white text-slate-900 shadow-none"
+      : "border-white/70 bg-white/15 text-white shadow-none"
+  );
+  const navLoginLinkClass = cn(
+    "hidden sm:inline-flex text-sm font-semibold transition-colors duration-200 text-white/90 hover:text-white"
+  );
+  const startNowButtonClass = cn(
+    "inline-flex h-12 items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300 shadow-[0_20px_60px_rgba(0,0,0,0.25)]",
+    isNavScrolled
+      ? "bg-primary text-white hover:bg-primary/90 shadow-[0_15px_40px_rgba(34,113,255,0.4)]"
+      : "border border-white/40 bg-transparent text-white shadow-none hover:bg-white/10"
   );
 
   const heroSectionClass = "relative overflow-hidden flex items-center py-16 sm:py-20 md:py-24";
@@ -345,37 +374,15 @@ export default function LandingPage() {
         <div className="gradient-blob bg-primary/32 left-6 top-16 w-80 h-80" />
         <div className="gradient-blob bg-secondary/30 right-8 top-1/4 w-96 h-96 animation-delay-4" />
         <div className="gradient-blob bg-info/24 left-1/2 top-1/2 w-88 h-88 animation-delay-8" />
-        <div className="light-line line-1" />
-        <div className="light-line line-2" />
       </div>
 
       {/* Navbar */}
-      <nav
-        ref={navRef}
-        className={cn(
-          "sticky top-0 z-50 transition-all duration-300 backdrop-blur-md supports-[backdrop-filter]:backdrop-blur-md",
-          isNavScrolled
-            ? "bg-card/90 border-b border-border text-foreground shadow-sm"
-            : "bg-primary text-white border-b border-primary/40 shadow-none"
-        )}
-      >
+      <nav ref={navRef} className={cn(navBaseClass, isNavScrolled ? navScrolledVisualClass : navDefaultClass)}>
         <div className="mx-auto flex max-w-[96rem] items-center justify-between px-4 py-2 sm:py-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/40 bg-gradient-to-br from-white/20 to-white/5 shadow-lg shadow-white/20">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.5em] text-white">FU</span>
-              <span className="absolute inset-0 rounded-full border border-white/30 opacity-40 animate-ping" />
-            </div>
-            <div className={cn(
-              "flex flex-col leading-tight",
-              isNavScrolled ? "text-foreground" : "text-white"
-            )}>
-              <span className="text-base sm:text-lg md:text-xl font-black tracking-tight bg-gradient-to-r from-[#f565bc] to-[#60a5fa] bg-clip-text text-transparent animate-[pulse_2s_ease-in-out_infinite]">
-                Follow-ups
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.5em] text-white/70">
-                {t("landing_nav_brand_hint")}
-              </span>
-            </div>
+          <div className="relative flex flex-col">
+            <span className={navLogoClass}>
+              Follow-ups
+            </span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm">
@@ -401,60 +408,62 @@ export default function LandingPage() {
             </a>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={toggleLanguage}
-              aria-label={`Switch language (current ${languageCode})`}
-              className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-full border-2 transition-all duration-300 shadow-lg",
-                isNavScrolled
-                  ? "border-border/60 bg-card/60 text-muted-foreground shadow-card"
-                  : "border-white/60 bg-white/20 text-white shadow-white/40"
-              )}
-            >
-              <span className="text-[11px] font-semibold tracking-[0.35em] uppercase">{languageCode}</span>
-            </button>
+          <div className="flex items-center gap-4">
             {isAuthenticated ? (
-              <Link
-                to="/dashboard"
-                className={cn(
-                  "hidden sm:flex h-12 items-center rounded-3xl border border-white/30 bg-white/10 px-4 py-2 text-left shadow-[0_12px_40px_rgba(30,64,175,0.3)] transition-all duration-300 hover:-translate-y-[1px] hover:border-white/70",
-                  isNavScrolled ? "backdrop-blur-sm bg-white/10 border-border/40 text-foreground" : "text-white"
-                )}
-              >
-                <div className="flex flex-col leading-tight">
-                  <span className="text-[10px] uppercase tracking-[0.35em] text-white/80">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={toggleLanguage}
+                  aria-label={`Switch language (current ${languageCode})`}
+                  className={navLanguageClass}
+                >
+                  <span className="text-[11px]">{languageCode}</span>
+                </button>
+                <Link
+                  to="/dashboard"
+                  className={cn(
+                    "hidden sm:flex flex-col leading-tight text-left text-sm transition-colors duration-200 text-white hover:text-white"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-[10px] uppercase tracking-[0.35em]",
+                      "text-white/70"
+                    )}
+                  >
                     {t("landing_nav_signed_in_as")}
                   </span>
-                  <span className="text-sm font-semibold">{userDisplayName || t("landing_nav_dashboard")}</span>
-                </div>
-              </Link>
-            ) : (
-              <div className="flex gap-3">
-                <Link
-                  to="/login"
-                  className={cn(
-                    "hidden sm:inline-flex text-xs sm:text-sm font-medium transition-all duration-300 hover:scale-105",
-                    isNavScrolled
-                      ? "text-muted-foreground hover:text-foreground"
-                      : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)] hover:text-white"
-                  )}
-                >
-                  {t("landing_nav_login")}
-                </Link>
-                <Link
-                  to="/signup"
-                  className={cn(
-                    "rounded-full px-3 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold transition-all duration-300 hover:scale-105 hover:shadow-lg",
-                    isNavScrolled
-                      ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground hover:shadow-primary/30"
-                      : "bg-white/20 text-white border border-white/30 hover:bg-white/25"
-                  )}
-                >
-                  {t("landing_nav_start_now")}
+                  <span
+                    className={cn(
+                      "text-sm font-semibold",
+                      "text-white"
+                    )}
+                  >
+                    {userDisplayName || t("landing_nav_dashboard")}
+                  </span>
                 </Link>
               </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={toggleLanguage}
+                    aria-label={`Switch language (current ${languageCode})`}
+                    className={navLanguageClass}
+                  >
+                    <span className="text-[11px]">{languageCode}</span>
+                  </button>
+                  <div className={navActionPanelClass}>
+                    <Link to="/login" className={navLoginLinkClass}>
+                      {t("landing_nav_login")}
+                    </Link>
+                  </div>
+                </div>
+                <Link to="/signup" className={startNowButtonClass}>
+                  {t("landing_nav_start_now")}
+                </Link>
+              </>
             )}
           </div>
         </div>
@@ -489,7 +498,9 @@ export default function LandingPage() {
         className={heroSectionClass}
         style={{
           background: "linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(215 92% 62%) 55%, hsl(207 95% 60%) 100%)",
-          minHeight: `calc(100svh - ${headerHeight}px)`
+          minHeight: "100svh",
+          marginTop: `-${headerHeight}px`,
+          paddingTop: `${headerHeight}px`
         }}
         ref={el => sectionRefs.current['hero'] = el}
       >
@@ -497,10 +508,10 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsl(var(--primary)_/_0.18),transparent_38%),radial-gradient(circle_at_80%_15%,hsl(var(--primary)_/_0.12),transparent_32%)]" />
 
         <div className={`relative mx-auto max-w-[96rem] px-4 sm:px-6 lg:px-14 ${fadeInUpClass('hero')}`}>
-          <div className="grid lg:grid-cols-[1.05fr_1fr] items-center gap-14 lg:gap-24">
+          <div className="grid lg:grid-cols-[0.95fr_1.05fr] items-center gap-12 lg:gap-20">
             {/* Chat preview mock (desktop only) */}
-            <div className="hidden lg:block">
-              <div className="relative mx-auto w-full max-w-xl rounded-[30px] bg-white/95 shadow-[0_30px_120px_-40px_rgba(0,0,0,0.45)] border border-white/70 backdrop-blur">
+            <div className="hidden lg:flex">
+              <div className="relative mx-auto w-full max-w-[38rem] rounded-[32px] bg-white/95 shadow-[0_40px_120px_-40px_rgba(6,11,45,0.55)] border border-white/70 backdrop-blur">
                 <div className="flex items-center gap-2 px-6 py-4">
                   {["#ff5f57", "#febc2e", "#28c840"].map((c, i) => (
                     <span
@@ -546,7 +557,7 @@ export default function LandingPage() {
             </div>
 
             {/* Hero copy */}
-            <div className="text-center lg:text-left flex flex-col items-center lg:items-start">
+            <div className="text-center lg:text-left flex flex-col items-center lg:items-start space-y-6">
               <Badge
                 variant="outline"
                 className="mb-6 inline-flex items-center justify-center gap-2 rounded-full border border-white/30 bg-white/15 px-6 py-2 text-sm font-semibold text-white backdrop-blur"
@@ -556,7 +567,7 @@ export default function LandingPage() {
               </Badge>
 
               <h1
-                className="relative inline-block text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight text-white"
+                className="relative inline-block text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight text-white max-w-[20ch]"
               >
                 <span className="block text-white">
                   {t("landing_hero_title_line1")}
@@ -567,11 +578,11 @@ export default function LandingPage() {
                 <span className="pointer-events-none absolute -bottom-4 left-1/2 -translate-x-1/2 w-full h-1.5 rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.9),rgba(255,255,255,0))]"></span>
               </h1>
 
-              <p className="mx-auto lg:mx-0 mt-8 max-w-xl text-base sm:text-xl text-white/90 leading-relaxed">
+              <p className="mx-auto lg:mx-0 mt-2 max-w-2xl text-base sm:text-xl text-white/90 leading-relaxed">
                 {t("landing_hero_subtitle")}
               </p>
 
-              <div className="mt-10 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-4 w-full">
+              <div className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 w-full">
                 <Link
                   to="/signup"
                   className="group relative w-full sm:w-auto rounded-full bg-white text-primary px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-bold shadow-[0_20px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_22px_70px_-10px_rgba(0,0,0,0.4)] overflow-hidden"
@@ -592,7 +603,7 @@ export default function LandingPage() {
               </div>
 
               {/* Social Proof */}
-              <div className="mt-12 flex flex-wrap justify-center lg:justify-start gap-6 text-white/85">
+              <div className="mt-10 flex flex-wrap justify-center lg:justify-start gap-6 text-white/85">
                 <div className="flex items-center gap-2">
                   <div className="flex -space-x-2">
                     {[1, 2, 3, 4].map(i => (
@@ -691,57 +702,57 @@ export default function LandingPage() {
             <div className="grid lg:grid-cols-[1fr_1.1fr] gap-10">
               {/* Demo Controls */}
               <div className="space-y-6">
-              <Card className="border-2 border-primary/20">
-                <CardContent className="p-6">
-                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-primary" />
-                    {t("landing_demo_process_title")}
-                  </h3>
+                <Card className="border-2 border-primary/20">
+                  <CardContent className="p-6">
+                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-primary" />
+                      {t("landing_demo_process_title")}
+                    </h3>
 
-                  <div className="space-y-4">
-                    {demoScenarios[0].steps.map((step, index) => (
-                      <div
-                        key={index}
-                        className={cn(
-                          "flex items-start gap-3 p-3 rounded-xl transition-all",
-                          index === currentStep ? "bg-primary/10 border border-primary/20" : "opacity-50"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                          index === currentStep ? "bg-primary text-white" : "bg-muted"
-                        )}>
-                          <step.icon className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm">{step.message}</p>
-                          {index === currentStep && (
-                            <Progress value={(index + 1) * (100 / demoScenarios[0].steps.length)} className="h-1 mt-2" />
+                    <div className="space-y-4">
+                      {demoScenarios[0].steps.map((step, index) => (
+                        <div
+                          key={index}
+                          className={cn(
+                            "flex items-start gap-3 p-3 rounded-xl transition-all",
+                            index === currentStep ? "bg-primary/10 border border-primary/20" : "opacity-50"
                           )}
+                        >
+                          <div className={cn(
+                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                            index === currentStep ? "bg-primary text-white" : "bg-muted"
+                          )}>
+                            <step.icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm">{step.message}</p>
+                            {index === currentStep && (
+                              <Progress value={(index + 1) * (100 / demoScenarios[0].steps.length)} className="h-1 mt-2" />
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
 
-                  <div className="flex gap-3 mt-6">
-                    <Button
-                      onClick={startChatAnimation}
-                      className="flex-1 rounded-xl"
-                      disabled={isPlaying}
-                    >
-                      <Play className="h-4 w-4 ml-2" />
-                      {t("landing_demo_play")}
-                    </Button>
-                    <Button
-                      onClick={resetAnimation}
-                      variant="outline"
-                      className="rounded-xl"
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="flex gap-3 mt-6">
+                      <Button
+                        onClick={startChatAnimation}
+                        className="flex-1 rounded-xl"
+                        disabled={isPlaying}
+                      >
+                        <Play className="h-4 w-4 ml-2" />
+                        {t("landing_demo_play")}
+                      </Button>
+                      <Button
+                        onClick={resetAnimation}
+                        variant="outline"
+                        className="rounded-xl"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
 
               {/* Chat Mockups */}
@@ -985,16 +996,16 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[96rem] px-4">
           <div className="text-center mb-12">
             <Badge variant="outline" className="mb-4 px-4 py-2 bg-primary/10">
-              Pricing
+              {t("landing_pricing_badge")}
             </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold">Choose the plan that fits your clinic</h2>
+            <h2 className="text-3xl md:text-4xl font-bold">{t("landing_pricing_title")}</h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Start free, scale when you’re ready. All plans include secure WhatsApp automation, smart follow-ups, and analytics.
+              {t("landing_pricing_subtitle")}
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {[ 
+            {[
               {
                 id: "starter",
                 title: t("plan_starter"),
@@ -1067,16 +1078,16 @@ export default function LandingPage() {
                       </div>
                     ))}
                   </div>
-                    <Link to="/dashboard" className="block mt-auto">
-                      <Button
-                        className={cn("w-full rounded-full text-base transition-all duration-200", plan.variant === "primary"
-                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                          : "border border-primary/20 bg-card text-foreground/80 hover:text-foreground hover:border-primary/50")}
-                        size="lg"
-                      >
-                        {plan.button}
-                      </Button>
-                    </Link>
+                  <Link to="/dashboard" className="block mt-auto">
+                    <Button
+                      className={cn("w-full rounded-full text-base transition-all duration-200", plan.variant === "primary"
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "border border-primary/20 bg-card text-foreground/80 hover:text-foreground hover:border-primary/50")}
+                      size="lg"
+                    >
+                      {plan.button}
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             ))}
@@ -1167,95 +1178,116 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-white/10 bg-gradient-to-br from-[#050c2a] via-[#09124f] to-[#0f1b5c] text-white">
-        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-primary/40 to-transparent blur-3xl" />
-        <div className="relative mx-auto max-w-[96rem] px-4 py-12 space-y-10">
-          <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr_1fr]">
-            <div className="space-y-5">
-              <p className="text-xs uppercase tracking-[0.4em] text-primary/80">{t("landing_footer_cta_tag")}</p>
-              <h3 className="text-3xl font-bold leading-tight">{t("landing_footer_cta_title")}</h3>
-              <p className="text-sm text-white/80 max-w-xl">{t("landing_footer_cta_subtitle")}</p>
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#03092d] via-[#05143c] to-[#050b24] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(140%_140%_at_top_left,_rgba(99,102,241,0.25),_transparent_50%),radial-gradient(160%_160%_at_bottom_right,_rgba(59,130,246,0.2),_transparent_60%)]" />
+        <div className="relative mx-auto max-w-[96rem] px-4 py-12">
+          <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr_0.7fr]">
+            <div className="space-y-4 rounded-[32px] border border-white/10 bg-white/5 p-6 sm:p-8 shadow-[0_25px_60px_rgba(1,5,25,0.7)] backdrop-blur">
+              <p className="text-[11px] uppercase tracking-[0.35em] text-white/60">{t("landing_footer_ready_tag")}</p>
+              <h3 className="text-3xl font-display font-extrabold leading-tight text-white">{t("landing_footer_title")}</h3>
+              <p className="text-sm text-white/80">{t("landing_footer_subtitle")}</p>
               <div className="flex flex-wrap gap-3">
                 <Link
                   to="/contact"
-                  className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-primary transition hover:bg-white/90"
+                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 transition hover:opacity-90"
                 >
-                  {t("landing_footer_cta_button")}
+                  {t("landing_footer_cta_contact")}
                 </Link>
                 <Link
                   to="/demo"
-                  className="inline-flex items-center justify-center rounded-full border border-white/50 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white/90 transition hover:border-white hover:text-white"
+                  className="inline-flex items-center justify-center rounded-full border border-white/40 bg-transparent px-5 py-2 text-sm font-semibold text-white/90 transition hover:border-white"
                 >
-                  {t("landing_footer_cta_secondary")}
+                  {t("landing_footer_cta_demo")}
                 </Link>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm text-white/80">
-                <div className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/50">{t("landing_footer_phone_label")}</p>
+              <div className="grid gap-3 sm:grid-cols-2 text-sm text-white/80">
+                <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-white/50">{t("landing_footer_contact_call")}</p>
                   <p className="font-semibold">{t("landing_footer_contact_phone")}</p>
                 </div>
-                <div className="rounded-2xl border border-white/20 bg-white/5 px-4 py-3">
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/50">{t("landing_footer_email_label")}</p>
+                <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-white/50">{t("landing_footer_email_label")}</p>
                   <p className="font-semibold">{t("landing_footer_contact_email")}</p>
                 </div>
               </div>
-              <p className="text-xs text-white/60">{t("landing_footer_cta_note")}</p>
-            </div>
-
-            <div className="grid gap-6">
-              <div>
-                <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">{t("landing_footer_product_title")}</h4>
-                <ul className="mt-4 space-y-2 text-sm text-white/70">
-                  <li><a href="#features" className="hover:text-white">{t("landing_footer_product_features")}</a></li>
-                  <li><a href="#pricing" className="hover:text-white">{t("landing_footer_product_pricing")}</a></li>
-                  <li><a href="#demo" className="hover:text-white">{t("landing_footer_product_demo")}</a></li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">{t("landing_footer_company_title")}</h4>
-                <ul className="mt-4 space-y-2 text-sm text-white/70">
-                  <li><a href="#about" className="hover:text-white">{t("landing_footer_company_about")}</a></li>
-                  <li><a href="#blog" className="hover:text-white">{t("landing_footer_company_blog")}</a></li>
-                  <li><a href="#contact" className="hover:text-white">{t("landing_footer_company_contact")}</a></li>
-                </ul>
+              <p className="text-xs text-white/60">{t("landing_footer_support_note")}</p>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.35em] text-white/60">
+                <span>{t("landing_footer_languages")}:</span>
+                <div className="flex gap-2">
+                  <span className="rounded-full border border-white/30 px-3 py-1 text-[11px] font-semibold">{t("english")}</span>
+                  <span className="rounded-full border border-white/30 px-3 py-1 text-[11px] font-semibold">{t("hebrew")}</span>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold uppercase tracking-[0.3em] text-white/70">{t("landing_footer_contact_title")}</h4>
-              <ul className="space-y-3 text-sm text-white/80">
-                <li className="flex items-start gap-3">
+            <div className="grid gap-4">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/60">{t("landing_footer_product_title")}</p>
+                <ul className="mt-3 space-y-2 text-sm text-white/80">
+                  <li><a href="#features" className="transition hover:text-white">{t("landing_footer_product_features")}</a></li>
+                  <li><a href="#pricing" className="transition hover:text-white">{t("landing_footer_product_pricing")}</a></li>
+                  <li><a href="#demo" className="transition hover:text-white">{t("landing_footer_product_demo")}</a></li>
+                </ul>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5">
+                <p className="text-xs uppercase tracking-[0.3em] text-white/60">{t("landing_footer_company_title")}</p>
+                <ul className="mt-3 space-y-2 text-sm text-white/80">
+                  <li><a href="#about" className="transition hover:text-white">{t("landing_footer_company_about")}</a></li>
+                  <li><a href="#blog" className="transition hover:text-white">{t("landing_footer_company_blog")}</a></li>
+                  <li><a href="#contact" className="transition hover:text-white">{t("landing_footer_company_contact")}</a></li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 text-sm text-white/80 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-white/60">{t("landing_footer_contact_title")}</p>
+                <p className="text-sm text-white/70">{t("landing_footer_contact_description")}</p>
+              </div>
+              <ul className="space-y-3">
+                <li className="flex items-center gap-3 text-white">
                   <Phone className="h-5 w-5 text-primary" />
-                  <span>{t("landing_footer_contact_phone")}</span>
+                  <a href="tel:+97231234567" className="font-semibold transition hover:text-white">
+                    {t("landing_footer_contact_phone")}
+                  </a>
                 </li>
-                <li className="flex items-start gap-3">
+                <li className="flex items-center gap-3 text-white">
                   <Mail className="h-5 w-5 text-primary" />
-                  <span>{t("landing_footer_contact_email")}</span>
+                  <a href="mailto:hello@clinicgrowth.com" className="font-semibold transition hover:text-white">
+                    {t("landing_footer_contact_email")}
+                  </a>
                 </li>
-                <li className="flex items-start gap-3">
+                <li className="flex items-center gap-3 text-white">
                   <Users className="h-5 w-5 text-primary" />
-                  <span>{t("landing_footer_contact_address")}</span>
+                  <a
+                    href="https://maps.google.com/?q=12+Herzl+St+Tel+Aviv"
+                    className="font-semibold transition hover:text-white"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("landing_footer_contact_address")}
+                  </a>
                 </li>
               </ul>
-              <div className="space-y-2 text-xs uppercase tracking-[0.4em] text-white/50">
+              <div className="text-xs uppercase tracking-[0.4em] text-white/60">
                 <p>{t("landing_footer_social_tag")}</p>
-                <p className="text-white/60">{t("landing_footer_follow_us")}</p>
+                <p className="text-white/50">{t("landing_footer_follow_us")}</p>
               </div>
               <div className="flex items-center gap-3 text-white/80">
-                <a href="https://www.instagram.com" className="rounded-full border border-white/20 p-2 text-white/70 transition hover:border-white hover:text-white" aria-label="Instagram">
+                <a href="https://www.instagram.com" className="rounded-full border border-white/20 p-2 transition hover:border-white hover:text-white" aria-label="Instagram">
                   <Instagram className="h-4 w-4" />
                 </a>
-                <a href="https://www.linkedin.com" className="rounded-full border border-white/20 p-2 text-white/70 transition hover:border-white hover:text-white" aria-label="LinkedIn">
+                <a href="https://www.linkedin.com" className="rounded-full border border-white/20 p-2 transition hover:border-white hover:text-white" aria-label="LinkedIn">
                   <Linkedin className="h-4 w-4" />
                 </a>
-                <a href="mailto:hello@clinicgrowth.com" className="rounded-full border border-white/20 p-2 text-white/70 transition hover:border-white hover:text-white" aria-label="Email">
+                <a href="mailto:hello@clinicgrowth.com" className="rounded-full border border-white/20 p-2 transition hover:border-white hover:text-white" aria-label="Email">
                   <Mail className="h-4 w-4" />
                 </a>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-white/10 pt-6 text-center text-xs uppercase tracking-[0.4em] text-white/70">
+          <div className="mt-8 border-t border-white/10 pt-5 text-center text-xs uppercase tracking-[0.35em] text-white/60">
             <p>{t("landing_footer_copyright")}</p>
           </div>
         </div>

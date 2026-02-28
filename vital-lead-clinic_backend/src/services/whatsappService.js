@@ -1,46 +1,104 @@
-const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
+const twilio = require('twilio');
 
-const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const whatsappFrom = process.env.TWILIO_WHATSAPP_FROM;
+const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
 
-const assertConfig = () => {
-  if (!phoneNumberId || !accessToken) {
-    throw new Error('WhatsApp credentials missing (WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN)');
+const ensureTwilioConfig = () => {
+  if (!accountSid || !authToken) {
+    throw new Error('Twilio credentials missing (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN)');
+  }
+  if (!whatsappFrom && !messagingServiceSid) {
+    throw new Error('Twilio WhatsApp sender missing (TWILIO_WHATSAPP_FROM or TWILIO_MESSAGING_SERVICE_SID)');
   }
 };
 
-async function sendTemplateMessage({ to, templateName, language = 'en_US', components = [] }) {
-  assertConfig();
+let twilioClient;
+const getTwilioClient = () => {
+  ensureTwilioConfig();
+  if (!twilioClient) {
+    twilioClient = twilio(accountSid, authToken);
+  }
+  return twilioClient;
+};
 
-  const url = `${GRAPH_BASE}/${phoneNumberId}/messages`;
-  const payload = {
-    messaging_product: 'whatsapp',
-    to,
-    type: 'template',
-    template: {
-      name: templateName,
-      language: { code: language },
-      components,
-    },
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`WhatsApp API error ${res.status}: ${text}`);
+const normalizeComponents = (components = []) => {
+  if (!Array.isArray(components)) {
+    return [];
   }
 
-  return res.json();
+  return components.map((component) => {
+    if (typeof component === "string") {
+      return {
+        type: "body",
+        parameters: [{ type: "text", text: component }]
+      };
+    }
+
+    if (component && typeof component === "object") {
+      return component;
+    }
+
+    return null;
+  }).filter(Boolean);
+};
+
+const buildTemplatePayload = ({ templateName, language, components, mediaUrl }) => {
+  if (!templateName) {
+    return null;
+  }
+
+  const payload = {
+    type: "template",
+    template: {
+      name: templateName,
+      language: {
+        code: language || "en"
+      },
+      components: normalizeComponents(components)
+    }
+  };
+
+  if (mediaUrl) {
+    payload.template.components.push({
+      type: "header",
+      parameters: [
+        {
+          type: "media",
+          mediaUrl
+        }
+      ]
+    });
+  }
+
+  return payload;
+};
+
+async function sendTemplateMessage({ to, templateName, language, components = [], mediaUrl, body }) {
+  const client = getTwilioClient();
+  const toAddress = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
+
+  const templatePayload = buildTemplatePayload({ templateName, language, components, mediaUrl });
+  const messagePayload = {
+    to: toAddress
+  };
+
+  if (templatePayload) {
+    messagePayload.content = [templatePayload];
+  } else {
+    messagePayload.body = (body || templateName || " ").trim();
+  }
+
+  if (messagingServiceSid) {
+    messagePayload.messagingServiceSid = messagingServiceSid;
+  } else {
+    messagePayload.from = whatsappFrom;
+  }
+
+  return client.messages.create(messagePayload);
 }
 
 module.exports = {
-  sendTemplateMessage,
+  sendTemplateMessage
 };

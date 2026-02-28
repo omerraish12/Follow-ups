@@ -41,7 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LeadStatus } from "@/types/leads";
+import type { Lead, LeadStatus } from "@/types/leads";
 import { Progress } from "@/components/ui/progress";
 
 export default function Leads() {
@@ -64,7 +64,7 @@ export default function Leads() {
   const [activeFilter, setActiveFilter] = useState<LeadStatus | "all" | "followup">(
     (searchParams.get('filter') as LeadStatus | "all" | "followup") || "all"
   );
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [dateRange, setDateRange] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
@@ -123,8 +123,50 @@ export default function Leads() {
 
   }, [search, activeFilter, sourceFilter]);
 
-  // Filter leads for display
-  const filteredLeads = activeFilter === 'followup'
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+  const getReferenceDate = (lead: Lead): Date | null => {
+    const dateValue = lead.last_contacted || lead.created_at || lead.next_follow_up || lead.nextFollowUp;
+    return dateValue ? new Date(dateValue) : null;
+  };
+
+  const matchesDateRange = (lead: Lead): boolean => {
+    if (dateRange === "all") {
+      return true;
+    }
+
+    const referenceDate = getReferenceDate(lead);
+    if (!referenceDate) {
+      return false;
+    }
+
+    const now = new Date();
+    const diffDays = Math.max(0, (now.getTime() - referenceDate.getTime()) / MS_PER_DAY);
+
+    if (dateRange === "today") {
+      return (
+        referenceDate.getDate() === now.getDate() &&
+        referenceDate.getMonth() === now.getMonth() &&
+        referenceDate.getFullYear() === now.getFullYear()
+      );
+    }
+
+    if (dateRange === "week") {
+      return diffDays <= 7;
+    }
+
+    if (dateRange === "month") {
+      return diffDays <= 30;
+    }
+
+    if (dateRange === "3months") {
+      return diffDays <= 90;
+    }
+
+    return true;
+  };
+
+  const leadsAfterFollowupFilter = activeFilter === 'followup'
     ? leads.filter(lead => {
       const daysSinceLastContact = lead.last_contacted
         ? Math.floor((new Date() - new Date(lead.last_contacted)) / (1000 * 60 * 60 * 24))
@@ -132,6 +174,8 @@ export default function Leads() {
       return daysSinceLastContact >= 3 && lead.status !== 'CLOSED' && lead.status !== 'LOST';
     })
     : leads;
+
+  const filteredLeads = leadsAfterFollowupFilter.filter(matchesDateRange);
 
   // Stats
   const newCount = leads.filter(l => l.status === 'NEW').length;
@@ -356,11 +400,15 @@ export default function Leads() {
   }
 
   // If viewing single lead
-  if (selectedLeadId) {
+  if (selectedLead) {
     return (
       <LeadDetail
-        leadId={selectedLeadId}
-        onBack={() => setSelectedLeadId(null)}
+        lead={selectedLead}
+        onBack={() => setSelectedLead(null)}
+        onDelete={() => {
+          setSelectedLead(null);
+          fetchLeads();
+        }}
       />
     );
   }
@@ -465,10 +513,13 @@ export default function Leads() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t("all_leads")}</SelectItem>
-              <SelectItem value="וואטסאפ">{t("source_whatsapp")}</SelectItem>
-              <SelectItem value="פייסבוק">{t("source_facebook")}</SelectItem>
-              <SelectItem value="אינסטגרם">{t("source_instagram")}</SelectItem>
-              <SelectItem value="המלצה">{t("smile_recommendation")}</SelectItem>
+              <SelectItem value="WhatsApp">{t("source_whatsapp")}</SelectItem>
+              <SelectItem value="Facebook">{t("source_facebook")}</SelectItem>
+              <SelectItem value="Instagram">{t("source_instagram")}</SelectItem>
+              <SelectItem value="Website">{t("source_website")}</SelectItem>
+              <SelectItem value="Smile recommendation">{t("smile_recommendation")}</SelectItem>
+              <SelectItem value="Referral">{t("source_referral")}</SelectItem>
+              <SelectItem value="Google Ads">{t("source_google_ads")}</SelectItem>
             </SelectContent>
           </Select>
           <Select value={dateRange} onValueChange={setDateRange}>
@@ -480,7 +531,7 @@ export default function Leads() {
               <SelectItem value="today">{t("today")}</SelectItem>
               <SelectItem value="week">{t("last_week_option")}</SelectItem>
               <SelectItem value="month">{t("last_month_option")}</SelectItem>
-              <SelectItem value="3months">3 {t("months")}</SelectItem>
+              <SelectItem value="3months">{t("last_3_months")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -560,7 +611,7 @@ export default function Leads() {
           return (
             <div
               key={lead.id}
-              onClick={() => setSelectedLeadId(lead.id)}
+              onClick={() => setSelectedLead(lead)}
               className={cn(
                 "w-full rounded-2xl border p-4 text-right shadow-card transition-all hover:shadow-card-hover active:scale-[0.99] relative cursor-pointer",
                 needsFollowup ? "border-warning/50 bg-warning/5" : "border-border bg-card"
@@ -584,7 +635,7 @@ export default function Leads() {
                 <div className="absolute top-2 left-2">
                   <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20 text-[10px]">
                     <Clock className="h-3 w-3 ml-1" />
-                    {daysSinceLastContact} ימים
+                    {daysSinceLastContact} {t("days")}
                   </Badge>
                 </div>
               )}
@@ -660,11 +711,18 @@ export default function Leads() {
                   ? Math.floor((new Date() - new Date(lead.last_contacted)) / (1000 * 60 * 60 * 24))
                   : 0;
                 const needsFollowup = daysSinceLastContact >= 3 && lead.status !== 'CLOSED' && lead.status !== 'LOST';
+                const lastMessageLabel = lead.last_contacted
+                  ? daysSinceLastContact === 0
+                    ? t("today")
+                    : daysSinceLastContact === 1
+                      ? t("yesterday")
+                      : `${daysSinceLastContact} ${t("days_ago")}`
+                  : t("no_messages");
 
                 return (
                   <tr
                     key={lead.id}
-                    onClick={() => setSelectedLeadId(lead.id)}
+                    onClick={() => setSelectedLead(lead)}
                     className={cn(
                       "border-b border-border last:border-0 hover:bg-muted/40 cursor-pointer transition-colors",
                       needsFollowup && "bg-warning/5"
@@ -702,25 +760,19 @@ export default function Leads() {
                     <td className="px-5 py-3.5 max-w-[200px]">
                       <div className="flex items-center gap-1">
                         <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-xs text-muted-foreground truncate">
-                          {lead.last_contacted
-                            ? daysSinceLastContact === 0 ? 'היום' :
-                              daysSinceLastContact === 1 ? 'אתמול' :
-                                `לפני ${daysSinceLastContact} ימים`
-                            : 'אין הודעות'}
-                        </span>
+                        <span className="text-xs text-muted-foreground truncate">{lastMessageLabel}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
                       {needsFollowup ? (
                         <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
                           <Bell className="h-3 w-3 ml-1" />
-                          דרוש מעקב
+                          {t("requires_attention")}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="bg-success/10 text-success border-success/20">
                           <CheckCircle className="h-3 w-3 ml-1" />
-                          מעודכן
+                          {t("status_up_to_date")}
                         </Badge>
                       )}
                     </td>
@@ -732,13 +784,13 @@ export default function Leads() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
-                          <DropdownMenuItem onClick={() => setSelectedLeadId(lead.id)}>
+                          <DropdownMenuItem onClick={() => setSelectedLead(lead)}>
                             <Eye className="h-4 w-4 ml-2" />
-                            צפה
+                            {t("view_lead")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setSelectedLead(lead)}>
                             <Edit className="h-4 w-4 ml-2" />
-                            ערוך
+                            {t("edit")}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -746,7 +798,7 @@ export default function Leads() {
                             onClick={(e) => handleDeleteClick(lead.id, e)}
                           >
                             <Trash2 className="h-4 w-4 ml-2" />
-                            מחק
+                            {t("delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
