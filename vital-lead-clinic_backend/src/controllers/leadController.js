@@ -3,6 +3,7 @@ const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
+const { sendWhatsAppMessage } = require('../services/whatsappService');
 
 const ALLOWED_LEAD_STATUSES = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
 
@@ -259,6 +260,22 @@ const addMessage = async (req, res) => {
 
         if (!lead) {
             return res.status(404).json({ message: 'Lead not found' });
+        }
+
+        if (type === 'SENT') {
+            if (!lead.phone) {
+                return res.status(400).json({ message: 'Lead phone number is required to send WhatsApp messages.' });
+            }
+
+            try {
+                await sendWhatsAppMessage({
+                    to: lead.phone,
+                    body: content
+                });
+            } catch (error) {
+                console.error('WhatsApp send failed:', error);
+                return res.status(502).json({ message: 'Failed to deliver WhatsApp message.' });
+            }
         }
 
         const message = await Message.create({

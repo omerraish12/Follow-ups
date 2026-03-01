@@ -118,30 +118,38 @@ export default function WhatsAppIntegration() {
   };
 
   const handleSendTest = async () => {
-    if (!testPhone || !testTemplate) {
-      toast({ title: t("error"), description: t("settings_save_failed"), variant: "destructive" });
+    const cleanedPhone = testPhone.trim();
+    const cleanedTemplate = testTemplate.trim();
+
+    if (!cleanedPhone || !cleanedTemplate) {
+      toast({ title: t("error"), description: t("missing_required_fields"), variant: "destructive" });
       return;
     }
 
+    const payload = {
+      to: cleanedPhone,
+      templateName: cleanedTemplate,
+      language: testLanguage,
+    };
+
     setIsSendingTest(true);
     try {
-      await whatsappService.sendTemplate({
-        to: testPhone,
-        templateName: testTemplate,
-        language: testLanguage,
-      });
+      await whatsappService.sendTemplate(payload);
       toast({ title: t("success"), description: t("message_sent") });
     } catch (error) {
       console.error("WhatsApp sendTemplate error:", error);
       toast({
         title: t("error"),
-        description: t("settings_save_failed"),
+        description: t("send_test_message_failed"),
         variant: "destructive",
       });
     } finally {
       setIsSendingTest(false);
     }
   };
+
+  const isConnected = whatsappConfig.status === "connected";
+  const readyToSendTest = Boolean(testPhone.trim() && testTemplate.trim());
 
   const languageOptions = useMemo(
     () => [
@@ -267,13 +275,16 @@ export default function WhatsAppIntegration() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex justify-end">
+          <div className="flex flex-col gap-2 items-end">
+            <p className="text-[11px] text-slate-500">
+              {!isConnected ? t("whatsapp_not_connected_notice") : readyToSendTest ? t("whatsapp_ready_to_send") : t("fill_required_fields")}
+            </p>
             <Button
               onClick={handleSendTest}
-              disabled={isSendingTest}
-              className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#5a5bd9] to-[#8458ff] px-6 py-2 text-sm font-semibold text-white shadow-[0_15px_40px_rgba(90,91,217,0.4)] transition hover:opacity-90"
+              disabled={!isConnected || !readyToSendTest || isSendingTest}
+              className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#5a5bd9] to-[#8458ff] px-6 py-2 text-sm font-semibold text-white shadow-[0_15px_40px_rgba(90,91,217,0.4)] transition hover:opacity-90 disabled:opacity-60"
             >
-              <span>{t("send_test_message")}</span>
+              <span>{isSendingTest ? t("sending") : t("send_test_message")}</span>
               <Send className="h-4 w-4" />
             </Button>
           </div>

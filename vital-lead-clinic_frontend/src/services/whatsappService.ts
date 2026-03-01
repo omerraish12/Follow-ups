@@ -1,3 +1,4 @@
+import api from "./api";
 import { settingsService } from "./settingsService";
 
 export type WhatsAppConnectionStatus = "disconnected" | "connecting" | "connected";
