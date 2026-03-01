@@ -78,6 +78,7 @@ class Automation {
             clinicId
         } = automationData;
 
+        const normalizedComponents = JSON.stringify(Array.isArray(components) ? components : []);
         const result = await query(
             `INSERT INTO automations 
             (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id) 
@@ -90,7 +91,7 @@ class Automation {
                 templateName,
                 templateLanguage || 'en',
                 mediaUrl,
-                components || [],
+                normalizedComponents,
                 targetStatus,
                 notifyOnReply,
                 personalization,
@@ -151,8 +152,13 @@ class Automation {
                 if (key === 'mediaUrl') dbKey = 'media_url';
                 if (key === 'components') dbKey = 'components';
 
+                let normalizedValue = value;
+                if (key === 'components') {
+                    normalizedValue = JSON.stringify(Array.isArray(value) ? value : []);
+                }
+
                 fields.push(`${dbKey} = $${paramIndex}`);
-                values.push(value);
+                values.push(normalizedValue);
                 paramIndex++;
             }
         }

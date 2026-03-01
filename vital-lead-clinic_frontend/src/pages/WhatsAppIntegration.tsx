@@ -45,6 +45,7 @@ export default function WhatsAppIntegration() {
   const [testPhone, setTestPhone] = useState("");
   const [testTemplate, setTestTemplate] = useState("");
   const [testLanguage, setTestLanguage] = useState(language === "he" ? "he" : "en");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const syncFromConfig = useCallback((config: WhatsAppIntegrationConfig) => {
     setWhatsAppConfig(config);
@@ -151,6 +152,44 @@ export default function WhatsAppIntegration() {
   const isConnected = whatsappConfig.status === "connected";
   const readyToSendTest = Boolean(testPhone.trim() && testTemplate.trim());
 
+  const templateOptions = useMemo(
+    () =>
+      whatsappConfig.templates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        language: template.language?.toUpperCase() ?? "EN",
+      })),
+    [whatsappConfig.templates]
+  );
+
+  const handleTemplateSelect = useCallback(
+    (templateId: string) => {
+      setSelectedTemplateId(templateId);
+      const selected = whatsappConfig.templates.find((template) => template.id === templateId);
+      if (selected) {
+        setTestTemplate(selected.name);
+      }
+    },
+    [whatsappConfig.templates]
+  );
+
+  const handleTemplateInputChange = useCallback(
+    (value: string) => {
+      setTestTemplate(value);
+      const match = templateOptions.find(
+        (option) => option.name.toLowerCase() === value.trim().toLowerCase()
+      );
+      setSelectedTemplateId(match?.id || "");
+    },
+    [templateOptions]
+  );
+
+  useEffect(() => {
+    if (selectedTemplateId && !templateOptions.some((option) => option.id === selectedTemplateId)) {
+      setSelectedTemplateId("");
+    }
+  }, [selectedTemplateId, templateOptions]);
+
   const languageOptions = useMemo(
     () => [
       { value: "en", label: t("english") },
@@ -250,13 +289,36 @@ export default function WhatsAppIntegration() {
             <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500" htmlFor="test-template">
               {t("template_name")}
             </Label>
-            <Input
-              id="test-template"
-              placeholder={t("template_name_placeholder")}
-              value={testTemplate}
-              onChange={(e) => setTestTemplate(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 shadow-sm"
-            />
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
+              <Input
+                id="test-template"
+                placeholder={t("template_name_placeholder")}
+                value={testTemplate}
+                onChange={(e) => handleTemplateInputChange(e.target.value)}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 shadow-sm"
+              />
+              {templateOptions.length > 0 ? (
+                <Select value={selectedTemplateId} onValueChange={(value) => handleTemplateSelect(value)}>
+                  <SelectTrigger
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm"
+                    aria-label={t("template_select_label")}
+                  >
+                    <SelectValue placeholder={t("template_select_placeholder")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templateOptions.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 px-4 py-3 text-xs text-slate-500">
+                  {t("template_select_empty")}
+                </div>
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500" htmlFor="test-language">
