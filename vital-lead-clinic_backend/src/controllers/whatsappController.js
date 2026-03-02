@@ -24,6 +24,7 @@ const normalizePhone = (value) => (value || '').replace(/[^0-9+]/g, '');
 const handleWebhook = async (req, res) => {
   try {
     const entries = req.body?.entry || [];
+    console.log("received message", entries);
 
     for (const entry of entries) {
       const changes = entry.changes || [];

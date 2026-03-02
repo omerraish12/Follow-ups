@@ -703,23 +703,23 @@ export default function Leads() {
       {/* Desktop Table */}
       <div className="hidden lg:block rounded-2xl border border-border bg-card shadow-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-center">
             <thead>
-              <tr className="border-b border-border text-right text-xs text-muted-foreground bg-muted/30">
-                <th className="px-5 py-3.5 w-10">
+              <tr className="border-b border-border text-center text-xs text-muted-foreground bg-muted/30">
+                <th className="px-5 py-3.5 w-10 text-center">
                   <Checkbox
                     checked={selectedLeads.length === filteredLeads.length && filteredLeads.length > 0}
                     onCheckedChange={handleSelectAll}
                   />
                 </th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_name")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_phone")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_service")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_status")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_source")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_value")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_last_message")}</th>
-                <th className="px-5 py-3.5 font-semibold">{t("table_followup")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_name")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_phone")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_service")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_status")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_source")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_value")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_last_message")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_followup")}</th>
                 <th className="px-5 py-3.5"></th>
               </tr>
             </thead>
@@ -745,7 +745,7 @@ export default function Leads() {
                       needsFollowupFlag && "bg-warning/5"
                     )}
                   >
-                    <td className="px-5 py-3.5" onClick={(e) => e.stopPropagaation()}>
+                    <td className="px-5 py-3.5 text-center" onClick={(e) => e.stopPropagaation()}>
                       <Checkbox
                         checked={selectedLeads.includes(lead.id)}
                         onCheckedChange={(checked) => {
@@ -757,30 +757,30 @@ export default function Leads() {
                         }}
                       />
                     </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
+                    <td className="px-5 py-3.5 text-center">
+                      <div className="flex items-center justify-center gap-3">
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                           {lead.name?.charAt(0) || '?'}
                         </div>
                         <span className="font-semibold text-foreground">{lead.name}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-muted-foreground font-mono text-xs" dir="ltr">
+                    <td className="px-5 py-3.5 text-center text-muted-foreground font-mono text-xs" dir="ltr">
                       {lead.phone}
                     </td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{lead.service || '-'}</td>
-                    <td className="px-5 py-3.5"><StatusBadge status={lead.status} /></td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{lead.source || '-'}</td>
-                    <td className="px-5 py-3.5 font-bold text-foreground">
+                    <td className="px-5 py-3.5 text-center text-muted-foreground">{lead.service || '-'}</td>
+                    <td className="px-5 py-3.5 text-center"><StatusBadge status={lead.status} /></td>
+                    <td className="px-5 py-3.5 text-center text-muted-foreground">{lead.source || '-'}</td>
+                    <td className="px-5 py-3.5 text-center font-bold text-foreground">
                       ₪{(lead.value || 0).toLocaleString()}
                     </td>
-                    <td className="px-5 py-3.5 max-w-[200px]">
-                      <div className="flex items-center gap-1">
+                    <td className="px-5 py-3.5 text-center max-w-[200px]">
+                      <div className="flex items-center justify-center gap-1">
                         <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         <span className="text-xs text-muted-foreground truncate">{lastMessageLabel}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-3.5 text-center">
                       {needsFollowupFlag ? (
                         <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
                           <Bell className="h-3 w-3 ml-1" />
@@ -793,7 +793,7 @@ export default function Leads() {
                         </Badge>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-5 py-3.5 text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                         <Button
