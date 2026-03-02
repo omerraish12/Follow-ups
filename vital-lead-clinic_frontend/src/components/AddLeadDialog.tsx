@@ -19,8 +19,21 @@ interface AddLeadDialogProps {
   trigger?: React.ReactNode;
 }
 
-const sources = ["WhatsApp", "Website", "Instagram", "Referral", "Google Ads"];
-const services = ["Dental Cleaning", "Orthodontics", "Root Canal", "Implants", "Cosmetic Dentistry", "Check-up"];
+const sources = [
+  { value: "WhatsApp", labelKey: "source_whatsapp" },
+  { value: "Website", labelKey: "source_website" },
+  { value: "Instagram", labelKey: "source_instagram" },
+  { value: "Referral", labelKey: "source_referral" },
+  { value: "Google Ads", labelKey: "source_google_ads" },
+];
+const services = [
+  { value: "Dental Cleaning", labelKey: "service_option_dental_cleaning" },
+  { value: "Orthodontics", labelKey: "service_option_orthodontics" },
+  { value: "Root Canal", labelKey: "service_option_root_canal" },
+  { value: "Implants", labelKey: "service_option_implants" },
+  { value: "Cosmetic Dentistry", labelKey: "service_option_cosmetic_dentistry" },
+  { value: "Check-up", labelKey: "service_option_checkup" },
+];
 
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
@@ -133,10 +146,10 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t("full_name")} className="rounded-xl" maxLength={100} disabled={isSubmitting} />
           </Field>
           <Field label={t("phone_number") + " *"} error={errors.phone}>
-            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+972-50-000-0000" className="rounded-xl" dir="ltr" maxLength={20} disabled={isSubmitting} />
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder={t("phone_placeholder")} className="rounded-xl" dir="ltr" maxLength={20} disabled={isSubmitting} />
           </Field>
           <Field label={t("email")} error={errors.email}>
-            <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" className="rounded-xl" dir="ltr" maxLength={255} disabled={isSubmitting} />
+            <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={t("email_placeholder")} className="rounded-xl" dir="ltr" maxLength={255} disabled={isSubmitting} />
           </Field>
           <Field label={t("value") + " (ILS)"}>
             <Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="0" className="rounded-xl" dir="ltr" min={0} disabled={isSubmitting} />
@@ -145,7 +158,11 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
             <Select value={form.service} onValueChange={(v) => setForm({ ...form, service: v })} disabled={isSubmitting}>
               <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_service")} /></SelectTrigger>
               <SelectContent>
-                {services.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {services.map(({ value, labelKey }) => (
+                  <SelectItem key={value} value={value}>
+                    {t(labelKey)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -153,7 +170,11 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
             <Select value={form.source} onValueChange={(v) => setForm({ ...form, source: v })} disabled={isSubmitting}>
               <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_source")} /></SelectTrigger>
               <SelectContent>
-                {sources.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                {sources.map(({ value, labelKey }) => (
+                  <SelectItem key={value} value={value}>
+                    {t(labelKey)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>

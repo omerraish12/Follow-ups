@@ -36,10 +36,13 @@ interface ExtendedAutomationRule extends Automation {
   replyCount?: number;
   notifyOnReply?: boolean;
   personalizationFields?: string[];
+  displayName?: string;
+  displayMessage?: string;
 }
 
 export default function Automations() {
   const { t, language } = useLanguage();
+  const isRTL = language === "he";
   const {
     automations,
     isLoading,
@@ -63,6 +66,7 @@ export default function Automations() {
   const [mediaUrl, setMediaUrl] = useState("");
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>(["new_lead"]);
   const [templateLanguage, setTemplateLanguage] = useState("en");
+  const [inactiveDays, setInactiveDays] = useState(60);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
   // Map backend automations into UI-friendly objects
@@ -151,6 +155,7 @@ export default function Automations() {
       );
       const messageText = templateMessage.trim();
       const componentsPayload = [...selectedTriggers];
+      const inactiveDaysValue = selectedTriggers.includes("inactive_no_visit") ? Number(inactiveDays) || 60 : null;
 
       await addAutomation({
         name: templateName.trim(),
@@ -178,6 +183,39 @@ export default function Automations() {
       setIsSavingTemplate(false);
     }
   };
+
+  const automationLocalization: Record<string, { nameKey: string; messageKey: string }> = {
+    "Test Template": {
+      nameKey: "automation_rule_test_name",
+      messageKey: "automation_rule_test_message"
+    },
+    "14-Day Win-back": {
+      nameKey: "automation_rule_winback_name",
+      messageKey: "automation_rule_winback_message"
+    },
+    "7-Day Reminder": {
+      nameKey: "automation_rule_7day_name",
+      messageKey: "automation_rule_7day_message"
+    },
+    "3-Day Follow-up": {
+      nameKey: "automation_rule_3day_name",
+      messageKey: "automation_rule_3day_message"
+    }
+  };
+
+  const localizedRules = useMemo(
+    () =>
+      rules.map((rule) => {
+        const override = automationLocalization[rule.name];
+        if (!override) return rule;
+        return {
+          ...rule,
+          displayName: t(override.nameKey),
+          displayMessage: t(override.messageKey)
+        };
+      }),
+    [rules, t]
+  );
 
   const cards = useMemo(() => ([
     {
@@ -353,23 +391,24 @@ export default function Automations() {
                 {t("template_triggers_label")}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {[
-                  { key: "new_lead", label: t("template_trigger_new_lead") },
-                  { key: "missing_reply", label: t("template_trigger_missing_reply") },
-                  { key: "appointment_missed", label: t("template_trigger_appointment_missed") },
-                  { key: "high_value", label: t("template_trigger_high_value") }
-                ].map((trigger) => {
-                  const active = selectedTriggers.includes(trigger.key);
-                  return (
-                    <Button
+              {[
+                { key: "new_lead", label: t("template_trigger_new_lead") },
+                { key: "missing_reply", label: t("template_trigger_missing_reply") },
+                { key: "appointment_missed", label: t("template_trigger_appointment_missed") },
+                { key: "high_value", label: t("template_trigger_high_value") },
+                { key: "inactive_no_visit", label: t("template_trigger_inactive_no_visit") }
+              ].map((trigger) => {
+                const active = selectedTriggers.includes(trigger.key);
+                return (
+                  <Button
                       key={trigger.key}
                       variant="ghost"
                       size="sm"
                       className={cn(
                         "rounded-full px-4 py-1 text-xs uppercase tracking-[0.25em] transition",
-                        active
-                          ? "bg-primary text-white"
-                          : "bg-muted/30 text-muted-foreground hover:bg-primary/10"
+                      active
+                        ? "bg-primary text-white"
+                        : "bg-muted/30 text-muted-foreground hover:bg-primary/10"
                       )}
                       onClick={() => handleToggleTrigger(trigger.key)}
                     >
@@ -377,11 +416,30 @@ export default function Automations() {
                     </Button>
                   );
                 })}
-              </div>
+             </div>
+              {selectedTriggers.includes("inactive_no_visit") && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  <label className="mr-2">{t("inactive_days_label")}</label>
+                  <Input
+                    type="number"
+                    value={inactiveDays}
+                    onChange={(e) => setInactiveDays(Math.max(7, Number(e.target.value) || 0))}
+                    min={7}
+                    className="w-24 rounded-full bg-card/80"
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-foreground">{t("template_media_label")}</p>
+            <div
+              className={cn(
+                "flex items-center gap-3",
+                isRTL ? "flex-row-reverse justify-end" : "justify-between"
+              )}
+            >
+              <p className={cn("text-sm font-semibold text-foreground", isRTL && "text-right")}>
+                {t("template_media_label")}
+              </p>
               <Switch checked={includeMedia} onCheckedChange={setIncludeMedia} />
             </div>
             {includeMedia && (
@@ -402,7 +460,7 @@ export default function Automations() {
             </Button>
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-white/90 p-6 text-sm text-foreground space-y-4 shadow-sm">
+          <div className="rounded-2xl border border-border/70 bg-card/90 p-6 text-sm text-foreground space-y-4 shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("template_preview_title")}</span>
               <Badge variant="outline" className="rounded-full text-[10px] text-primary">
@@ -530,17 +588,17 @@ export default function Automations() {
                 </CardContent>
               </Card>
             )}
-            {rules.map((rule) => (
+          {localizedRules.map((rule) => (
               <Card key={rule.id} className={cn("relative rounded-2xl border-2", rule.active ? "border-primary/30" : "border-border")}>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{rule.name}</CardTitle>
-                      <CardDescription className="flex items-center gap-2 text-xs">
-                        <Clock className="h-3.5 w-3.5" />
-                        {t("every_days").replace("%s", (rule.triggerDays || []).join(", "))}
-                      </CardDescription>
-                    </div>
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg">{rule.displayName || rule.name}</CardTitle>
+                        <CardDescription className="flex items-center gap-2 text-xs">
+                          <Clock className="h-3.5 w-3.5" />
+                          {t("every_days").replace("%s", (rule.triggerDays || []).join(", "))}
+                        </CardDescription>
+                      </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="rounded-full text-xs">
                         {rule.target_status ? t(`status_${rule.target_status.toLowerCase()}` as any) : t("all_leads")}
@@ -552,7 +610,7 @@ export default function Automations() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <p className="text-sm leading-relaxed text-muted-foreground">{rule.message}</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{rule.displayMessage || rule.message}</p>
 
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
@@ -676,7 +734,7 @@ export default function Automations() {
                 <CardDescription>{t("automation_activity_log")}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {rules.slice(0, 4).map((rule) => (
+                {localizedRules.slice(0, 4).map((rule) => (
                   <div key={rule.id} className="flex items-center gap-3 text-sm">
                     <div className="h-2 w-2 rounded-full bg-primary" />
                     <div>
@@ -721,7 +779,7 @@ export default function Automations() {
             <p className="text-sm text-muted-foreground">{t("recent_replies_empty")}</p>
           )}
           {!repliesLoading && replies.map((item) => (
-            <div key={item.id} className="rounded-2xl border border-border/60 bg-white/80 p-4 shadow-sm">
+            <div key={item.id} className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
                 <span>{item.automation_name}</span>
                 <span>{new Date(item.replied_at).toLocaleString()}</span>
@@ -762,7 +820,7 @@ export default function Automations() {
             <p className="text-sm text-muted-foreground">{t("system_logs_empty")}</p>
           )}
           {!logsLoading && logs.map((log) => (
-            <div key={log.id} className="rounded-2xl border border-border/60 bg-white/80 p-4 shadow-sm transition hover:border-primary/60">
+            <div key={log.id} className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm transition hover:border-primary/60">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
                 <span>{log.type.replace(/_/g, " ")}</span>
                 <span>{new Date(log.created_at).toLocaleString()}</span>

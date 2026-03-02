@@ -16,6 +16,7 @@ const pricingRoutes = require('./routes/pricingRoutes');
 const logRoutes = require('./routes/logRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 
+const requestLogger = require('./middleware/requestLogger');
 const app = express();
 
 // Middleware
@@ -46,6 +47,7 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(requestLogger);
 
 // Root + favicon to avoid noisy 404s on Vercel
 app.get('/', (req, res) => {

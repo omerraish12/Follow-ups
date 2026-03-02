@@ -42,6 +42,7 @@ export default function WhatsAppIntegration() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [isConfirmingJoin, setIsConfirmingJoin] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [testTemplate, setTestTemplate] = useState("");
   const [testLanguage, setTestLanguage] = useState(language === "he" ? "he" : "en");
@@ -190,6 +191,57 @@ export default function WhatsAppIntegration() {
     }
   }, [selectedTemplateId, templateOptions]);
 
+  const handleCopyValue = useCallback(
+    async (value: string, label: string) => {
+      try {
+        if (typeof navigator === "undefined" || !navigator.clipboard) {
+          throw new Error("Clipboard not available");
+        }
+        await navigator.clipboard.writeText(value);
+        toast({
+          title: t("copy"),
+          description: t("copied_to_clipboard").replace("%s", label),
+        });
+      } catch (error) {
+        console.error("Clipboard copy failed:", error);
+        toast({
+          title: t("error"),
+          description: t("clipboard_copy_failed"),
+          variant: "destructive",
+        });
+      }
+    },
+    [t, toast]
+  );
+
+  const handleOpenSandboxPortal = useCallback(() => {
+    if (!whatsappConfig.sandbox.link) {
+      return;
+    }
+    window.open(whatsappConfig.sandbox.link, "_blank", "noopener,noreferrer");
+  }, [whatsappConfig.sandbox.link]);
+
+  const handleConfirmSandboxJoin = useCallback(async () => {
+    setIsConfirmingJoin(true);
+    try {
+      const updatedConfig = await whatsappService.confirmSandboxJoin();
+      syncFromConfig(updatedConfig);
+      toast({
+        title: t("success"),
+        description: t("whatsapp_sandbox_join_confirmed"),
+      });
+    } catch (error) {
+      console.error("WhatsApp sandbox join failed:", error);
+      toast({
+        title: t("error"),
+        description: t("whatsapp_sandbox_join_failed"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirmingJoin(false);
+    }
+  }, [syncFromConfig, t, toast]);
+
   const languageOptions = useMemo(
     () => [
       { value: "en", label: t("english") },
@@ -259,10 +311,73 @@ export default function WhatsAppIntegration() {
               {t("whatsapp_mark_disconnected")}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+      </CardContent>
+    </Card>
 
-      <Card className="rounded-[36px] border border-slate-200 bg-gradient-to-br from-[#fdfbf7] to-[#f4efe6] text-slate-900 shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
+    <Card className="rounded-[36px] border border-slate-200 bg-white shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
+      <CardHeader className="space-y-3">
+        <div>
+          <CardTitle className="text-2xl text-slate-900">{t("whatsapp_sandbox_title")}</CardTitle>
+          <CardDescription className="text-sm text-slate-500">{t("whatsapp_sandbox_description")}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500">{t("whatsapp_sandbox_join_code_label")}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="font-mono text-base text-slate-900">{whatsappConfig.sandbox.joinCode}</span>
+              <Button size="sm" variant="outline" onClick={() => handleCopyValue(whatsappConfig.sandbox.joinCode, t("whatsapp_sandbox_join_code_label"))}>
+                {t("copy")}
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">{t("whatsapp_sandbox_join_code_help")}</p>
+          </div>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
+            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500">{t("whatsapp_sandbox_number_label")}</p>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <span className="font-mono text-base text-slate-900">{whatsappConfig.sandbox.number}</span>
+              <Button size="sm" variant="outline" onClick={() => handleCopyValue(whatsappConfig.sandbox.number, t("whatsapp_sandbox_number_label"))}>
+                {t("copy")}
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">{t("whatsapp_sandbox_number_help")}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <p className="font-semibold text-slate-900">{t("whatsapp_sandbox_steps_title")}</p>
+          <ol className="mt-3 space-y-2 list-decimal list-inside text-slate-600">
+            <li>{t("whatsapp_sandbox_step_scan")}</li>
+            <li>{t("whatsapp_sandbox_step_join_number")}</li>
+            <li>{t("whatsapp_sandbox_step_confirm")}</li>
+          </ol>
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>{t("whatsapp_sandbox_last_joined")}</span>
+            <span className="font-mono text-xs text-slate-500">
+              {whatsappConfig.sandbox.lastJoinedAt
+                ? formatDate(whatsappConfig.sandbox.lastJoinedAt, locale, fallbackDate)
+                : t("whatsapp_sandbox_not_joined")}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleConfirmSandboxJoin}
+              disabled={isConfirmingJoin}
+              className="rounded-full bg-gradient-to-r from-[#5a5bd9] to-[#8458ff] px-6 py-2 text-sm font-semibold text-white shadow-[0_15px_40px_rgba(90,91,217,0.4)] transition hover:opacity-90 disabled:opacity-60"
+            >
+              {isConfirmingJoin ? t("whatsapp_sandbox_marking") : t("whatsapp_sandbox_button")}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleOpenSandboxPortal} className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+              {t("whatsapp_open_sandbox")}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card className="rounded-[36px] border border-slate-200 bg-gradient-to-br from-[#fdfbf7] to-[#f4efe6] text-slate-900 shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
         <CardHeader className="space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div>

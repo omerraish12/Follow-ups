@@ -30,6 +30,13 @@ export interface WhatsAppFilterSettings {
   keywords: string;
 }
 
+export interface WhatsAppSandboxInfo {
+  joinCode: string;
+  number: string;
+  link: string;
+  lastJoinedAt: string | null;
+}
+
 export interface WhatsAppIntegrationConfig {
   status: WhatsAppConnectionStatus;
   phoneNumber: string;
@@ -40,6 +47,7 @@ export interface WhatsAppIntegrationConfig {
   filters: WhatsAppFilterSettings;
   templates: WhatsAppTemplate[];
   importHistory: WhatsAppImportHistory[];
+  sandbox: WhatsAppSandboxInfo;
   lastConnectedAt: string | null;
   updatedAt: string | null;
 }
@@ -61,6 +69,12 @@ const DEFAULT_CONFIG: WhatsAppIntegrationConfig = {
   },
   templates: [],
   importHistory: [],
+  sandbox: {
+    joinCode: "wood-silent",
+    number: "whatsapp:+14155238886",
+    link: "https://www.twilio.com/console/sms/whatsapp/sandbox",
+    lastJoinedAt: null,
+  },
   lastConnectedAt: null,
   updatedAt: null,
 };
@@ -131,6 +145,23 @@ const normalizeImportHistory = (value: unknown): WhatsAppImportHistory | null =>
   };
 };
 
+const sanitizeString = (value: unknown, fallback: string) => {
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  return fallback;
+};
+
+const normalizeSandboxInfo = (value: unknown): WhatsAppSandboxInfo => {
+  const obj = asObject(value);
+  return {
+    joinCode: sanitizeString(obj.joinCode, DEFAULT_CONFIG.sandbox.joinCode),
+    number: sanitizeString(obj.number, DEFAULT_CONFIG.sandbox.number),
+    link: sanitizeString(obj.link, DEFAULT_CONFIG.sandbox.link),
+    lastJoinedAt: typeof obj.lastJoinedAt === "string" ? obj.lastJoinedAt : DEFAULT_CONFIG.sandbox.lastJoinedAt,
+  };
+};
+
 export const normalizeWhatsAppConfig = (raw: unknown): WhatsAppIntegrationConfig => {
   const obj = asObject(raw);
   const filters = asObject(obj.filters);
@@ -165,6 +196,7 @@ export const normalizeWhatsAppConfig = (raw: unknown): WhatsAppIntegrationConfig
           .map(normalizeImportHistory)
           .filter((item): item is WhatsAppImportHistory => Boolean(item))
       : DEFAULT_CONFIG.importHistory,
+    sandbox: normalizeSandboxInfo(obj.sandbox),
     lastConnectedAt: typeof obj.lastConnectedAt === "string" ? obj.lastConnectedAt : DEFAULT_CONFIG.lastConnectedAt,
     updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : DEFAULT_CONFIG.updatedAt,
   };
@@ -180,6 +212,17 @@ export const whatsappService = {
 
   saveConfig: async (config: WhatsAppIntegrationConfig): Promise<WhatsAppIntegrationConfig> => {
     const integrationMap = await settingsService.updateIntegration("whatsapp", config.status, config as unknown as Record<string, unknown>);
+    const saved = asObject(integrationMap).whatsapp;
+    return normalizeWhatsAppConfig(saved);
+  },
+
+  confirmSandboxJoin: async (): Promise<WhatsAppIntegrationConfig> => {
+    const payload = {
+      sandbox: {
+        lastJoinedAt: new Date().toISOString(),
+      },
+    };
+    const integrationMap = await settingsService.updateIntegration("whatsapp", "connected", payload);
     const saved = asObject(integrationMap).whatsapp;
     return normalizeWhatsAppConfig(saved);
   },

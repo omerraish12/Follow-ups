@@ -1,5 +1,6 @@
 // src/pages/auth/ResetPassword.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { authService } from '@/services/authService';
@@ -36,18 +37,20 @@ export default function ResetPassword() {
     }
   }, [token, email, navigate]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     if (error) setError('');
   };
 
   const validatePassword = (password: string): boolean => {
-    const regex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
-    return regex.test(password);
+    const hasMinLength = password.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    return hasMinLength && hasLetter && hasNumber;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
@@ -72,13 +75,14 @@ export default function ResetPassword() {
       });
       setTimeout(() => navigate('/login'), 3000);
     } catch (err: any) {
-      setError(err.message || t('reset_link_send_failed'));
+      const serverMessage = err?.response?.data?.message;
+      setError(serverMessage || err?.message || t('reset_link_send_failed'));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getPasswordStrength = (password: string): { strength: string; color: string; width: string } => {
+  const getPasswordStrength = (password: string, translate: (key: string) => string): { strength: string; color: string; width: string } => {
     if (!password) return { strength: '', color: 'bg-gray-200', width: '0%' };
 
     let score = 0;
@@ -91,19 +95,31 @@ export default function ResetPassword() {
     switch (score) {
       case 1:
       case 2:
-        return { strength: t('strength_weak'), color: 'bg-destructive', width: '20%' };
+        return { strength: translate('weak'), color: 'bg-destructive', width: '20%' };
       case 3:
-        return { strength: t('strength_medium'), color: 'bg-warning', width: '50%' };
+        return { strength: translate('medium'), color: 'bg-warning', width: '50%' };
       case 4:
-        return { strength: t('strength_good'), color: 'bg-info', width: '75%' };
+        return { strength: translate('good'), color: 'bg-info', width: '75%' };
       case 5:
-        return { strength: t('strength_strong'), color: 'bg-success', width: '100%' };
+        return { strength: translate('strong'), color: 'bg-success', width: '100%' };
       default:
         return { strength: '', color: 'bg-gray-200', width: '0%' };
     }
   };
 
-  const passwordStrength = getPasswordStrength(formData.password);
+  const passwordStrength = useMemo(() => getPasswordStrength(formData.password, t), [formData.password, t]);
+
+  const passwordRequirementStatus = useMemo(() => {
+    const hasMinLength = formData.password.length >= 8;
+    const hasLetter = /[A-Za-z]/.test(formData.password);
+    const hasNumber = /\d/.test(formData.password);
+
+    return [
+      { key: 'at_least_8_chars', isValid: hasMinLength },
+      { key: 'at_least_one_letter', isValid: hasLetter },
+      { key: 'at_least_one_number', isValid: hasNumber },
+    ];
+  }, [formData.password]);
 
   if (!token || !email) {
     return null;
@@ -130,14 +146,26 @@ export default function ResetPassword() {
         </CardHeader>
 
         {success ? (
-          <CardContent>
-            <Alert className="rounded-xl bg-success/10 border-success/20">
-              <CheckCircle className="h-4 w-4 text-success" />
-              <AlertDescription className="text-success mr-2">
-                {t('password_updated_successfully')}
-              </AlertDescription>
-            </Alert>
-          </CardContent>
+          <>
+            <CardContent>
+              <Alert className="rounded-xl bg-success/10 border-success/20">
+                <CheckCircle className="h-4 w-4 text-success" />
+                <AlertDescription className="text-success mr-2">
+                  {t('password_updated_successfully')}
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+
+            <CardFooter className="flex flex-col gap-4">
+              <Button
+                type="button"
+                className="w-full rounded-xl h-11"
+                onClick={() => navigate('/login')}
+              >
+                {t('back_to_login')}
+              </Button>
+            </CardFooter>
+          </>
         ) : (
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
@@ -166,10 +194,25 @@ export default function ResetPassword() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? t('hide_password') : t('show_password')}
                     className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground`}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                </div>
+
+                <div className="text-xs space-y-1 text-muted-foreground">
+                  <p className="text-xs font-medium text-muted-foreground">{t('password_requirements_title')}</p>
+                  <ul className="space-y-1">
+                    {passwordRequirementStatus.map((requirement) => (
+                      <li key={requirement.key} className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${requirement.isValid ? 'bg-success' : 'bg-muted'}`} />
+                        <span className={requirement.isValid ? 'text-foreground' : 'text-muted-foreground'}>
+                          {t(requirement.key)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
                 {formData.password && (
@@ -208,6 +251,7 @@ export default function ResetPassword() {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? t('hide_password') : t('show_password')}
                     className={`absolute ${isRtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground`}
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

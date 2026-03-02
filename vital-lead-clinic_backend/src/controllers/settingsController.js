@@ -5,11 +5,46 @@ const PDFDocument = require('pdfkit');
 const { query } = require('../config/database');
 const User = require('../models/User');
 
-const defaultIntegrationSettings = {
-    whatsapp: { status: 'disconnected' },
-    email: { status: 'connected' },
-    calendar: { status: 'connected' },
-    payment: { status: 'disconnected' }
+const TWILIO_SANDBOX_URL = process.env.TWILIO_SANDBOX_URL || 'https://www.twilio.com/console/sms/whatsapp/sandbox';
+const TWILIO_SANDBOX_JOIN_CODE = process.env.TWILIO_SANDBOX_JOIN_CODE || 'join wood-silent';
+const TWILIO_SANDBOX_NUMBER =
+    process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
+
+const mergeWhatsappDefaults = (whatsapp = {}) => {
+    return {
+        ...{
+            status: 'disconnected',
+            sandbox: {
+                joinCode: TWILIO_SANDBOX_JOIN_CODE,
+                number: TWILIO_SANDBOX_NUMBER,
+                link: TWILIO_SANDBOX_URL,
+                lastJoinedAt: null
+            }
+        },
+        ...whatsapp,
+        sandbox: {
+            ...{
+                joinCode: TWILIO_SANDBOX_JOIN_CODE,
+                number: TWILIO_SANDBOX_NUMBER,
+                link: TWILIO_SANDBOX_URL,
+                lastJoinedAt: null
+            },
+            ...(whatsapp.sandbox || {})
+        }
+    };
+};
+
+const mergeIntegrationDefaults = (incoming = {}) => {
+    const defaults = {
+        email: { status: 'connected' },
+        calendar: { status: 'connected' },
+        payment: { status: 'disconnected' }
+    };
+    return {
+        ...defaults,
+        ...incoming,
+        whatsapp: mergeWhatsappDefaults(incoming.whatsapp)
+    };
 };
 
 const defaultBackupSettings = {
@@ -184,7 +219,7 @@ const getSettings = async (req, res) => {
         );
         const profile = userResult.rows[0] || {};
 
-        const integrations = clinic.integration_settings || defaultIntegrationSettings;
+        const integrations = mergeIntegrationDefaults(clinic.integration_settings || {});
         const backupSettings = clinic.backup_settings || defaultBackupSettings;
         const notificationSettings = profile.notification_settings || defaultNotificationSettings;
 
@@ -395,7 +430,7 @@ const updateIntegration = async (req, res) => {
             `SELECT integration_settings FROM clinics WHERE id = $1`,
             [req.user.clinic_id]
         );
-        const current = clinicResult.rows[0]?.integration_settings || defaultIntegrationSettings;
+        const current = mergeIntegrationDefaults(clinicResult.rows[0]?.integration_settings || {});
         const currentTypeSettings = current?.[type] || {};
         const next = {
             ...current,
@@ -415,7 +450,8 @@ const updateIntegration = async (req, res) => {
             [next, req.user.clinic_id]
         );
 
-        res.json(result.rows[0]?.integration_settings || next);
+        const savedIntegrations = result.rows[0]?.integration_settings || next;
+        res.json(mergeIntegrationDefaults(savedIntegrations));
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

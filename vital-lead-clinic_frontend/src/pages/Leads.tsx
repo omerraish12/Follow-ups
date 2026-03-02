@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import LeadDetail from "@/components/LeadDetail";
 import AddLeadDialog from "@/components/AddLeadDialog";
+import EditLeadDialog from "@/components/EditLeadDialog";
 import { useLeads } from "@/hooks/useLeads";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -72,6 +73,8 @@ export default function Leads() {
   const [leadToDelete, setLeadToDelete] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [addLeadOpen, setAddLeadOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Hooks
   const {
@@ -130,6 +133,25 @@ export default function Leads() {
     return dateValue ? new Date(dateValue) : null;
   };
 
+  const getFollowupAgeDays = (lead: Lead): number | null => {
+    const referenceDate = getReferenceDate(lead);
+    if (!referenceDate) {
+      return null;
+    }
+    const now = new Date();
+    return Math.max(0, (now.getTime() - referenceDate.getTime()) / MS_PER_DAY);
+  };
+
+  const needsFollowup = (lead: Lead): boolean => {
+    const days = getFollowupAgeDays(lead);
+    return (
+      days !== null &&
+      days >= 3 &&
+      lead.status !== "CLOSED" &&
+      lead.status !== "LOST"
+    );
+  };
+
   const matchesDateRange = (lead: Lead): boolean => {
     if (dateRange === "all") {
       return true;
@@ -167,12 +189,7 @@ export default function Leads() {
   };
 
   const leadsAfterFollowupFilter = activeFilter === 'followup'
-    ? leads.filter(lead => {
-      const daysSinceLastContact = lead.last_contacted
-        ? Math.floor((new Date() - new Date(lead.last_contacted)) / (1000 * 60 * 60 * 24))
-        : 0;
-      return daysSinceLastContact >= 3 && lead.status !== 'CLOSED' && lead.status !== 'LOST';
-    })
+    ? leads.filter(needsFollowup)
     : leads;
 
   const filteredLeads = leadsAfterFollowupFilter.filter(matchesDateRange);
@@ -238,6 +255,11 @@ export default function Leads() {
     loadFollowupCount();
   }, [fetchLeads, loadFollowupCount]);
 
+  const handleLeadUpdated = useCallback(() => {
+    fetchLeads();
+    loadFollowupCount();
+  }, [fetchLeads, loadFollowupCount]);
+
   const toCsvCell = useCallback((value: string | number | boolean | null | undefined) => {
     if (value === null || value === undefined) {
       return "";
@@ -289,29 +311,26 @@ export default function Leads() {
         ])
       );
 
-      filteredLeads.forEach((lead) => {
-        const daysSinceLastContact = lead.last_contacted
-          ? Math.floor((Date.now() - new Date(lead.last_contacted).getTime()) / (1000 * 60 * 60 * 24))
-          : 0;
-        const needsFollowup = daysSinceLastContact >= 3 && lead.status !== "CLOSED" && lead.status !== "LOST";
+        filteredLeads.forEach((lead) => {
+          const needsFollowupRow = needsFollowup(lead);
 
-        rows.push(
-          toCsvRow([
-            lead.name || "-",
-            lead.phone || "-",
-            lead.email || "-",
-            lead.service || "-",
-            lead.status || "-",
-            lead.source || "-",
-            lead.value || 0,
-            lead.last_contacted || "-",
-            lead.next_follow_up || lead.nextFollowUp || "-",
-            lead.messages?.length || 0,
-            needsFollowup ? "Yes" : "No",
-            lead.notes || "-",
-          ])
-        );
-      });
+          rows.push(
+            toCsvRow([
+              lead.name || "-",
+              lead.phone || "-",
+              lead.email || "-",
+              lead.service || "-",
+              lead.status || "-",
+              lead.source || "-",
+              lead.value || 0,
+              lead.last_contacted || "-",
+              lead.next_follow_up || lead.nextFollowUp || "-",
+              lead.messages?.length || 0,
+              needsFollowupRow ? "Yes" : "No",
+              lead.notes || "-",
+            ])
+          );
+        });
 
       const csvContent = rows.join("\n");
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -603,10 +622,9 @@ export default function Leads() {
       {/* Mobile Cards */}
       <div className="space-y-3 lg:hidden">
         {filteredLeads.map((lead) => {
-          const daysSinceLastContact = lead.last_contacted
-            ? Math.floor((new Date() - new Date(lead.last_contacted)) / (1000 * 60 * 60 * 24))
-            : 0;
-          const needsFollowup = daysSinceLastContact >= 3 && lead.status !== 'CLOSED' && lead.status !== 'LOST';
+          const followupDays = getFollowupAgeDays(lead);
+          const daysSinceLastContact = followupDays !== null ? Math.floor(followupDays) : 0;
+          const needsFollowupFlag = needsFollowup(lead);
 
           return (
             <div
@@ -614,7 +632,7 @@ export default function Leads() {
               onClick={() => setSelectedLead(lead)}
               className={cn(
                 "w-full rounded-2xl border p-4 text-right shadow-card transition-all hover:shadow-card-hover active:scale-[0.99] relative cursor-pointer",
-                needsFollowup ? "border-warning/50 bg-warning/5" : "border-border bg-card"
+                needsFollowupFlag ? "border-warning/50 bg-warning/5" : "border-border bg-card"
               )}
             >
               {/* Selection Checkbox */}
@@ -707,10 +725,9 @@ export default function Leads() {
             </thead>
             <tbody>
               {filteredLeads.map((lead) => {
-                const daysSinceLastContact = lead.last_contacted
-                  ? Math.floor((new Date() - new Date(lead.last_contacted)) / (1000 * 60 * 60 * 24))
-                  : 0;
-                const needsFollowup = daysSinceLastContact >= 3 && lead.status !== 'CLOSED' && lead.status !== 'LOST';
+                const followupDays = getFollowupAgeDays(lead);
+                const daysSinceLastContact = followupDays !== null ? Math.floor(followupDays) : 0;
+                const needsFollowupFlag = needsFollowup(lead);
                 const lastMessageLabel = lead.last_contacted
                   ? daysSinceLastContact === 0
                     ? t("today")
@@ -725,10 +742,10 @@ export default function Leads() {
                     onClick={() => setSelectedLead(lead)}
                     className={cn(
                       "border-b border-border last:border-0 hover:bg-muted/40 cursor-pointer transition-colors",
-                      needsFollowup && "bg-warning/5"
+                      needsFollowupFlag && "bg-warning/5"
                     )}
                   >
-                    <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-5 py-3.5" onClick={(e) => e.stopPropagaation()}>
                       <Checkbox
                         checked={selectedLeads.includes(lead.id)}
                         onCheckedChange={(checked) => {
@@ -764,7 +781,7 @@ export default function Leads() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      {needsFollowup ? (
+                      {needsFollowupFlag ? (
                         <Badge variant="outline" className="bg-warning/10 text-warning border-warning/20">
                           <Bell className="h-3 w-3 ml-1" />
                           {t("requires_attention")}
@@ -779,16 +796,32 @@ export default function Leads() {
                     <td className="px-5 py-3.5">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <ChevronLeft className="h-4 w-4" />
-                          </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start">
-                          <DropdownMenuItem onClick={() => setSelectedLead(lead)}>
+                          <DropdownMenuItem
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedLead(lead);
+                            }}
+                          >
                             <Eye className="h-4 w-4 ml-2" />
                             {t("view_lead")}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setSelectedLead(lead)}>
+                          <DropdownMenuItem
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingLead(lead);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
                             <Edit className="h-4 w-4 ml-2" />
                             {t("edit")}
                           </DropdownMenuItem>
@@ -828,6 +861,22 @@ export default function Leads() {
             </Button>
           )}
         </div>
+      )}
+
+      {editingLead && (
+        <EditLeadDialog
+          lead={editingLead}
+          open={isEditDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setIsEditDialogOpen(false);
+              setEditingLead(null);
+            } else {
+              setIsEditDialogOpen(true);
+            }
+          }}
+          onSuccess={handleLeadUpdated}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
