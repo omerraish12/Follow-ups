@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
@@ -30,6 +31,7 @@ const getInitialForm = (lead: Lead) => ({
   notes: lead.notes || "",
   value: String(lead.value || 0),
   nextFollowUp: lead.next_follow_up ?? lead.nextFollowUp ?? "",
+  consentGiven: lead.consent_given ?? false
 });
 
 export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: EditLeadDialogProps) {
@@ -62,17 +64,19 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
 
     setIsSubmitting(true);
     try {
-      await updateLead(lead.id, {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim(),
-        service: form.service,
-        source: form.source,
-        status: form.status.toUpperCase() as Lead["status"],
-        notes: form.notes.trim(),
-        value: Number(form.value) || 0,
-        next_follow_up: form.nextFollowUp || null,
-      });
+        await updateLead(lead.id, {
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          email: form.email.trim(),
+          service: form.service,
+          source: form.source,
+          status: form.status.toUpperCase() as Lead["status"],
+          notes: form.notes.trim(),
+          value: Number(form.value) || 0,
+          next_follow_up: form.nextFollowUp || null,
+          consentGiven: form.consentGiven,
+          consentTimestamp: form.consentGiven ? new Date().toISOString() : null,
+        });
       onSuccess?.();
       handleClose();
     } catch (error) {
@@ -212,6 +216,17 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
               maxLength={500}
               disabled={isSubmitting}
             />
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold">{t("consent_label")}</Label>
+              <Switch
+                checked={form.consentGiven}
+                onCheckedChange={(checked) => setForm({ ...form, consentGiven: checked })}
+                disabled={isSubmitting}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">{t("consent_description")}</p>
           </div>
         </div>
         <div className="flex gap-3 mt-5 justify-end">

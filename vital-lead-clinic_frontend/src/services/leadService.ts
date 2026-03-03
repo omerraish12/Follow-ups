@@ -23,6 +23,8 @@ type LeadUpsertPayload = Omit<Lead, 'id'> & {
   id?: string;
   nextFollowUp?: string;
   assignedToId?: string | number;
+  consentGiven?: boolean;
+  consentTimestamp?: string | null;
 };
 
 export const leadService = {

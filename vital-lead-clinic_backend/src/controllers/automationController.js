@@ -1,6 +1,46 @@
 const Automation = require('../models/Automation');
 const Execution = require('../models/Execution');
 const Notification = require('../models/Notification');
+const IntegrationLog = require('../models/IntegrationLog');
+const { submitTemplateForApproval } = require('../services/whatsappService');
+
+const submitTemplateApprovalForAutomation = async (automationId, clinicId, templatePayload) => {
+    if (!templatePayload || !templatePayload.templateName || !templatePayload.message) {
+        return null;
+    }
+
+    try {
+        const approval = await submitTemplateForApproval({
+            clinicId,
+            templateName: templatePayload.templateName,
+            language: templatePayload.language,
+            message: templatePayload.message,
+            components: templatePayload.components,
+            personalization: templatePayload.personalization
+        });
+        if (approval) {
+            return Automation.updateTemplateMetadata(automationId, clinicId, {
+                templateStatus: approval.status,
+                templateSid: approval.contentSid,
+                templateApprovalSid: approval.approvalSid
+            });
+        }
+    } catch (error) {
+        console.error('Template approval submission failed:', error);
+        await IntegrationLog.create({
+            type: 'template_approval',
+            message: error.response?.data?.message || error.message || 'Template approval submission failed',
+            metadata: {
+                automationId,
+                templateName: templatePayload?.templateName,
+                clinicId,
+                error: error.response?.data || error.message
+            },
+            clinicId
+        });
+    }
+    return null;
+};
 
 // @desc    Get all automations for clinic
 // @route   GET /api/automations
@@ -101,19 +141,29 @@ const createAutomation = async (req, res) => {
             clinicId: req.user.clinic_id
         });
 
+        const templatePayload = {
+            templateName: templateName,
+            language: templateLanguage,
+            message,
+            components,
+            personalization
+        };
+        const submittedAutomation = await submitTemplateApprovalForAutomation(automation.id, req.user.clinic_id, templatePayload);
+        const automationResponse = submittedAutomation || automation;
+
         await Notification.create({
             type: 'system',
             title: 'Automation created',
-            message: `Automation "${automation.name}" was created.`,
+            message: `Automation "${automationResponse.name}" was created.`,
             priority: 'low',
             actionLabel: 'View automations',
             actionLink: '/automations',
-            metadata: { automationId: automation.id, automationName: automation.name },
+            metadata: { automationId: automationResponse.id, automationName: automationResponse.name },
             userId: null,
             clinicId: req.user.clinic_id
         });
 
-        res.status(201).json(automation);
+        res.status(201).json(automationResponse);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -157,8 +207,16 @@ const updateAutomation = async (req, res) => {
             mediaUrl,
             components
         });
-
-        res.json(updated);
+        const templatePayload = {
+            templateName: templateName || updated?.template_name,
+            language: templateLanguage || updated?.template_language,
+            message: message || updated?.message,
+            components: components || updated?.components,
+            personalization: personalization || updated?.personalization
+        };
+        const submittedAutomation = await submitTemplateApprovalForAutomation(updated.id, req.user.clinic_id, templatePayload);
+        const automationResponse = submittedAutomation || updated;
+        res.json(automationResponse);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
@@ -60,6 +61,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
     notes: "",
     value: "",
     nextFollowUp: "",
+    consentGiven: false
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isControlled = typeof open === "boolean";
@@ -101,10 +103,12 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
         notes: form.notes.trim(),
         value: Number(form.value) || 0,
         nextFollowUp: form.nextFollowUp || undefined,
+        consentGiven: form.consentGiven,
+        consentTimestamp: form.consentGiven ? new Date().toISOString() : null
       });
 
       // Reset form
-      setForm({ name: "", phone: "", email: "", service: "", source: "", status: "NEW", notes: "", value: "", nextFollowUp: "" });
+      setForm({ name: "", phone: "", email: "", service: "", source: "", status: "NEW", notes: "", value: "", nextFollowUp: "", consentGiven: false });
       setErrors({});
       setDialogOpen(false);
       onSuccess?.();
@@ -196,6 +200,18 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
             <Field label={t("notes")}>
               <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t("additional_notes")} className="rounded-xl resize-none" rows={2} maxLength={500} disabled={isSubmitting} />
             </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-semibold text-foreground">{t("consent_label")}</Label>
+              <Switch
+                checked={form.consentGiven}
+                onCheckedChange={(checked) => setForm({ ...form, consentGiven: checked })}
+                disabled={isSubmitting}
+                className="ml-2"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">{t("consent_description")}</p>
           </div>
         </div>
         <div className="flex gap-3 mt-5 justify-end">

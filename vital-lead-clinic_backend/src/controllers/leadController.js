@@ -4,6 +4,7 @@ const Message = require('../models/Message');
 const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
 const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { canUseFreeText } = require('../utils/freeTextWindow');
 
 const ALLOWED_LEAD_STATUSES = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
 
@@ -12,6 +13,11 @@ const normalizeLeadStatus = (status) => {
     const normalized = status.trim().toUpperCase();
     return ALLOWED_LEAD_STATUSES.has(normalized) ? normalized : undefined;
 };
+
+const annotateLeadWithFreeText = (lead) => ({
+    ...lead,
+    can_use_free_text: canUseFreeText(lead?.last_inbound_message_at)
+});
 
 // @desc    Get all leads for clinic
 // @route   GET /api/leads
@@ -28,8 +34,9 @@ const getLeads = async (req, res) => {
         };
 
         const leads = await Lead.findAll(filters);
+        const annotatedLeads = leads.map(annotateLeadWithFreeText);
 
-        res.json(leads);
+        res.json(annotatedLeads);
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -52,8 +59,9 @@ const getLead = async (req, res) => {
         // Get activities
         const activities = await Activity.findByLeadId(lead.id);
 
+        const annotatedLead = annotateLeadWithFreeText(lead);
         res.json({
-            ...lead,
+            ...annotatedLead,
             messages,
             activities
         });
@@ -82,10 +90,16 @@ const createLead = async (req, res) => {
             value,
             notes,
             nextFollowUp,
-            assignedToId
+            assignedToId,
+            consentGiven,
+            consentTimestamp
         } = req.body;
 
         const normalizedStatus = normalizeLeadStatus(status) || 'NEW';
+
+        const resolvedConsentTimestamp = consentGiven
+            ? consentTimestamp || new Date().toISOString()
+            : null;
 
         const lead = await Lead.create({
             name,
@@ -98,7 +112,9 @@ const createLead = async (req, res) => {
             notes,
             nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId,
-            clinicId: req.user.clinic_id
+            clinicId: req.user.clinic_id,
+            consentGiven: Boolean(consentGiven),
+            consentTimestamp: resolvedConsentTimestamp
         });
 
         // Log activity
@@ -133,7 +149,7 @@ const createLead = async (req, res) => {
 // @route   PUT /api/leads/:id
 const updateLead = async (req, res) => {
     try {
-        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId } = req.body;
+        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId, lastVisitDate, followUpSent, consentGiven, consentTimestamp } = req.body;
 
         const existingLead = await Lead.findById(req.params.id, req.user.clinic_id);
 
@@ -142,8 +158,14 @@ const updateLead = async (req, res) => {
         }
 
         const normalizedStatus = normalizeLeadStatus(status);
+        const parsedVisitDate = lastVisitDate ? new Date(lastVisitDate) : null;
+        const normalizedVisitDate =
+            parsedVisitDate && !Number.isNaN(parsedVisitDate.getTime())
+                ? parsedVisitDate.toISOString().split('T')[0]
+                : null;
+        const visitDateValue = normalizedVisitDate || (normalizedStatus === 'CLOSED' ? new Date().toISOString().split('T')[0] : null);
 
-        const lead = await Lead.update(req.params.id, req.user.clinic_id, {
+        const updatePayload = {
             name,
             phone,
             email,
@@ -154,7 +176,23 @@ const updateLead = async (req, res) => {
             notes,
             nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId
-        });
+        };
+
+        if (visitDateValue) {
+            updatePayload.lastVisitDate = visitDateValue;
+            updatePayload.followUpSent = false;
+        } else if (followUpSent !== undefined) {
+            updatePayload.followUpSent = followUpSent;
+        }
+
+        if (consentGiven !== undefined) {
+            updatePayload.consentGiven = Boolean(consentGiven);
+            updatePayload.consentTimestamp = consentGiven
+                ? (consentTimestamp ? new Date(consentTimestamp).toISOString() : new Date().toISOString())
+                : null;
+        }
+
+        const lead = await Lead.update(req.params.id, req.user.clinic_id, updatePayload);
 
         // Log status change
         if (normalizedStatus && normalizedStatus !== existingLead.status) {
@@ -262,7 +300,14 @@ const addMessage = async (req, res) => {
             return res.status(404).json({ message: 'Lead not found' });
         }
 
+        const freeTextAllowed = canUseFreeText(lead.last_inbound_message_at);
+
         if (type === 'SENT') {
+            if (!freeTextAllowed) {
+                return res.status(403).json({
+                    message: 'The 24-hour free-text window has closed. Please send an approved template instead.'
+                });
+            }
             if (!lead.phone) {
                 return res.status(400).json({ message: 'Lead phone number is required to send WhatsApp messages.' });
             }
@@ -270,7 +315,8 @@ const addMessage = async (req, res) => {
             try {
                 await sendWhatsAppMessage({
                     to: lead.phone,
-                    body: content
+                    body: content,
+                    clinicId: req.user.clinic_id
                 });
             } catch (error) {
                 console.error('WhatsApp send failed:', error);
@@ -284,6 +330,10 @@ const addMessage = async (req, res) => {
             isBusiness: isBusiness || false,
             leadId: lead.id
         });
+
+        if (type === 'RECEIVED') {
+            await Lead.update(lead.id, req.user.clinic_id, { lastInboundMessageAt: new Date() });
+        }
 
         // Update last contacted
         await Lead.updateLastContacted(lead.id);

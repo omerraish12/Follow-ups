@@ -16,8 +16,10 @@ import {
   Globe,
   UserCog,
   AlertCircle,
+  Activity,
   LogOut,
   User,
+  ServerCog,
   MoreVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -47,6 +49,8 @@ const navItemsConfig = [
   { to: "/team", icon: UserCog, labelKey: "team", permission: "team" },
   { to: "/notifications", icon: AlertCircle, labelKey: "notifications", permission: "notifications" },
   { to: "/settings", icon: Settings, labelKey: "settings", permission: "settings" },
+  { to: "/platform/analytics", icon: Activity, labelKey: "platform_analytics", permission: "platform" },
+  { to: "/platform/clinics", icon: ServerCog, labelKey: "platform_clinics", permission: "platform" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

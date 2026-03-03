@@ -9,6 +9,15 @@ const IntegrationLog = require('../models/IntegrationLog');
 const { query } = require('../config/database');
 const { sendTemplateMessage } = require('../services/whatsappService');
 const { getClinicAdminId } = require('../utils/clinicHelpers');
+const { canUseFreeText } = require('../utils/freeTextWindow');
+
+const THREE_WEEK_TEMPLATE_NAME = 'three_week_followup';
+const THREE_WEEK_TEMPLATE_LANGUAGE = 'en';
+const THREE_WEEK_TEMPLATE_MESSAGE = 'Hi {{1}}, it has been 3 weeks since your visit at our clinic. We wanted to check in—how are you feeling? Reply to this message if you have any questions!';
+const THREE_WEEK_TEMPLATE_COMPONENTS = [
+    { type: 'quick_reply', title: 'I feel great!', payload: 'feeling_great' },
+    { type: 'quick_reply', title: 'Need a call', payload: 'need_call' }
+];
 
 class CronJobs {
     init() {
@@ -22,6 +31,12 @@ class CronJobs {
         cron.schedule('0 * * * *', async () => {
             console.log('Running hourly automation check...');
             await this.runAutomations();
+        });
+
+        // Run every day at 9 AM for 3-week follow-ups
+        cron.schedule('0 9 * * *', async () => {
+            console.log('Running 3-week follow-up automation...');
+            await this.runThreeWeekFollowups();
         });
 
         console.log('Cron jobs initialized');
@@ -62,6 +77,70 @@ class CronJobs {
         }
     }
 
+    async runThreeWeekFollowups() {
+        try {
+            const targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() - 21);
+            const targetDay = targetDate.toISOString().split('T')[0];
+
+            const leadsResult = await query(
+            `SELECT *
+                 FROM leads
+                 WHERE last_visit_date::date = $1
+                   AND COALESCE(follow_up_sent, false) = false
+                   AND COALESCE(consent_given, false) = true
+                   AND phone IS NOT NULL`,
+                [targetDay]
+            );
+
+            for (const lead of leadsResult.rows) {
+                if (canUseFreeText(lead.last_inbound_message_at)) {
+                    continue;
+                }
+
+                try {
+                    await sendTemplateMessage({
+                        to: lead.phone,
+                        templateName: THREE_WEEK_TEMPLATE_NAME,
+                        language: THREE_WEEK_TEMPLATE_LANGUAGE,
+                        components: THREE_WEEK_TEMPLATE_COMPONENTS,
+                        body: THREE_WEEK_TEMPLATE_MESSAGE,
+                        clinicId: lead.clinic_id
+                    });
+                } catch (error) {
+                    console.error('3-week follow-up send failed for lead:', lead.id, error.response?.data || error.message);
+                    await IntegrationLog.create({
+                        type: 'follow_up_3week',
+                        message: error.response?.data?.message || error.message || '3-week follow-up failed',
+                        metadata: {
+                            leadId: lead.id,
+                            clinicId: lead.clinic_id,
+                            template: THREE_WEEK_TEMPLATE_NAME,
+                            error: error.response?.data || error.message
+                        },
+                        clinicId: lead.clinic_id
+                    });
+                    continue;
+                }
+
+                await query('UPDATE leads SET follow_up_sent = TRUE WHERE id = $1', [lead.id]);
+                await Lead.updateLastContacted(lead.id);
+
+                console.log(`3-week follow-up template sent to lead ${lead.id}`);
+            }
+        } catch (error) {
+            console.error('Error running 3-week follow-up automation:', error);
+            await IntegrationLog.create({
+                type: 'follow_up_3week',
+                message: error.message || '3-week follow-up job failed',
+                metadata: {
+                    error: error.stack || ''
+                }
+            });
+        }
+    }
+
+
     async runAutomations() {
         try {
             const automations = await Automation.getActiveAutomations();
@@ -76,6 +155,9 @@ class CronJobs {
 
     async processAutomation(automation) {
         try {
+            if (automation.template_status && automation.template_status !== 'approved') {
+                return;
+            }
             const adminId = await getClinicAdminId(automation.clinic_id);
             const triggerDays = Array.isArray(automation.trigger_days) ? automation.trigger_days : [3, 7, 14];
 
@@ -89,6 +171,7 @@ class CronJobs {
            WHERE l.clinic_id = $1 
              AND ($2::lead_status IS NULL OR l.status = $2::lead_status)
              AND COALESCE(l.last_contacted, l.created_at) <= $3
+             AND COALESCE(l.consent_given, false) = true
              AND NOT EXISTS (
                SELECT 1 FROM executions e 
                WHERE e.lead_id = l.id 
@@ -110,12 +193,13 @@ class CronJobs {
 
                     try {
                         await sendTemplateMessage({
-                            to: lead.phone,
-                            body: messageBody,
-                            templateName: automation.template_name || automation.name,
-                            language: automation.template_language || 'en',
-                            components: automation.components || [],
-                            mediaUrl: automation.media_url || undefined
+                          to: lead.phone,
+                          body: messageBody,
+                          templateName: automation.template_name || automation.name,
+                          language: automation.template_language || 'en',
+                          components: automation.components || [],
+                          mediaUrl: automation.media_url || undefined,
+                          clinicId: automation.clinic_id
                         });
                     } catch (error) {
                         console.error('Twilio sendTemplate failed for automation:', automation.id, error.response?.data || error.message || error);

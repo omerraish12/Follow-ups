@@ -5,7 +5,12 @@ class Lead {
         let sql = `
       SELECT l.*, 
              u.name as assigned_to_name,
-             (SELECT COUNT(*) FROM messages WHERE lead_id = l.id) as message_count
+             (SELECT COUNT(*) FROM messages WHERE lead_id = l.id) as message_count,
+             (SELECT content FROM messages WHERE lead_id = l.id ORDER BY timestamp DESC LIMIT 1) as last_message_content,
+             (SELECT timestamp FROM messages WHERE lead_id = l.id ORDER BY timestamp DESC LIMIT 1) as last_message_at,
+             (SELECT type FROM messages WHERE lead_id = l.id ORDER BY timestamp DESC LIMIT 1) as last_message_type,
+             (SELECT is_business FROM messages WHERE lead_id = l.id ORDER BY timestamp DESC LIMIT 1) as last_message_is_business,
+             (SELECT timestamp FROM messages WHERE lead_id = l.id AND type = 'RECEIVED' ORDER BY timestamp DESC LIMIT 1) as last_inbound_message_at
       FROM leads l
       LEFT JOIN users u ON l.assigned_to_id = u.id
       WHERE 1=1
@@ -56,9 +61,10 @@ class Lead {
 
     static async findById(id, clinicId) {
         const result = await query(
-            `SELECT l.*, 
+        `SELECT l.*, 
               u.name as assigned_to_name,
-              u.email as assigned_to_email
+              u.email as assigned_to_email,
+              (SELECT timestamp FROM messages WHERE lead_id = l.id AND type = 'RECEIVED' ORDER BY timestamp DESC LIMIT 1) as last_inbound_message_at
        FROM leads l
        LEFT JOIN users u ON l.assigned_to_id = u.id
        WHERE l.id = $1 AND l.clinic_id = $2`,
@@ -68,24 +74,44 @@ class Lead {
     }
 
     static async create(leadData) {
-        const {
-            name,
-            phone,
-            email,
-            service,
-            status = 'NEW',
-            source,
-            value,
-            notes,
-            nextFollowUp,
-            assignedToId,
-            clinicId
-        } = leadData;
-        const result = await query(
-            `INSERT INTO leads (name, phone, email, service, status, source, value, notes, next_follow_up, assigned_to_id, clinic_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+    const {
+        name,
+        phone,
+        email,
+        service,
+        status = 'NEW',
+        source,
+        value,
+        notes,
+        nextFollowUp,
+        assignedToId,
+        lastVisitDate,
+        followUpSent,
+        consentGiven,
+        consentTimestamp,
+        clinicId
+    } = leadData;
+    const result = await query(
+            `INSERT INTO leads (name, phone, email, service, status, source, value, notes, next_follow_up, last_visit_date, follow_up_sent, consent_given, consent_timestamp, assigned_to_id, clinic_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
        RETURNING *`,
-            [name, phone, email, service, status, source, value, notes, nextFollowUp || null, assignedToId, clinicId]
+            [
+                name,
+                phone,
+                email,
+                service,
+                status,
+                source,
+                value,
+                notes,
+                nextFollowUp || null,
+                lastVisitDate || null,
+                followUpSent || false,
+                consentGiven || false,
+                consentTimestamp || null,
+                assignedToId,
+                clinicId
+            ]
         );
         return result.rows[0];
     }
@@ -112,7 +138,12 @@ class Lead {
                 let dbKey = key;
                 if (key === 'assignedToId') dbKey = 'assigned_to_id';
                 if (key === 'lastContacted') dbKey = 'last_contacted';
+                if (key === 'lastInboundMessageAt') dbKey = 'last_inbound_message_at';
                 if (key === 'nextFollowUp') dbKey = 'next_follow_up';
+                if (key === 'lastVisitDate') dbKey = 'last_visit_date';
+                if (key === 'followUpSent') dbKey = 'follow_up_sent';
+                if (key === 'consentGiven') dbKey = 'consent_given';
+                if (key === 'consentTimestamp') dbKey = 'consent_timestamp';
 
                 fields.push(`${dbKey} = $${paramIndex}`);
                 values.push(value);

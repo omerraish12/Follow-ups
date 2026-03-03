@@ -25,4 +25,12 @@ export interface Lead {
   assigned_to?: string;
   assigned_to_name?: string;
   messages?: LeadMessage[];
+  last_message_content?: string;
+  last_message_at?: string;
+  last_message_type?: string;
+  last_message_is_business?: boolean;
+  last_inbound_message_at?: string;
+  can_use_free_text?: boolean;
+  consent_given?: boolean;
+  consent_timestamp?: string;
 }

@@ -29,6 +29,8 @@ import WhatsAppIntegration from "@/pages/WhatsAppIntegration";
 import TeamManagement from "@/pages/TeamManagement";
 import NotificationsCenter from "@/pages/NotificationsCenter";
 import SettingsPage from "@/pages/Settings";
+import PlatformClinics from "@/pages/PlatformClinics";
+import PlatformAnalytics from "@/pages/PlatformAnalytics";
 import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 
@@ -159,6 +161,32 @@ const App = () => {
                         <AppLayout>
                           <ErrorBoundary>
                             <SettingsPage />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/platform/clinics"
+                    element={
+                      <ProtectedRoute permission="platform">
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <PlatformClinics />
+                          </ErrorBoundary>
+                        </AppLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/platform/analytics"
+                    element={
+                      <ProtectedRoute permission="platform">
+                        <AppLayout>
+                          <ErrorBoundary>
+                            <PlatformAnalytics />
                           </ErrorBoundary>
                         </AppLayout>
                       </ProtectedRoute>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, Phone, Mail, Calendar, MessageSquare, Clock, Tag, User, Building, Edit, Trash2 } from 'lucide-react';
+import { ArrowRight, Phone, Mail, Calendar, MessageSquare, Clock, Tag, User, Building, Edit, Trash2, Send } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
+import { Label } from './ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Switch } from './ui/switch';
 import { toast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -21,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
+import { whatsappService, type WhatsAppTemplate } from '@/services/whatsappService';
 
 interface Lead {
   id: string;
@@ -72,12 +76,76 @@ export default function LeadDetail({
   const [isLoading, setIsLoading] = useState<boolean>(!propLead);
   const [newMessage, setNewMessage] = useState<string>('');
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState<boolean>(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(null);
+  const [isSendingTemplate, setIsSendingTemplate] = useState<boolean>(false);
+  const [isUpdatingConsent, setIsUpdatingConsent] = useState<boolean>(false);
 
   useEffect(() => {
     if (!propLead && id) {
       loadLead();
     }
   }, [id, propLead]);
+
+  useEffect(() => {
+    if (!propLead) {
+      return;
+    }
+
+    setLead(propLead);
+
+    if (propLead.messages && propLead.messages.length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const detailedLead = await getLead(propLead.id);
+        if (!cancelled) {
+          setLead(detailedLead);
+        }
+      } catch (error) {
+        console.error("Failed to refresh lead messages:", error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [propLead, getLead]);
+
+  useEffect(() => {
+    if (!lead || lead.can_use_free_text) {
+      setTemplates([]);
+      setSelectedTemplate(null);
+      setTemplatesError(null);
+      return;
+    }
+
+    if (templatesLoading || templates.length > 0) {
+      return;
+    }
+
+    const fetchTemplates = async () => {
+      setTemplatesLoading(true);
+      setTemplatesError(null);
+      try {
+        const config = await whatsappService.getConfig();
+        setTemplates(config.templates || []);
+      } catch (error) {
+        console.error('Failed to load WhatsApp templates:', error);
+        setTemplatesError(t("template_fetch_error"));
+      } finally {
+        setTemplatesLoading(false);
+      }
+    };
+
+    fetchTemplates();
+  }, [lead?.id, lead?.can_use_free_text, templates.length, templatesLoading, t]);
 
   const loadLead = async (): Promise<void> => {
     setIsLoading(true);
@@ -125,6 +193,74 @@ export default function LeadDetail({
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      toast({
+        title: t("error"),
+        description: error?.response?.data?.message || t("free_text_window_closed_hint"),
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSendTemplate = async (): Promise<void> => {
+    if (!lead || !selectedTemplate) return;
+
+    if (!lead.phone) {
+      toast({
+        title: t("error"),
+        description: t("lead_phone_required"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSendingTemplate(true);
+    try {
+      await whatsappService.sendTemplate({
+        to: lead.phone,
+        templateName: selectedTemplate.name,
+        language: selectedTemplate.language || "en",
+      });
+      toast({
+        title: t("message_sent"),
+        description: t("template_send_success"),
+      });
+      setSelectedTemplate(null);
+      await loadLead();
+    } catch (error) {
+      console.error('Error sending template:', error);
+      toast({
+        title: t("error"),
+        description: t("template_send_failure"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingTemplate(false);
+    }
+  };
+
+  const handleConsentToggle = async (value: boolean): Promise<void> => {
+    if (!lead) return;
+    setIsUpdatingConsent(true);
+    try {
+      const updatedLead = await updateLead(lead.id, {
+        consentGiven: value,
+        consentTimestamp: value ? new Date().toISOString() : null
+      });
+      setLead(updatedLead);
+      toast({
+        title: t("success"),
+        description: t("consent_status_saved")
+      });
+      onUpdate?.(lead.id, updatedLead);
+    } catch (error) {
+      console.error("Error updating consent:", error);
+      toast({
+        title: t("error"),
+        description: t("consent_update_failed"),
+        variant: "destructive"
+      });
+    } finally {
+      setIsUpdatingConsent(false);
     }
   };
 
@@ -156,6 +292,28 @@ export default function LeadDetail({
       minute: '2-digit'
     });
   };
+
+  const FREE_TEXT_WINDOW_DURATION = 24 * 60 * 60 * 1000;
+  const freeTextOpen = Boolean(lead?.can_use_free_text);
+  const consentLabel = lead?.consent_given ? t("consent_banner_granted") : t("consent_banner_missing");
+  const consentBadgeClasses = lead?.consent_given
+    ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+    : 'bg-destructive/10 text-destructive border-destructive/20';
+  const lastInboundDate = lead?.last_inbound_message_at
+    ? new Date(lead.last_inbound_message_at)
+    : null;
+  const windowExpiresAt = lastInboundDate
+    ? new Date(lastInboundDate.getTime() + FREE_TEXT_WINDOW_DURATION)
+    : null;
+  const formattedWindowExpires = windowExpiresAt
+    ? windowExpiresAt.toLocaleString(language === 'he' ? 'he-IL' : 'en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    : null;
 
   if (isLoading) {
     return (
@@ -217,6 +375,17 @@ export default function LeadDetail({
                       <Badge variant="outline">{lead.source}</Badge>
                     )}
                   </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="outline" className={`px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${consentBadgeClasses}`}>
+                      {consentLabel}
+                    </Badge>
+                    <Switch
+                      checked={Boolean(lead?.consent_given)}
+                      onCheckedChange={(value) => handleConsentToggle(value)}
+                      disabled={isUpdatingConsent}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t("consent_description")}</p>
                 </div>
               </div>
               {lead.value && lead.value > 0 && (
@@ -319,6 +488,29 @@ export default function LeadDetail({
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={`px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${
+                    freeTextOpen
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                      : 'bg-warning/10 text-warning border-warning/20'
+                  }`}
+                >
+                  {freeTextOpen ? t("free_text_window_open") : t("free_text_window_closed")}
+                </Badge>
+                {freeTextOpen && formattedWindowExpires && (
+                  <span className="text-xs text-muted-foreground">
+                    {t("free_text_window_expires_at").replace("{time}", formattedWindowExpires)}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {freeTextOpen ? t("free_text_window_open_hint") : t("free_text_window_closed_hint")}
+              </p>
+            </div>
+
             {/* Message List */}
             <div className="space-y-3 max-h-96 overflow-y-auto p-2">
               {lead.messages && lead.messages.length > 0 ? (
@@ -357,21 +549,71 @@ export default function LeadDetail({
             {/* New Message Input */}
             <div className="flex gap-2 pt-4 border-t">
               <Textarea
-                placeholder={t("write_new_message")}
+                placeholder={freeTextOpen ? t("write_new_message") : t("free_text_window_closed_hint")}
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 className="flex-1"
                 rows={2}
+                disabled={!freeTextOpen}
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() || !freeTextOpen}
                 className="self-end"
               >
                 <MessageSquare className="h-4 w-4 ml-2" />
                 {t("send")}
               </Button>
             </div>
+
+            {!freeTextOpen && (
+              <div className="space-y-3 border-t pt-4">
+                <Label
+                  htmlFor="template-select"
+                  className="text-[10px] font-semibold uppercase tracking-[0.3em] text-muted-foreground"
+                >
+                  {t("free_text_window_template_label")}
+                </Label>
+                {templatesLoading ? (
+                  <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground text-center">
+                    {t("loading")}
+                  </div>
+                ) : templates.length > 0 ? (
+                  <Select
+                    value={selectedTemplate?.id || ''}
+                    onValueChange={(value) => {
+                      const template = templates.find((item) => item.id === value);
+                      setSelectedTemplate(template || null);
+                    }}
+                    id="template-select"
+                  >
+                    <SelectTrigger className="rounded-2xl border border-border bg-white px-4 py-3 text-slate-900 shadow-sm">
+                      <SelectValue placeholder={t("template_select_placeholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.map((template) => (
+                        <SelectItem key={template.id} value={template.id}>
+                          {template.name}
+                          {template.language ? ` (${template.language.toUpperCase()})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/10 px-4 py-3 text-xs text-muted-foreground text-center">
+                    {templatesError || t("template_select_empty")}
+                  </div>
+                )}
+                <Button
+                  onClick={handleSendTemplate}
+                  disabled={!selectedTemplate || isSendingTemplate || templatesLoading}
+                  className="self-end"
+                >
+                  <Send className="h-4 w-4 ml-2" />
+                  {t("send_template_message")}
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

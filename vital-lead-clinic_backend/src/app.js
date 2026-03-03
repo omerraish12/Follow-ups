@@ -15,6 +15,7 @@ const whatsappRoutes = require('./routes/whatsappRoutes');
 const pricingRoutes = require('./routes/pricingRoutes');
 const logRoutes = require('./routes/logRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const platformRoutes = require('./routes/platformRoutes');
 
 const requestLogger = require('./middleware/requestLogger');
 const app = express();
@@ -69,6 +70,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/pricing', pricingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/logs', logRoutes);
+app.use('/api/platform', platformRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -95,8 +95,15 @@ export const settingsService = {
     return response.data;
   },
 
-  exportData: async (format: "csv" | "json" | "pdf" = "json") => {
-    const response = await api.post("/settings/export", { format }, { responseType: "blob" });
+  exportData: async (
+    format: "csv" | "json" | "pdf" = "json",
+    filters: Record<string, unknown> = {}
+  ) => {
+    const response = await api.post(
+      "/settings/export",
+      { format, filters },
+      { responseType: "blob" }
+    );
     return response;
   },
 

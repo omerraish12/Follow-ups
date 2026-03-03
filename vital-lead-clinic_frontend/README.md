@@ -32,3 +32,8 @@ React/Vite application for the clinic UI (dashboard, leads, automations, notific
 ## Notes
 - The frontend automatically reads the user's language preference from `localStorage`. To force a language in development, set `localStorage.setItem("language", "he")` in the console.
 - Toggle the WhatsApp and notification UI by ensuring the backend has the required API keys configured (`WHATSAPP_*` in the backend `.env`).
+
+## Automation & WhatsApp workflow
+- Automations exist to follow up patients who haven't replied or booked (for example, after two weeks send a templated reminder). Each rule uses the WhatsApp builder template, runs on a schedule, and records replies so the CRM updates lead status automatically.
+- Automations exist to follow up patients who haven't replied or booked (for example, after two weeks send a templated reminder). Each rule uses the WhatsApp builder template you choose (default ones are provided but you can edit or clone them) and runs on a schedule so replies update the CRM and the next automation fires automatically.
+- WhatsApp messages are sent through Twilio but appear to patients as the clinic’s configured WhatsApp number (`TWILIO_WHATSAPP_FROM` / messaging service SID). The integration page surfaces that sender so clinics know which number is being used.

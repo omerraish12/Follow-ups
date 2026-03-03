@@ -1,12 +1,12 @@
 // src/pages/Leads.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search, MessageSquare, Phone, ChevronLeft, Users, Trash2,
   Clock, AlertCircle, Filter, Download, Mail, CheckCircle,
   XCircle, Calendar, Tag, Star, TrendingUp, Bell,
-  Loader2, Plus, Edit, Eye
+  Loader2, Plus, Edit, Eye, Info
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import StatusBadge from "@/components/StatusBadge";
 import LeadDetail from "@/components/LeadDetail";
@@ -44,9 +44,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Lead, LeadStatus } from "@/types/leads";
 import { Progress } from "@/components/ui/progress";
+import { whatsappService } from "@/services/whatsappService";
 
 export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
 
@@ -89,6 +92,11 @@ export default function Leads() {
     getFollowupNeeded
   } = useLeads();
 
+  const [latestMessageTimestamp, setLatestMessageTimestamp] = useState<string | null>(null);
+  const latestMessageRef = useRef<string | null>(null);
+
+  const focusLeadIdFromState = (location.state as { focusLeadId?: string } | null)?.focusLeadId;
+
   // Load follow-up count
   const [followupCount, setFollowupCount] = useState(0);
 
@@ -104,6 +112,44 @@ export default function Leads() {
   useEffect(() => {
     loadFollowupCount();
   }, [loadFollowupCount]);
+
+  useEffect(() => {
+    if (!focusLeadIdFromState) {
+      return;
+    }
+
+    let didCancel = false;
+    let clearedState = false;
+    const clearLocationState = () => {
+      if (clearedState) {
+        return;
+      }
+      clearedState = true;
+      navigate(location.pathname, { replace: true, state: undefined });
+    };
+
+    if (selectedLead?.id === focusLeadIdFromState) {
+      clearLocationState();
+      return;
+    }
+
+    (async () => {
+      try {
+        const lead = await leadService.getLead(focusLeadIdFromState);
+        if (!didCancel) {
+          setSelectedLead(lead);
+        }
+      } catch (error) {
+        console.error("Failed to load lead from notification:", error);
+      } finally {
+        clearLocationState();
+      }
+    })();
+
+    return () => {
+      didCancel = true;
+    };
+  }, [focusLeadIdFromState, selectedLead?.id, location.pathname, navigate]);
 
   // Update filters when search/filter changes
   useEffect(() => {
@@ -125,6 +171,26 @@ export default function Leads() {
     setSearchParams(params);
 
   }, [search, activeFilter, sourceFilter]);
+
+  const refreshLatestMessageTimestamp = useCallback(async () => {
+    try {
+      const data = await whatsappService.getLatestMessageTimestamp();
+      const normalized = data?.last_message_at || null;
+      if (latestMessageRef.current && normalized && normalized !== latestMessageRef.current) {
+        await fetchLeads();
+      }
+      latestMessageRef.current = normalized;
+      setLatestMessageTimestamp(normalized);
+    } catch (err) {
+      console.error("Error fetching latest WhatsApp message timestamp:", err);
+    }
+  }, [fetchLeads]);
+
+  useEffect(() => {
+    refreshLatestMessageTimestamp();
+    const interval = setInterval(refreshLatestMessageTimestamp, 10000);
+    return () => clearInterval(interval);
+  }, [refreshLatestMessageTimestamp]);
 
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -188,11 +254,21 @@ export default function Leads() {
     return true;
   };
 
-  const leadsAfterFollowupFilter = activeFilter === 'followup'
-    ? leads.filter(needsFollowup)
-    : leads;
+  const filteredByStatus = leads.filter((lead) => {
+    if (activeFilter === "all") {
+      return true;
+    }
+    if (activeFilter === "followup") {
+      return needsFollowup(lead);
+    }
+    return lead.status === activeFilter;
+  });
 
-  const filteredLeads = leadsAfterFollowupFilter.filter(matchesDateRange);
+  const formattedLatestMessage = latestMessageTimestamp
+    ? new Date(latestMessageTimestamp).toLocaleString()
+    : null;
+
+  const filteredLeads = filteredByStatus.filter(matchesDateRange);
 
   // Stats
   const newCount = leads.filter(l => l.status === 'NEW').length;
@@ -379,30 +455,54 @@ export default function Leads() {
   // Loading state
   if (isLoading && !leads.length) {
     return (
-      <div className="space-y-6">
-        {/* Header skeleton */}
-        <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-32" />
+      <>
+        <div className="space-y-6">
+          {/* Header skeleton */}
+          <div className="flex justify-between items-center">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+
+          {/* Stats skeletons */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-32 rounded-2xl" />
+            ))}
+          </div>
+
+          {/* Filters skeleton */}
+          <div className="flex gap-3">
+            <Skeleton className="h-10 flex-1 rounded-xl" />
+            <Skeleton className="h-10 w-32 rounded-xl" />
+            <Skeleton className="h-10 w-32 rounded-xl" />
+          </div>
+
+          {/* Table skeleton */}
+          <Skeleton className="h-96 rounded-2xl" />
         </div>
 
-        {/* Stats skeletons */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-32 rounded-2xl" />
-          ))}
-        </div>
-
-        {/* Filters skeleton */}
-        <div className="flex gap-3">
-          <Skeleton className="h-10 flex-1 rounded-xl" />
-          <Skeleton className="h-10 w-32 rounded-xl" />
-          <Skeleton className="h-10 w-32 rounded-xl" />
-        </div>
-
-        {/* Table skeleton */}
-        <Skeleton className="h-96 rounded-2xl" />
-      </div>
+        <Card className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground shadow-sm">
+          <div className="flex items-start gap-2">
+            <Info className="h-4 w-4 text-primary" />
+            <div>
+              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                {t("whatsapp_incoming_highlight_title")}
+              </p>
+              <p className="text-[13px] mt-1 text-foreground font-semibold">
+                {t("whatsapp_incoming_highlight_description")}
+              </p>
+              {formattedLatestMessage && (
+                <p className="text-[11px] mt-1 text-muted-foreground">
+                  {t("whatsapp_last_message_time").replace("%s", formattedLatestMessage)}
+                </p>
+              )}
+              <p className="text-[11px] mt-1 text-muted-foreground">
+                {t("whatsapp_incoming_auto_note")}
+              </p>
+            </div>
+          </div>
+        </Card>
+      </>
     );
   }
 
@@ -454,6 +554,28 @@ export default function Leads() {
           <AddLeadDialog open={addLeadOpen} onOpenChange={setAddLeadOpen} onSuccess={handleLeadCreated} />
         </div>
       </div>
+
+      <Card className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground shadow-sm">
+        <div className="flex items-start gap-2">
+          <Info className="h-4 w-4 text-primary" />
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              {t("whatsapp_incoming_highlight_title")}
+            </p>
+            <p className="text-[13px] mt-1 text-foreground font-semibold">
+              {t("whatsapp_incoming_highlight_description")}
+            </p>
+            {formattedLatestMessage && (
+              <p className="text-[11px] mt-1 text-muted-foreground">
+                {t("whatsapp_last_message_time").replace("%s", formattedLatestMessage)}
+              </p>
+            )}
+            <p className="text-[11px] mt-1 text-muted-foreground">
+              {t("whatsapp_incoming_auto_note")}
+            </p>
+          </div>
+        </div>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -621,10 +743,20 @@ export default function Leads() {
 
       {/* Mobile Cards */}
       <div className="space-y-3 lg:hidden">
-        {filteredLeads.map((lead) => {
-          const followupDays = getFollowupAgeDays(lead);
-          const daysSinceLastContact = followupDays !== null ? Math.floor(followupDays) : 0;
-          const needsFollowupFlag = needsFollowup(lead);
+          {filteredLeads.map((lead) => {
+            const followupDays = getFollowupAgeDays(lead);
+            const daysSinceLastContact = followupDays !== null ? Math.floor(followupDays) : 0;
+            const needsFollowupFlag = needsFollowup(lead);
+            const freeTextOpen = Boolean(lead.can_use_free_text);
+            const windowBadgeLabel = freeTextOpen ? t("free_text_window_open") : t("free_text_window_closed");
+            const windowBadgeClasses = freeTextOpen
+              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              : 'bg-warning/10 text-warning border-warning/20';
+            const consentGiven = Boolean(lead.consent_given);
+            const consentBadgeLabel = consentGiven ? t("consent_banner_granted") : t("consent_banner_missing");
+            const consentBadgeClasses = consentGiven
+              ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+              : 'bg-destructive/10 text-destructive border-destructive/20';
 
           return (
             <div
@@ -678,6 +810,23 @@ export default function Leads() {
                 </div>
               )}
 
+              <div className="mt-2">
+                <Badge
+                  variant="outline"
+                  className={`px-2 py-1 text-[10px] uppercase tracking-[0.2em] ${windowBadgeClasses}`}
+                >
+                  {windowBadgeLabel}
+                </Badge>
+              </div>
+              <div className="mt-2">
+                <Badge
+                  variant="outline"
+                  className={`px-2 py-1 text-[10px] uppercase tracking-[0.2em] ${consentBadgeClasses}`}
+                >
+                  {consentBadgeLabel}
+                </Badge>
+              </div>
+
               <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
@@ -720,6 +869,8 @@ export default function Leads() {
                 <th className="px-5 py-3.5 text-center font-semibold">{t("table_value")}</th>
                 <th className="px-5 py-3.5 text-center font-semibold">{t("table_last_message")}</th>
                 <th className="px-5 py-3.5 text-center font-semibold">{t("table_followup")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("table_free_text_window")}</th>
+                <th className="px-5 py-3.5 text-center font-semibold">{t("consent_label")}</th>
                 <th className="px-5 py-3.5"></th>
               </tr>
             </thead>
@@ -728,6 +879,11 @@ export default function Leads() {
                 const followupDays = getFollowupAgeDays(lead);
                 const daysSinceLastContact = followupDays !== null ? Math.floor(followupDays) : 0;
                 const needsFollowupFlag = needsFollowup(lead);
+                const freeTextOpen = Boolean(lead.can_use_free_text);
+                const windowBadgeLabel = freeTextOpen ? t("free_text_window_open") : t("free_text_window_closed");
+                const windowBadgeClasses = freeTextOpen
+                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                  : 'bg-warning/10 text-warning border-warning/20';
                 const lastMessageLabel = lead.last_contacted
                   ? daysSinceLastContact === 0
                     ? t("today")
@@ -735,6 +891,11 @@ export default function Leads() {
                       ? t("yesterday")
                       : `${daysSinceLastContact} ${t("days_ago")}`
                   : t("no_messages");
+                const consentGiven = Boolean(lead.consent_given);
+                const consentBadgeLabel = consentGiven ? t("consent_banner_granted") : t("consent_banner_missing");
+                const consentBadgeClasses = consentGiven
+                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                  : 'bg-destructive/10 text-destructive border-destructive/20';
 
                 return (
                   <tr
@@ -775,9 +936,14 @@ export default function Leads() {
                       ₪{(lead.value || 0).toLocaleString()}
                     </td>
                     <td className="px-5 py-3.5 text-center max-w-[200px]">
-                      <div className="flex items-center justify-center gap-1">
-                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="text-xs text-muted-foreground truncate">{lastMessageLabel}</span>
+                      <div className="flex flex-col items-center justify-center gap-1 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-xs text-muted-foreground">{lastMessageLabel}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground max-w-[160px] line-clamp-2 text-center">
+                          {lead.last_message_content || t("no_messages")}
+                        </p>
                       </div>
                     </td>
                     <td className="px-5 py-3.5 text-center">
@@ -792,6 +958,22 @@ export default function Leads() {
                           {t("status_up_to_date")}
                         </Badge>
                       )}
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <Badge
+                        variant="outline"
+                        className={`px-2 py-1 text-[10px] uppercase tracking-[0.2em] ${windowBadgeClasses}`}
+                      >
+                        {windowBadgeLabel}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <Badge
+                        variant="outline"
+                        className={`px-2 py-1 text-[10px] uppercase tracking-[0.2em] ${consentBadgeClasses}`}
+                      >
+                        {consentBadgeLabel}
+                      </Badge>
                     </td>
                     <td className="px-5 py-3.5 text-center">
                       <DropdownMenu>

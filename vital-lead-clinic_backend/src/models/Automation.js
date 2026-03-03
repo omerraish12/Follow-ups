@@ -40,8 +40,51 @@ const DEFAULT_AUTOMATIONS = Object.freeze([
         targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
+    },
+    {
+        name: '3-Week Follow-up',
+        triggerDays: [21],
+        message: 'Hi {name}, it has been 3 weeks since your visit at our clinic. We wanted to check in—how are you feeling? Reply to this message if you have any questions!',
+        templateName: 'three_week_followup',
+        templateLanguage: 'en',
+        notifyOnReply: true,
+        personalization: ['name'],
+        components: [
+            { type: 'quick_reply', title: 'I feel great!', payload: 'feeling_great' },
+            { type: 'quick_reply', title: 'Need a call', payload: 'need_call' }
+        ],
+        template_status: 'approved'
     }
 ]);
+
+const normalizeComponents = (components) => {
+    if (Array.isArray(components)) {
+        return components;
+    }
+    if (!components) {
+        return [];
+    }
+    if (typeof components === 'string') {
+        try {
+            const parsed = JSON.parse(components);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    return [];
+};
+
+const formatAutomationRow = (row) => {
+    if (!row) {
+        return null;
+    }
+    return {
+        ...row,
+        components: normalizeComponents(row.components),
+        template_status: row.template_status || 'pending'
+    };
+};
 
 class Automation {
     static async findAll(clinicId) {
@@ -49,7 +92,7 @@ class Automation {
             `SELECT * FROM automations WHERE clinic_id = $1 ORDER BY created_at DESC`,
             [clinicId]
         );
-        return result.rows;
+        return result.rows.map(formatAutomationRow);
     }
 
     static async findById(id, clinicId) {
@@ -75,14 +118,17 @@ class Automation {
             templateLanguage,
             mediaUrl,
             components,
+            templateStatus,
+            templateSid,
+            templateApprovalSid,
             clinicId
         } = automationData;
 
-        const normalizedComponents = JSON.stringify(Array.isArray(components) ? components : []);
+        const normalizedComponents = normalizeComponents(components);
         const result = await query(
             `INSERT INTO automations 
-            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
        RETURNING *`,
             [
                 name,
@@ -95,10 +141,13 @@ class Automation {
                 targetStatus,
                 notifyOnReply,
                 personalization,
-                clinicId
+                clinicId,
+                templateStatus || 'pending',
+                templateSid || null,
+                templateApprovalSid || null
             ]
         );
-        return result.rows[0];
+        return formatAutomationRow(result.rows[0]);
     }
 
     static getDefaultAutomationPayloads() {
@@ -151,10 +200,13 @@ class Automation {
                 if (key === 'templateLanguage') dbKey = 'template_language';
                 if (key === 'mediaUrl') dbKey = 'media_url';
                 if (key === 'components') dbKey = 'components';
+                if (key === 'templateStatus') dbKey = 'template_status';
+                if (key === 'templateSid') dbKey = 'template_sid';
+                if (key === 'templateApprovalSid') dbKey = 'template_approval_sid';
 
                 let normalizedValue = value;
                 if (key === 'components') {
-                    normalizedValue = JSON.stringify(Array.isArray(value) ? value : []);
+                    normalizedValue = normalizeComponents(value);
                 }
 
                 fields.push(`${dbKey} = $${paramIndex}`);
@@ -171,7 +223,7 @@ class Automation {
        WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1} RETURNING *`,
             values
         );
-        return result.rows[0];
+        return formatAutomationRow(result.rows[0]);
     }
 
     static async delete(id, clinicId) {
@@ -191,6 +243,41 @@ class Automation {
             [id, clinicId]
         );
         return result.rows[0];
+    }
+
+    static async updateTemplateMetadata(id, clinicId, metadata = {}) {
+        const fields = [];
+        const values = [];
+        let paramIndex = 1;
+
+        const mapping = {
+            templateStatus: 'template_status',
+            templateSid: 'template_sid',
+            templateApprovalSid: 'template_approval_sid'
+        };
+
+        for (const [key, value] of Object.entries(metadata)) {
+            if (value === undefined) continue;
+            const dbKey = mapping[key];
+            if (!dbKey) continue;
+            fields.push(`${dbKey} = $${paramIndex}`);
+            values.push(value);
+            paramIndex++;
+        }
+
+        if (!fields.length) {
+            return null;
+        }
+
+        values.push(id, clinicId);
+        const result = await query(
+            `UPDATE automations 
+       SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP 
+       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1} RETURNING *`,
+            values
+        );
+
+        return formatAutomationRow(result.rows[0]);
     }
 
     static async getActiveAutomations() {

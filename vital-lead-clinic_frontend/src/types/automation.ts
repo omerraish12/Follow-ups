@@ -1,5 +1,13 @@
 import { LeadStatus } from "./leads";
 
+export type AutomationStatus = "pending" | "approved" | "rejected" | string;
+
+export interface AutomationComponent {
+  type: "quick_reply";
+  title: string;
+  payload?: string;
+}
+
 export interface Automation {
   id: string;
   name: string;
@@ -15,6 +23,10 @@ export interface Automation {
   last_executed?: string;
   created_at?: string;
   updated_at?: string;
+  template_name?: string;
+  template_language?: string;
+  template_status?: AutomationStatus;
+  components?: AutomationComponent[];
 }
 
 export interface AutomationPerformanceResponse {

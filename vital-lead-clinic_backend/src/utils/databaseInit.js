@@ -12,6 +12,17 @@ async function initializeDatabase() {
         WHEN duplicate_object THEN null;
       END $$;
     `);
+        await query(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_enum
+          WHERE enumtypid = 'user_role'::regtype
+            AND enumlabel = 'SUPER_ADMIN'
+        ) THEN
+          ALTER TYPE user_role ADD VALUE 'SUPER_ADMIN';
+        END IF;
+      END $$;
+    `);
 
         await query(`
       DO $$ BEGIN
@@ -94,7 +105,7 @@ async function initializeDatabase() {
 
         // Create leads table
         await query(`
-      CREATE TABLE IF NOT EXISTS leads (
+        CREATE TABLE IF NOT EXISTS leads (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) NOT NULL,
@@ -105,13 +116,21 @@ async function initializeDatabase() {
         value DECIMAL(10,2) DEFAULT 0,
         notes TEXT,
         last_contacted TIMESTAMP,
+        last_inbound_message_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         clinic_id INTEGER REFERENCES clinics(id) ON DELETE CASCADE,
-        assigned_to_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+        assigned_to_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        consent_given BOOLEAN DEFAULT FALSE,
+        consent_timestamp TIMESTAMP
       );
     `);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS next_follow_up TIMESTAMP;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_inbound_message_at TIMESTAMP;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_visit_date DATE;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_sent BOOLEAN DEFAULT FALSE;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_given BOOLEAN DEFAULT FALSE;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_timestamp TIMESTAMP;`);
 
         // Create messages table
         await query(`
@@ -155,6 +174,9 @@ async function initializeDatabase() {
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_language VARCHAR(10) DEFAULT 'en';`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS media_url TEXT;`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS components JSONB DEFAULT '[]'::jsonb;`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_status VARCHAR(32) DEFAULT 'pending';`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_sid VARCHAR(64);`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_approval_sid VARCHAR(64);`);
 
         // Create executions table
         await query(`

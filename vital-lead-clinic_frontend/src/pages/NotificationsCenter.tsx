@@ -211,17 +211,38 @@ export default function NotificationsCenter() {
         }
     }, [markAsRead]);
 
+    const handleInternalNotificationLink = useCallback((link: string) => {
+        try {
+            const url = new URL(link, window.location.origin);
+            if (url.origin !== window.location.origin) {
+                return false;
+            }
+            const leadMatch = url.pathname.match(/^\/leads\/([^\/]+)/);
+            if (leadMatch) {
+                navigate("/leads", { state: { focusLeadId: leadMatch[1] } });
+                return true;
+            }
+            navigate(`${url.pathname}${url.search}`, { replace: false });
+            return true;
+        } catch {
+            return false;
+        }
+    }, [navigate]);
+
     const handleNotificationActionClick = useCallback(async (notification: NotificationItem) => {
         await markNotificationSilentRead(notification);
         if (notification.actionLink) {
+            if (handleInternalNotificationLink(notification.actionLink)) {
+                return;
+            }
             window.location.href = notification.actionLink;
             return;
         }
         const leadId = notification.metadata?.leadId;
         if (leadId) {
-            navigate(`/leads/${leadId}`);
+            navigate("/leads", { state: { focusLeadId: String(leadId) } });
         }
-    }, [markNotificationSilentRead, navigate]);
+    }, [markNotificationSilentRead, handleInternalNotificationLink]);
 
     const filteredNotifications: NotificationItem[] = notifications.filter(n => {
         if (filter === 'unread') return !n.read;

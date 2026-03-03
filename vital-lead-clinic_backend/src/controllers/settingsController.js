@@ -10,25 +10,29 @@ const TWILIO_SANDBOX_JOIN_CODE = process.env.TWILIO_SANDBOX_JOIN_CODE || 'join w
 const TWILIO_SANDBOX_NUMBER =
     process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
 
+const defaultWhatsappIntegration = {
+    status: 'disconnected',
+    sandbox: {
+        joinCode: TWILIO_SANDBOX_JOIN_CODE,
+        number: TWILIO_SANDBOX_NUMBER,
+        link: TWILIO_SANDBOX_URL,
+        lastJoinedAt: null
+    },
+    templates: [],
+    lastConnectedAt: null,
+    updatedAt: null,
+    accountSid: null,
+    authToken: null,
+    messagingServiceSid: null,
+    whatsappFrom: null
+};
+
 const mergeWhatsappDefaults = (whatsapp = {}) => {
     return {
-        ...{
-            status: 'disconnected',
-            sandbox: {
-                joinCode: TWILIO_SANDBOX_JOIN_CODE,
-                number: TWILIO_SANDBOX_NUMBER,
-                link: TWILIO_SANDBOX_URL,
-                lastJoinedAt: null
-            }
-        },
+        ...defaultWhatsappIntegration,
         ...whatsapp,
         sandbox: {
-            ...{
-                joinCode: TWILIO_SANDBOX_JOIN_CODE,
-                number: TWILIO_SANDBOX_NUMBER,
-                link: TWILIO_SANDBOX_URL,
-                lastJoinedAt: null
-            },
+            ...defaultWhatsappIntegration.sandbox,
             ...(whatsapp.sandbox || {})
         }
     };
@@ -118,6 +122,76 @@ const collectClinicData = async (clinicId) => {
     };
 };
 
+const parseDateFilter = (value) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const collectConversationHistory = async (clinicId, filters = {}) => {
+    const whereClauses = ['l.clinic_id = $1'];
+    const values = [clinicId];
+    let paramIndex = 2;
+
+    const startDate = parseDateFilter(filters.startDate);
+    if (startDate) {
+        whereClauses.push(`m.timestamp >= $${paramIndex}`);
+        values.push(startDate);
+        paramIndex++;
+    }
+
+    const endDate = parseDateFilter(filters.endDate);
+    if (endDate) {
+        whereClauses.push(`m.timestamp <= $${paramIndex}`);
+        values.push(endDate);
+        paramIndex++;
+    }
+
+    const messageType = (filters.messageType || '').toString().trim().toUpperCase();
+    if (messageType && ['SENT', 'RECEIVED'].includes(messageType)) {
+        whereClauses.push(`m.type = $${paramIndex}`);
+        values.push(messageType);
+        paramIndex++;
+    }
+
+    const limitValue = Math.min(Math.max(parseInt(filters.limit, 10) || 1000, 1), 5000);
+
+    const result = await query(
+        `SELECT m.*, l.name as lead_name, l.phone as lead_phone
+         FROM messages m
+         JOIN leads l ON l.id = m.lead_id
+         WHERE ${whereClauses.join(' AND ')}
+         ORDER BY m.timestamp DESC
+         LIMIT $${paramIndex}`,
+        [...values, limitValue]
+    );
+
+    return result.rows;
+};
+
+const escapeCsvValue = (value) => {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    const text = String(value).replace(/"/g, '""');
+    return /[",\n]/.test(text) ? `"${text}"` : text;
+};
+
+const messagesToCsv = (messages) => {
+    if (!messages?.length) {
+        return 'No messages found';
+    }
+    const headers = ['Lead Name', 'Lead Phone', 'Type', 'Timestamp', 'Content'];
+    const rows = messages.map((message) => [
+        escapeCsvValue(message.lead_name || ''),
+        escapeCsvValue(message.lead_phone || ''),
+        escapeCsvValue(message.type),
+        escapeCsvValue(message.timestamp),
+        escapeCsvValue(message.content)
+    ]);
+    return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+};
+
 const ensureBackupDirectory = async () => {
     await fs.promises.mkdir(BACKUP_DIR, { recursive: true });
 };
@@ -193,6 +267,16 @@ const buildPdfBuffer = (data) => new Promise((resolve, reject) => {
             doc.fillColor('#444').text(note.message || '', { width: 480 });
             doc.fillColor('black');
         });
+
+        if (data.messages?.length) {
+            renderList('Conversation history', data.messages, (message) => {
+                doc.fontSize(11).text(`${message.lead_name || 'Lead'} (${message.lead_phone || 'n/a'})`);
+                const messageTime = message.timestamp ? new Date(message.timestamp).toLocaleString() : '—';
+                doc.fontSize(10).fillColor('#666').text(`${message.type} • ${messageTime}`);
+                doc.fillColor('#444').text(message.content || '', { width: 480 });
+                doc.fillColor('black');
+            });
+        }
 
         doc.end();
     } catch (err) {
@@ -425,6 +509,9 @@ const updateIntegration = async (req, res) => {
         }
 
         const safeData = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+        const sanitizedData = Object.fromEntries(
+            Object.entries(safeData).filter(([, value]) => value !== undefined)
+        );
 
         const clinicResult = await query(
             `SELECT integration_settings FROM clinics WHERE id = $1`,
@@ -436,7 +523,7 @@ const updateIntegration = async (req, res) => {
             ...current,
             [type]: {
                 ...currentTypeSettings,
-                ...safeData,
+                ...sanitizedData,
                 status,
                 updatedAt: new Date().toISOString()
             }
@@ -461,13 +548,60 @@ const updateIntegration = async (req, res) => {
 const exportData = async (req, res) => {
     try {
         const format = (req.body?.format || 'json').toString().toLowerCase();
+        const filters = req.body?.filters || {};
+        const messageFilters = filters.messages || {};
+        const messagesOnly = Boolean(filters.messagesOnly);
+
+        if (messagesOnly) {
+            const history = await collectConversationHistory(req.user.clinic_id, messageFilters);
+            if (format === 'json') {
+                const payload = {
+                    generatedAt: new Date().toISOString(),
+                    filters: messageFilters,
+                    messages: history
+                };
+                const buffer = Buffer.from(JSON.stringify(payload, null, 2));
+                const filename = `conversation-export-${Date.now()}.json`;
+                res.setHeader('Content-Type', 'application/json');
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                return res.send(buffer);
+            }
+
+            if (format === 'csv') {
+                const csv = messagesToCsv(history);
+                const filename = `conversation-export-${Date.now()}.csv`;
+                res.setHeader('Content-Type', 'text/csv');
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                return res.send(csv);
+            }
+
+            if (format === 'pdf') {
+                const baseData = await collectClinicData(req.user.clinic_id);
+                const pdfBuffer = await buildPdfBuffer({
+                    ...baseData,
+                    messages: history
+                });
+                const filename = `conversation-export-${Date.now()}.pdf`;
+                res.setHeader('Content-Type', 'application/pdf');
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                return res.send(pdfBuffer);
+            }
+
+            return res.status(400).json({ message: 'Unsupported export format' });
+        }
+
         const data = await collectClinicData(req.user.clinic_id);
+        if (filters.includeMessages) {
+            data.messages = await collectConversationHistory(req.user.clinic_id, messageFilters);
+        } else {
+            data.messages = [];
+        }
 
         if (format === 'json') {
             const buffer = Buffer.from(JSON.stringify(data, null, 2));
             const filename = `clinic-export-${Date.now()}.json`;
             res.setHeader('Content-Type', 'application/json');
-            res.setHeader('Content-Disposition', `attachment; filename=\"${filename}\"`);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
             return res.send(buffer);
         }
 
@@ -475,7 +609,7 @@ const exportData = async (req, res) => {
             const csv = leadsToCsv(data.leads);
             const filename = `leads-export-${Date.now()}.csv`;
             res.setHeader('Content-Type', 'text/csv');
-            res.setHeader('Content-Disposition', `attachment; filename=\"${filename}\"`);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
             return res.send(csv);
         }
 
@@ -483,7 +617,7 @@ const exportData = async (req, res) => {
             const pdfBuffer = await buildPdfBuffer(data);
             const filename = `clinic-export-${Date.now()}.pdf`;
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=\"${filename}\"`);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
             return res.send(pdfBuffer);
         }
 

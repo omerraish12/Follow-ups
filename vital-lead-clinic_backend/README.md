@@ -48,6 +48,11 @@ You can send WhatsApp messages either through Meta’s Business Cloud or via Twi
 2. A WhatsApp sender (`TWILIO_WHATSAPP_FROM` or `TWILIO_MESSAGING_SERVICE_SID`).
 The Meta `WHATSAPP_*` keys are optional unless you want to switch providers later; leave them blank when using Twilio.
 
+### Automations & templates
+- Automations follow patients who remain quiet for 2, 3, 7, or 14 days (default rules are seeded) and run on a schedule. Each rule references a WhatsApp template so Twilio can send a pre-approved message that your clinic crafted.
+- Clinics can edit or clone the default templates on the frontend builder and link a template to an automation. The backend stores `template_name`, `template_language`, and optional `components`, so each automation sends the template you select rather than a hard-coded `.env` value.
+- Incoming WhatsApp replies hit `/api/whatsapp/webhook`, are recorded as `messages`, mark the lead as `HOT`, create notifications/activities, and immediately trigger the automation’s follow-up template (if defined) through Twilio, all while appearing to patients as your clinic’s configured sender.
+
 ## Scripts
 - `npm run dev` – dev server with nodemon
 - `npm start` – production mode

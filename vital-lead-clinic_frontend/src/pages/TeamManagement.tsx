@@ -870,17 +870,17 @@ export default function TeamManagement() {
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
-                                <table className="w-full">
+                                <table className="w-full text-center">
                                     <thead>
                                         <tr className="border-b border-border">
-                                            <th className="text-right py-3">{t("name")}</th>
-                                            <th className="text-right py-3">{t("clinic")}</th>
-                                            <th className="text-right py-3">{t("leads_handled")}</th>
-                                            <th className="text-right py-3">{t("conversions")}</th>
-                                            <th className="text-right py-3">{t("success_rate")}</th>
-                                            <th className="text-right py-3">{t("revenue")}</th>
-                                            <th className="text-right py-3">{t("response_time")}</th>
-                                            <th className="text-right py-3">{t("rating")}</th>
+                                            <th className="text-center py-3">{t("name")}</th>
+                                            <th className="text-center py-3">{t("clinic")}</th>
+                                            <th className="text-center py-3">{t("leads_handled")}</th>
+                                            <th className="text-center py-3">{t("conversions")}</th>
+                                            <th className="text-center py-3">{t("success_rate")}</th>
+                                            <th className="text-center py-3">{t("revenue")}</th>
+                                            <th className="text-center py-3">{t("response_time")}</th>
+                                            <th className="text-center py-3">{t("rating")}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -888,25 +888,25 @@ export default function TeamManagement() {
                                             .sort((a, b) => b.performance.rating - a.performance.rating)
                                             .map((member, index) => (
                                                 <tr key={member.id} className="border-b border-border last:border-0">
-                                                    <td className="py-3">
-                                                        <div className="flex items-center gap-2">
+                                                    <td className="py-3 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
                                                             {index === 0 && <Award className="h-4 w-4 text-warning" />}
                                                             <span className="font-medium">{member.name}</span>
                                                         </div>
                                                     </td>
-                                                    <td className="py-3 text-muted-foreground">{member.clinicName}</td>
-                                                    <td className="py-3">{member.performance.leadsAssigned}</td>
-                                                    <td className="py-3">{member.performance.conversions}</td>
-                                                    <td className="py-3">
+                                                    <td className="py-3 text-center text-muted-foreground">{member.clinicName}</td>
+                                                    <td className="py-3 text-center">{member.performance.leadsAssigned}</td>
+                                                    <td className="py-3 text-center">{member.performance.conversions}</td>
+                                                    <td className="py-3 text-center">
                                                         <span className="text-success">
                                                             {member.performance.leadsAssigned > 0
                                                                 ? Math.round((member.performance.conversions / member.performance.leadsAssigned) * 100)
                                                                 : 0}%
                                                         </span>
                                                     </td>
-                                                    <td className="py-3 font-bold">₪{member.performance.revenue.toLocaleString()}</td>
-                                                    <td className="py-3 text-muted-foreground">{member.performance.responseTime}</td>
-                                                    <td className="py-3">
+                                                    <td className="py-3 text-center font-bold">₪{member.performance.revenue.toLocaleString()}</td>
+                                                    <td className="py-3 text-center text-muted-foreground">{member.performance.responseTime}</td>
+                                                    <td className="py-3 text-center">
                                                         <div className="flex items-center gap-1">
                                                             <Star className="h-3 w-3 fill-warning text-warning" />
                                                             <span>{member.performance.rating}</span>

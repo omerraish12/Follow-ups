@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -16,6 +16,8 @@ interface AutomationRuleDialogProps {
   onSuccess?: () => void;
   trigger?: React.ReactNode;
 }
+
+const MAX_QUICK_REPLIES = 3;
 
 export default function AutomationRuleDialog({ rule, onSuccess, trigger }: AutomationRuleDialogProps) {
   const { t } = useLanguage();
@@ -40,8 +42,11 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
     trigger: rule?.trigger || defaultTriggerValue,
     delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
     message: rule?.message || "",
+    templateName: rule?.template_name || "",
+    templateLanguage: rule?.template_language || "en",
     targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
     active: rule?.active ?? true,
+    quickReplies: Array.isArray(rule?.components) ? rule.components.filter((component) => component?.type === "quick_reply") : []
   });
 
   const [form, setForm] = useState(buildFormState);
@@ -53,12 +58,27 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
 
     setIsSubmitting(true);
     try {
+      const quickReplies = form.quickReplies
+        .map((reply) => {
+          const title = reply?.title?.trim();
+          if (!title) return null;
+          return {
+            type: "quick_reply" as const,
+            title,
+            payload: reply?.payload?.trim() || title
+          };
+        })
+        .filter(Boolean);
+
       const ruleData = {
         name: form.name.trim(),
         triggerDays: [Number(form.delayDays) || 0],
         message: form.message.trim(),
         targetStatus: form.targetStatus === ALL_STATUSES ? null : form.targetStatus,
         active: form.active,
+        templateName: form.templateName.trim() || undefined,
+        templateLanguage: form.templateLanguage || "en",
+        components: quickReplies,
       };
 
       if (isEdit && rule?.id) {
@@ -76,14 +96,43 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
     }
   };
 
+  const addQuickReply = () => {
+    if (form.quickReplies.length >= MAX_QUICK_REPLIES) {
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      quickReplies: [...prev.quickReplies, { title: "", payload: "" }]
+    }));
+  };
+
+  const updateQuickReply = (index: number, value: Partial<{ title: string; payload: string }>) => {
+    setForm((prev) => ({
+      ...prev,
+      quickReplies: prev.quickReplies.map((reply, idx) =>
+        idx === index ? { ...reply, ...value } : reply
+      )
+    }));
+  };
+
+  const removeQuickReply = (index: number) => {
+    setForm((prev) => ({
+      ...prev,
+      quickReplies: prev.quickReplies.filter((_, idx) => idx !== index)
+    }));
+  };
+
   const resetForm = () => {
     setForm({
       name: rule?.name || "",
       trigger: (rule as any)?.trigger || "",
       delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
       message: rule?.message || "",
+      templateName: rule?.template_name || "",
+      templateLanguage: rule?.template_language || "en",
       targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
       active: rule?.active ?? true,
+      quickReplies: Array.isArray(rule?.components) ? rule.components.filter((component) => component?.type === "quick_reply") : []
     });
   };
 
@@ -109,20 +158,80 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-4">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">{t("automation_rule_name")} *</Label>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder={t("automation_rule_name")}
-              className="rounded-xl"
-              maxLength={100}
-              disabled={isSubmitting}
-            />
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">{t("automation_rule_name")} *</Label>
+          <Input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder={t("automation_rule_name")}
+            className="rounded-xl"
+            maxLength={100}
+            disabled={isSubmitting}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">{t("template_name_label")}</Label>
+          <Input
+            value={form.templateName}
+            onChange={(e) => setForm({ ...form, templateName: e.target.value })}
+            placeholder={t("template_name_placeholder")}
+            className="rounded-xl"
+            disabled={isSubmitting}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">{t("template_language_label")}</Label>
+          <Select
+            value={form.templateLanguage}
+            onValueChange={(value) => setForm({ ...form, templateLanguage: value })}
+            disabled={isSubmitting}
+          >
+            <SelectTrigger className="rounded-xl">
+              <SelectValue placeholder={t("template_language_placeholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">{t("english")}</SelectItem>
+              <SelectItem value="he">{t("hebrew")}</SelectItem>
+              <SelectItem value="es">EspaÃ±ol</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">{t("quick_replies_label")}</Label>
+          <div className="space-y-2">
+            {form.quickReplies.map((reply, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Input
+                  value={reply?.title || ""}
+                  onChange={(event) => updateQuickReply(index, { title: event.target.value })}
+                  placeholder={t("quick_reply_placeholder")}
+                  className="flex-1 rounded-xl"
+                  disabled={isSubmitting}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => removeQuickReply(index)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            {form.quickReplies.length < MAX_QUICK_REPLIES && (
+              <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={addQuickReply}>
+                <Plus className="h-3.5 w-3.5" />
+                {t("automation_add_quick_reply")}
+              </Button>
+            )}
+            <p className="text-[10px] text-muted-foreground">{t("quick_reply_help")}</p>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">{t("trigger")} *</Label>
-            <Select value={form.trigger} onValueChange={(v) => setForm({ ...form, trigger: v })} disabled={isSubmitting}>
+        </div>
+        <p className="text-[10px] text-muted-foreground">{t("automation_rule_template_note")}</p>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">{t("trigger")} *</Label>
+          <Select value={form.trigger} onValueChange={(v) => setForm({ ...form, trigger: v })} disabled={isSubmitting}>
               <SelectTrigger className="rounded-xl">
                 <SelectValue placeholder={t("select_trigger")} />
               </SelectTrigger>

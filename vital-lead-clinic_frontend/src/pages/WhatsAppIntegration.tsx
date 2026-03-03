@@ -21,7 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { getDefaultWhatsAppConfig, whatsappService, type WhatsAppIntegrationConfig } from "@/services/whatsappService";
+import {
+  getDefaultWhatsAppConfig,
+  whatsappService,
+  type WhatsAppIntegrationConfig,
+  type WhatsAppSenderInfo,
+} from "@/services/whatsappService";
 
 const formatDate = (value: string | null | undefined, locale: string, fallback: string) => {
   if (!value) {
@@ -36,6 +41,11 @@ const formatDate = (value: string | null | undefined, locale: string, fallback: 
   }
 };
 
+interface WhatsAppFAQItem {
+  questionKey: string;
+  answerKey: string;
+}
+
 export default function WhatsAppIntegration() {
   const { t, language } = useLanguage();
   const [whatsappConfig, setWhatsAppConfig] = useState<WhatsAppIntegrationConfig>(getDefaultWhatsAppConfig());
@@ -47,6 +57,14 @@ export default function WhatsAppIntegration() {
   const [testTemplate, setTestTemplate] = useState("");
   const [testLanguage, setTestLanguage] = useState(language === "he" ? "he" : "en");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [senderInfo, setSenderInfo] = useState<WhatsAppSenderInfo | null>(null);
+  const [faqItems, setFaqItems] = useState<WhatsAppFAQItem[]>([]);
+  const [twilioAccountSid, setTwilioAccountSid] = useState("");
+  const [twilioAuthToken, setTwilioAuthToken] = useState("");
+  const [twilioMessagingServiceSid, setTwilioMessagingServiceSid] = useState("");
+  const [twilioWhatsappFrom, setTwilioWhatsappFrom] = useState("");
+  const [hasStoredAuthToken, setHasStoredAuthToken] = useState(false);
+  const [isSavingTwilio, setIsSavingTwilio] = useState(false);
 
   const syncFromConfig = useCallback((config: WhatsAppIntegrationConfig) => {
     setWhatsAppConfig(config);
@@ -69,13 +87,46 @@ export default function WhatsAppIntegration() {
     }
   }, [syncFromConfig, t]);
 
+  const loadSenderInfo = useCallback(async () => {
+    try {
+      const info = await whatsappService.getSenderInfo();
+      setSenderInfo(info);
+    } catch (error) {
+      console.error("Error loading WhatsApp sender info:", error);
+    }
+  }, []);
+
+  const loadFAQ = useCallback(async () => {
+    try {
+      const data = await whatsappService.getFAQ();
+      setFaqItems(data.faq || []);
+    } catch (error) {
+      console.error("Error loading WhatsApp FAQ:", error);
+    }
+  }, []);
+
   useEffect(() => {
     loadConfig();
-  }, [loadConfig]);
+    loadSenderInfo();
+    loadFAQ();
+  }, [loadConfig, loadSenderInfo, loadFAQ]);
 
   useEffect(() => {
     setTestLanguage(language === "he" ? "he" : "en");
   }, [language]);
+
+  useEffect(() => {
+    setTwilioAccountSid(whatsappConfig.accountSid || "");
+    setTwilioMessagingServiceSid(whatsappConfig.messagingServiceSid || "");
+    setTwilioWhatsappFrom(whatsappConfig.whatsappFrom || "");
+    setHasStoredAuthToken(Boolean(whatsappConfig.authToken));
+    setTwilioAuthToken("");
+  }, [
+    whatsappConfig.accountSid,
+    whatsappConfig.messagingServiceSid,
+    whatsappConfig.whatsappFrom,
+    whatsappConfig.authToken
+  ]);
 
   const buildConfig = useCallback(
     (overrides: Partial<WhatsAppIntegrationConfig> = {}) => ({
@@ -117,6 +168,28 @@ export default function WhatsAppIntegration() {
       return;
     }
     saveToBackend({ status }, t("whatsapp_status_saved"));
+  };
+
+  const handleSaveTwilioConfig = async () => {
+    const payload: Partial<WhatsAppIntegrationConfig> = {
+      accountSid: twilioAccountSid.trim() || null,
+      messagingServiceSid: twilioMessagingServiceSid.trim() || null,
+      whatsappFrom: twilioWhatsappFrom.trim() || null
+    };
+    const tokenValue = twilioAuthToken.trim();
+    if (tokenValue) {
+      payload.authToken = tokenValue;
+    }
+    setIsSavingTwilio(true);
+    try {
+      await saveToBackend(payload, t("twilio_provision_saved"));
+      setHasStoredAuthToken(Boolean(tokenValue || whatsappConfig.authToken));
+      setTwilioAuthToken("");
+    } catch (error) {
+      setHasStoredAuthToken(Boolean(whatsappConfig.authToken));
+    } finally {
+      setIsSavingTwilio(false);
+    }
   };
 
   const handleSendTest = async () => {
@@ -311,10 +384,122 @@ export default function WhatsAppIntegration() {
               {t("whatsapp_mark_disconnected")}
             </Button>
           </div>
+    </CardContent>
+  </Card>
+
+  <Card className="rounded-[32px] border border-slate-200 bg-white shadow-[0_25px_40px_rgba(15,20,40,0.08)]">
+    <CardHeader className="space-y-2">
+      <div>
+        <CardTitle className="text-2xl text-slate-900">{t("whatsapp_twilio_provisioning_title")}</CardTitle>
+        <CardDescription className="text-sm text-slate-500">
+          {t("whatsapp_twilio_provisioning_description")}
+        </CardDescription>
+      </div>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-1">
+          <Label htmlFor="twilio-account">{t("twilio_account_sid_label")}</Label>
+          <Input
+            id="twilio-account"
+            value={twilioAccountSid}
+            placeholder={t("twilio_account_sid_placeholder")}
+            onChange={(event) => setTwilioAccountSid(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="twilio-messaging-service">{t("twilio_messaging_service_label")}</Label>
+          <Input
+            id="twilio-messaging-service"
+            value={twilioMessagingServiceSid}
+            placeholder={t("twilio_messaging_service_placeholder")}
+            onChange={(event) => setTwilioMessagingServiceSid(event.target.value)}
+          />
+        </div>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="twilio-whatsapp-from">{t("twilio_whatsapp_from_label")}</Label>
+        <Input
+          id="twilio-whatsapp-from"
+          value={twilioWhatsappFrom}
+          placeholder={t("twilio_whatsapp_from_placeholder")}
+          onChange={(event) => setTwilioWhatsappFrom(event.target.value)}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="twilio-auth-token">{t("twilio_auth_token_label")}</Label>
+        <Input
+          id="twilio-auth-token"
+          type="password"
+          value={twilioAuthToken}
+          placeholder={t("twilio_auth_token_placeholder")}
+          onChange={(event) => setTwilioAuthToken(event.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">
+          {hasStoredAuthToken ? t("twilio_auth_token_configured") : t("twilio_auth_token_help")}
+        </p>
+      </div>
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSaveTwilioConfig}
+          disabled={isSavingTwilio || isSavingStatus}
+          className="rounded-full px-6 py-2 text-sm font-semibold"
+        >
+          {isSavingTwilio ? t("saving") : t("twilio_save_button")}
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
+
+  <Card className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-[#f6f8ff] via-[#eef2ff] to-white text-slate-900 shadow-[0_25px_40px_rgba(15,20,40,0.08)]">
+    <CardHeader className="space-y-2">
+      <div>
+        <CardTitle className="text-2xl text-slate-900">{t("whatsapp_sender_info_title")}</CardTitle>
+        <CardDescription className="text-sm text-slate-500">{t("whatsapp_sender_info_description")}</CardDescription>
+      </div>
+    </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-3">
+          <Phone className="h-6 w-6 text-slate-400" />
+          <div>
+            <p className="text-lg font-semibold text-slate-900">{senderInfo?.sender || t("not_available")}</p>
+            <p className="text-sm text-slate-500">{t("whatsapp_sender_note")}</p>
+          </div>
+        </div>
+        {senderInfo?.messagingServiceSid && (
+          <p className="text-xs text-slate-500">
+            {t("whatsapp_messaging_service_label")}: {senderInfo.messagingServiceSid}
+          </p>
+        )}
+        {senderInfo?.message && (
+          <p className="text-xs text-slate-500">{senderInfo.message}</p>
+        )}
+        <p className="text-xs text-slate-500">{t("whatsapp_sender_info_note")}</p>
       </CardContent>
     </Card>
 
-    <Card className="rounded-[36px] border border-slate-200 bg-white shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
+  <Card className="rounded-[36px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,20,40,0.15)]">
+    <CardHeader className="space-y-2">
+      <CardTitle className="text-2xl text-slate-900">{t("whatsapp_faq_title")}</CardTitle>
+      <CardDescription className="text-sm text-slate-500">{t("whatsapp_faq_description")}</CardDescription>
+    </CardHeader>
+    <CardContent className="space-y-4">
+      {faqItems.length ? (
+        faqItems.map((item) => (
+          <div key={item.questionKey} className="space-y-1 border-b border-slate-200 pb-3 last:border-0 last:pb-0">
+            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              {t(item.questionKey)}
+            </p>
+            <p className="text-sm text-slate-600">{t(item.answerKey)}</p>
+          </div>
+        ))
+      ) : (
+        <p className="text-sm text-muted-foreground">{t("whatsapp_faq_loading")}</p>
+      )}
+    </CardContent>
+  </Card>
+
+  <Card className="rounded-[36px] border border-slate-200 bg-white shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
       <CardHeader className="space-y-3">
         <div>
           <CardTitle className="text-2xl text-slate-900">{t("whatsapp_sandbox_title")}</CardTitle>

@@ -1,7 +1,7 @@
 // src/pages/Automations.tsx
 import {
   Zap, Clock, MessageSquare, ToggleLeft, ToggleRight, Trash2, Info,
-  Users, AlertCircle, CheckCircle, TrendingUp, Bell, Rocket, ArrowRight, Phone
+  Users, AlertCircle, CheckCircle, TrendingUp, Bell, Rocket, ArrowRight, Phone, Plus, X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -22,11 +22,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAutomations } from "@/hooks/useAutomations";
 import { leadService } from "@/services/leadService";
 import { useIntegrationLogs } from "@/hooks/useIntegrationLogs";
 import { useAutomationReplies } from "@/hooks/useAutomationReplies";
-import type { Automation } from "@/types/automation";
+import type { Automation, AutomationComponent } from "@/types/automation";
+
+const MAX_QUICK_REPLIES = 3;
 import type { LeadStatus } from "@/types/leads";
 
 interface ExtendedAutomationRule extends Automation {
@@ -68,6 +71,25 @@ export default function Automations() {
   const [templateLanguage, setTemplateLanguage] = useState("en");
   const [inactiveDays, setInactiveDays] = useState(60);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [quickReplies, setQuickReplies] = useState<AutomationComponent[]>([]);
+
+  const addQuickReply = () => {
+    setQuickReplies((prev) =>
+      prev.length >= MAX_QUICK_REPLIES
+        ? prev
+        : [...prev, { type: "quick_reply", title: "", payload: "" }]
+    );
+  };
+
+  const updateQuickReply = (index: number, value: Partial<AutomationComponent>) => {
+    setQuickReplies((prev) =>
+      prev.map((reply, idx) => (idx === index ? { ...reply, ...value } : reply))
+    );
+  };
+
+  const removeQuickReply = (index: number) => {
+    setQuickReplies((prev) => prev.filter((_, idx) => idx !== index));
+  };
 
   // Map backend automations into UI-friendly objects
   useEffect(() => {
@@ -154,7 +176,17 @@ export default function Automations() {
         )
       );
       const messageText = templateMessage.trim();
-      const componentsPayload = [...selectedTriggers];
+      const quickReplyComponents = quickReplies
+        .map((reply) => {
+          const title = reply?.title?.trim();
+          if (!title) return null;
+          return {
+            type: "quick_reply" as const,
+            title,
+            payload: reply?.payload?.trim() || title
+          };
+        })
+        .filter(Boolean);
       const inactiveDaysValue = selectedTriggers.includes("inactive_no_visit") ? Number(inactiveDays) || 60 : null;
 
       await addAutomation({
@@ -162,7 +194,7 @@ export default function Automations() {
         templateName: templateName.trim(),
         templateLanguage,
         mediaUrl: includeMedia ? mediaUrl.trim() : null,
-        components: componentsPayload,
+        components: quickReplyComponents,
         message: messageText,
         triggerDays,
         targetStatus: "NEW",
@@ -177,6 +209,7 @@ export default function Automations() {
       setMediaUrl("");
       setSelectedTriggers(["new_lead"]);
       setTemplateLanguage("en");
+      setQuickReplies([]);
     } catch {
       // addAutomation already surfaces errors via toast
     } finally {
@@ -217,6 +250,27 @@ export default function Automations() {
     [rules, t]
   );
 
+  const followupAutomation = localizedRules.find(
+    (rule) =>
+      rule.template_name === 'three_week_followup' ||
+      rule.name === '3-Week Follow-up'
+  );
+  const followupStatus = (followupAutomation?.template_status || 'pending').toLowerCase();
+  const followupStatusLabelKey =
+    followupStatus === 'approved'
+      ? 'template_status_approved_tag'
+      : followupStatus === 'rejected'
+        ? 'template_status_rejected_tag'
+        : 'template_status_pending_tag';
+  const followupStatusHelpKey =
+    followupStatus === 'rejected'
+      ? 'template_status_rejected_help'
+      : 'template_status_pending_help';
+  const isFollowupApproved = followupStatus === 'approved';
+  const followupQuickReplies = (followupAutomation?.components || []).filter(
+    (component) => component?.type === 'quick_reply'
+  );
+
   const cards = useMemo(() => ([
     {
       title: t("messages_sent_month"),
@@ -247,6 +301,25 @@ export default function Automations() {
       detail: t("leads_waiting_reply")
     }
   ]), [t, totalExecutions, totalReplies, avgSuccessRate, activeCount, followupNeeded.length, stats?.totals?.active_count]);
+
+  const workflowSteps = useMemo(() => ([
+    {
+      title: t("automation_workflow_step_reply_title"),
+      desc: t("automation_workflow_step_reply_desc")
+    },
+    {
+      title: t("automation_workflow_step_template_title"),
+      desc: t("automation_workflow_step_template_desc")
+    },
+    {
+      title: t("automation_workflow_step_status_title"),
+      desc: t("automation_workflow_step_status_desc")
+    },
+    {
+      title: t("automation_workflow_step_activity_title"),
+      desc: t("automation_workflow_step_activity_desc")
+    },
+  ]), [t]);
 
   const showcaseStats = useMemo(() => ([
     {
@@ -305,6 +378,12 @@ export default function Automations() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {t("automations_subtitle")}
           </p>
+          <p className="mt-2 text-xs uppercase tracking-[0.4em] text-muted-foreground">
+            {t("automation_workflow_description")}
+          </p>
+          <p className="text-[11px] mt-1 text-muted-foreground">
+            {t("automation_followup_story")}
+          </p>
         </div>
         <AutomationRuleDialog onSuccess={() => { fetchAutomations(); fetchStats(); }} />
       </div>
@@ -330,15 +409,49 @@ export default function Automations() {
         ))}
       </div>
 
+      <Card className="rounded-3xl border border-border bg-card/80 p-5 shadow-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">{t("automation_workflow_card_title")}</CardTitle>
+          <CardDescription className="text-sm text-muted-foreground">{t("automation_workflow_card_description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          {workflowSteps.map((step, index) => (
+            <div key={step.title} className="rounded-2xl border border-border/70 bg-card/90 p-4">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{String(index + 1).padStart(2, "0")}</p>
+              <p className="mt-1 text-sm font-semibold text-foreground">{step.title}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{step.desc}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card/90 to-card p-6 shadow-xl shadow-primary/20">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <Badge variant="outline" className="rounded-full bg-primary/10 px-3 py-1 text-[11px] font-semibold text-primary">
               WhatsApp
             </Badge>
-            <h3 className="text-2xl font-bold text-foreground">{t("whatsapp_builder_title")}</h3>
+            <div className="flex items-start gap-1">
+              <h3 className="text-2xl font-bold text-foreground">{t("whatsapp_builder_title")}</h3>
+              <TooltipProvider delayDuration={100}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[220px] text-[11px] leading-snug">
+                    {t("automation_template_tooltip")}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <p className="text-sm text-muted-foreground max-w-2xl">
               {t("whatsapp_builder_subtitle")}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t("automation_builder_help")}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {t("automation_builder_template_note")}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -384,6 +497,47 @@ export default function Automations() {
                 className="rounded-2xl bg-card"
                 rows={5}
               />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-foreground">{t("quick_replies_label")}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-full border border-muted/40 px-4 py-1 text-[10px]"
+                  onClick={addQuickReply}
+                  disabled={quickReplies.length >= MAX_QUICK_REPLIES}
+                >
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {t("automation_add_quick_reply")}
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {quickReplies.length ? (
+                  quickReplies.map((reply, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={reply.title}
+                        onChange={(event) => updateQuickReply(index, { title: event.target.value })}
+                        placeholder={t("quick_reply_placeholder")}
+                        className="flex-1 rounded-2xl bg-card"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => removeQuickReply(index)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t("quick_reply_empty")}</p>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">{t("quick_reply_help")}</p>
             </div>
 
             <div>
@@ -588,8 +742,31 @@ export default function Automations() {
                 </CardContent>
               </Card>
             )}
-          {localizedRules.map((rule) => (
-              <Card key={rule.id} className={cn("relative rounded-2xl border-2", rule.active ? "border-primary/30" : "border-border")}>
+          {localizedRules.map((rule) => {
+              const templateStatus = (rule.template_status || "pending").toLowerCase();
+              const isTemplateApproved = templateStatus === "approved";
+              const statusLabelKey =
+                templateStatus === "approved"
+                  ? "template_status_approved_tag"
+                  : templateStatus === "rejected"
+                    ? "template_status_rejected_tag"
+                    : "template_status_pending_tag";
+              const statusHelpKey =
+                templateStatus === "rejected"
+                  ? "template_status_rejected_help"
+                  : "template_status_pending_help";
+              const quickReplyCount = Array.isArray(rule.components)
+                ? rule.components.filter((component) => component?.type === "quick_reply").length
+                : 0;
+              return (
+              <Card
+                key={rule.id}
+                className={cn(
+                  "relative rounded-2xl border-2",
+                  rule.active ? "border-primary/30" : "border-border",
+                  !isTemplateApproved && "border-warning/40 bg-warning/5"
+                )}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1">
@@ -603,6 +780,12 @@ export default function Automations() {
                       <Badge variant="outline" className="rounded-full text-xs">
                         {rule.target_status ? t(`status_${rule.target_status.toLowerCase()}` as any) : t("all_leads")}
                       </Badge>
+                      <Badge
+                        variant={isTemplateApproved ? "secondary" : "destructive"}
+                        className="rounded-full text-[10px]"
+                      >
+                        {t(statusLabelKey)}
+                      </Badge>
                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleToggle(rule.id)}>
                         {rule.active ? <ToggleRight className="h-5 w-5 text-primary" /> : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
                       </Button>
@@ -612,15 +795,31 @@ export default function Automations() {
                 <CardContent className="space-y-3">
                   <p className="text-sm leading-relaxed text-muted-foreground">{rule.displayMessage || rule.message}</p>
 
+                  <div className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-xs">{t("automation_template_label")}:</span>
+                    <span>{rule.template_name || rule.name}</span>
+                    {rule.template_language && (
+                      <span className="uppercase font-mono tracking-[0.3em]">{rule.template_language}</span>
+                    )}
+                  </div>
+
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
-                    <Zap className="h-3 w-3" /> {t("auto_followups")}
-                  </span>
-                  {rule.notifyOnReply && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
-                      <Bell className="h-3 w-3" /> {t("notify_on_reply")}
+                      <Zap className="h-3 w-3" /> {t("auto_followups")}
                     </span>
-                  )}
+                    {rule.notifyOnReply && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
+                        <Bell className="h-3 w-3" /> {t("notify_on_reply")}
+                      </span>
+                    )}
+                    <Badge
+                      variant={quickReplyCount ? "secondary" : "outline"}
+                      className="rounded-full px-2 py-1 uppercase tracking-[0.2em] text-[10px]"
+                    >
+                      {quickReplyCount
+                        ? t("quick_reply_count").replace("%s", String(quickReplyCount))
+                        : t("quick_reply_none")}
+                    </Badge>
                   </div>
 
                   <div className="grid grid-cols-3 gap-3 text-center text-xs">
@@ -637,6 +836,12 @@ export default function Automations() {
                       <p className="text-muted-foreground mt-1">{t("response_rate")}</p>
                     </div>
                   </div>
+
+                  {!isTemplateApproved && (
+                    <div className="rounded-2xl border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                      {t(statusHelpKey)}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between pt-2">
                     <AutomationRuleDialog rule={rule} onSuccess={() => { fetchAutomations(); fetchStats(); }} />
@@ -667,35 +872,126 @@ export default function Automations() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            );
+          })}
           </div>
         </TabsContent>
 
         {/* Followups tab */}
         <TabsContent value="followups">
-          <Card className="rounded-2xl">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">{t("followups_pending")}</CardTitle>
-              <CardDescription>{t("leads_waiting_reply")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {followupNeeded.length === 0 && (
-                <p className="text-sm text-muted-foreground">{t("no_data")}</p>
-              )}
-              {followupNeeded.map((item) => (
-                <div key={item.leadId} className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
+          <div className="space-y-4">
+            {followupAutomation ? (
+              <Card className="rounded-2xl border border-border bg-card shadow-card">
+                <CardHeader className="pb-1">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold">{item.leadName}</p>
-                      <p className="text-xs text-muted-foreground">{t("days_since_contact").replace("%s", String(item.days))}</p>
+                      <CardTitle className="text-lg">{t("followup_automation_card_title")}</CardTitle>
+                      <CardDescription>{t("followup_automation_card_description")}</CardDescription>
                     </div>
+                    <Badge
+                      variant={isFollowupApproved ? "secondary" : "destructive"}
+                      className="rounded-full text-[10px] uppercase tracking-[0.2em]"
+                    >
+                      {t(followupStatusLabelKey)}
+                    </Badge>
                   </div>
-                  <StatusBadge status={"HOT" as LeadStatus} />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                      {t("followup_automation_message_preview_label")}
+                    </p>
+                    <p className="text-sm font-medium text-foreground leading-relaxed line-clamp-3">
+                      {followupAutomation.displayMessage || followupAutomation.message || t("no_data")}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+                      {t("followup_automation_quick_replies_label")}
+                    </p>
+                    {followupQuickReplies.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {followupQuickReplies.map((reply, index) => (
+                          <Badge
+                            key={`${reply.payload || reply.title || index}`}
+                            variant="outline"
+                            className="rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.2em]"
+                          >
+                            {reply.title || reply.payload}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{t("quick_reply_none")}</p>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t(followupStatusHelpKey)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <AutomationRuleDialog
+                      rule={followupAutomation}
+                      onSuccess={() => {
+                        fetchAutomations();
+                        fetchStats();
+                      }}
+                      trigger={
+                        <Button size="sm" variant="outline">
+                          {t("preview")}
+                        </Button>
+                      }
+                    />
+                    <Button
+                      size="sm"
+                      variant={followupAutomation.active ? "destructive" : "secondary"}
+                      onClick={() => handleToggle(followupAutomation.id)}
+                    >
+                      {followupAutomation.active
+                        ? t("followup_automation_toggle_disable")
+                        : t("followup_automation_toggle_enable")}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="rounded-2xl border border-border bg-card shadow-card">
+                <CardHeader className="pb-1">
+                  <CardTitle className="text-lg">{t("followup_automation_no_rule_title")}</CardTitle>
+                  <CardDescription>{t("followup_automation_no_rule_description")}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-end">
+                  <AutomationRuleDialog
+                    onSuccess={() => {
+                      fetchAutomations();
+                      fetchStats();
+                    }}
+                    trigger={<Button variant="outline">{t("followup_automation_create_button")}</Button>}
+                  />
+                </CardContent>
+              </Card>
+            )}
+            <Card className="rounded-2xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">{t("followups_pending")}</CardTitle>
+                <CardDescription>{t("leads_waiting_reply")}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {followupNeeded.length === 0 && (
+                  <p className="text-sm text-muted-foreground">{t("no_data")}</p>
+                )}
+                {followupNeeded.map((item) => (
+                  <div key={item.leadId} className="flex items-center justify-between rounded-xl border border-border px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-primary" />
+                      <div>
+                        <p className="text-sm font-semibold">{item.leadName}</p>
+                        <p className="text-xs text-muted-foreground">{t("days_since_contact").replace("%s", String(item.days))}</p>
+                      </div>
+                    </div>
+                    <StatusBadge status={"HOT" as LeadStatus} />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Insights tab */}

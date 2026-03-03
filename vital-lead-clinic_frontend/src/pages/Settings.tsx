@@ -86,6 +86,13 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [conversationFilters, setConversationFilters] = useState({
+    startDate: "",
+    endDate: "",
+    messageType: "all",
+    limit: "1000"
+  });
+  const [isExportingConversation, setIsExportingConversation] = useState(false);
   const [hasLoadedSettings, setHasLoadedSettings] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -456,21 +463,7 @@ export default function SettingsPage() {
     setIsExporting(true);
     try {
       const response = await settingsService.exportData(format);
-      const contentType = response.headers['content-type'] || 'application/octet-stream';
-      const disposition = response.headers['content-disposition'] as string | undefined;
-      const suggested = disposition?.match(/filename=\"?([^\";]+)\"?/i)?.[1];
-      const extension = format === 'csv' ? 'csv' : format === 'pdf' ? 'pdf' : 'json';
-      const filename = suggested || `clinic-export-${Date.now()}.${extension}`;
-
-      const blob = new Blob([response.data], { type: contentType });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      downloadBlob(response, "clinic-export", format);
 
       toast({
         title: t("export_completed"),
@@ -485,6 +478,62 @@ export default function SettingsPage() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleExportConversation = async (format: "csv" | "json" | "pdf") => {
+    setIsExportingConversation(true);
+    try {
+      const response = await settingsService.exportData(format, {
+        messagesOnly: true,
+        messages: getConversationFilterPayload()
+      });
+      downloadBlob(response, "conversation-export", format);
+      toast({
+        title: t("export_completed"),
+        description: t("conversation_history_description"),
+      });
+    } catch (error) {
+      toast({
+        title: t("error"),
+        description: t("export_failed"),
+        variant: "destructive"
+      });
+    } finally {
+      setIsExportingConversation(false);
+    }
+  };
+
+  const downloadBlob = (response: any, baseName: string, extension: string) => {
+    const contentType = response.headers['content-type'] || 'application/octet-stream';
+    const disposition = response.headers['content-disposition'] as string | undefined;
+    const suggested = disposition?.match(/filename=\"?([^\";]+)\"?/i)?.[1];
+    const filename = suggested || `${baseName}-${Date.now()}.${extension}`;
+
+    const blob = new Blob([response.data], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const getConversationFilterPayload = () => {
+    const payload: Record<string, unknown> = {};
+    if (conversationFilters.startDate) {
+      payload.startDate = conversationFilters.startDate;
+    }
+    if (conversationFilters.endDate) {
+      payload.endDate = conversationFilters.endDate;
+    }
+    if (conversationFilters.messageType && conversationFilters.messageType !== "all") {
+      payload.messageType = conversationFilters.messageType;
+    }
+    const parsedLimit = parseInt(conversationFilters.limit, 10);
+    payload.limit = Number.isNaN(parsedLimit) ? 1000 : Math.min(Math.max(parsedLimit, 1), 5000);
+    return payload;
   };
 
   const handleDeleteAccount = async () => {
@@ -781,6 +830,111 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
+          </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border-border">
+            <CardHeader>
+              <CardTitle className="text-lg">{t("conversation_history_title")}</CardTitle>
+              <CardDescription>
+                {t("conversation_history_description")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold uppercase tracking-[0.3em]">{t("conversation_history_start_label")}</Label>
+                  <Input
+                    type="date"
+                    value={conversationFilters.startDate}
+                    onChange={(e) =>
+                      setConversationFilters((prev) => ({ ...prev, startDate: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold uppercase tracking-[0.3em]">{t("conversation_history_end_label")}</Label>
+                  <Input
+                    type="date"
+                    value={conversationFilters.endDate}
+                    onChange={(e) =>
+                      setConversationFilters((prev) => ({ ...prev, endDate: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold uppercase tracking-[0.3em]">{t("conversation_history_message_type")}</Label>
+                  <Select
+                    value={conversationFilters.messageType}
+                    onValueChange={(value) => setConversationFilters((prev) => ({ ...prev, messageType: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("conversation_history_type_all")}</SelectItem>
+                      <SelectItem value="sent">{t("conversation_history_type_sent")}</SelectItem>
+                      <SelectItem value="received">{t("conversation_history_type_received")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold uppercase tracking-[0.3em]">{t("conversation_history_limit_label")}</Label>
+                  <Input
+                    type="number"
+                    value={conversationFilters.limit}
+                    onChange={(e) =>
+                      setConversationFilters((prev) => ({ ...prev, limit: e.target.value }))}
+                    min={1}
+                    max={5000}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isExportingConversation}
+                  onClick={() => handleExportConversation("csv")}
+                >
+                  {isExportingConversation ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t("conversation_history_export_csv")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isExportingConversation}
+                  onClick={() => handleExportConversation("json")}
+                >
+                  {isExportingConversation ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t("conversation_history_export_json")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isExportingConversation}
+                  onClick={() => handleExportConversation("pdf")}
+                >
+                  {isExportingConversation ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4 mr-2" />
+                  )}
+                  {t("conversation_history_export_pdf")}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("conversation_history_note")}
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
