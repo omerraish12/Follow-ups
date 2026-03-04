@@ -52,6 +52,7 @@ import { useAutomations } from "@/hooks/useAutomations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "@/hooks/use-toast";
 import { translateAutomationName } from "@/lib/automationNames";
+import { getTranslatedServiceLabel } from "@/lib/serviceOptions";
 
 // Types
 interface Activity {
@@ -1109,16 +1110,16 @@ export default function Dashboard() {
           </div>
         </CardHeader>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-center">
             <thead className="bg-muted/30">
               <tr className="border-b border-border">
-                <th className="text-right px-6 py-3 font-medium">{t("full_name")}</th>
-                <th className="text-right px-6 py-3 font-medium">{t("service")}</th>
-                <th className="text-right px-6 py-3 font-medium">{t("status")}</th>
-                <th className="text-right px-6 py-3 font-medium">{t("source")}</th>
-                <th className="text-right px-6 py-3 font-medium">{t("value_shekels")}</th>
-                <th className="text-right px-6 py-3 font-medium">{t("last_3_days")}</th>
-                <th className="text-right px-6 py-3 font-medium">{t("next_followup")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("full_name")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("service")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("status")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("source")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("value_shekels")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("last_3_days")}</th>
+                <th className="text-center px-6 py-3 font-medium">{t("next_followup")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1130,8 +1131,8 @@ export default function Dashboard() {
 
                   return (
                     <tr key={lead.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-3">
                           <Avatar className="h-8 w-8">
                             <AvatarFallback className="bg-primary/10 text-primary text-xs">
                               {lead.name?.charAt(0) || '?'}
@@ -1140,12 +1141,14 @@ export default function Dashboard() {
                           <span className="font-medium">{lead.name}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground">{lead.service || '-'}</td>
-                      <td className="px-6 py-4"><StatusBadge status={lead.status} /></td>
-                      <td className="px-6 py-4 text-muted-foreground">{formatSourceLabel(lead.source)}</td>
-                      <td className="px-6 py-4 font-bold">{formatCurrency(lead.value)}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="px-6 py-4 text-center text-muted-foreground">
+                        {getTranslatedServiceLabel(lead.service, t, "-")}
+                      </td>
+                      <td className="px-6 py-4 text-center"><StatusBadge status={lead.status} /></td>
+                      <td className="px-6 py-4 text-center text-muted-foreground">{formatSourceLabel(lead.source)}</td>
+                      <td className="px-6 py-4 text-center font-bold">{formatCurrency(lead.value)}</td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
                           <MessageSquare className="h-4 w-4 text-muted-foreground" />
                           <span className="text-xs text-muted-foreground">
                             {daysSinceLastContact === 0 ? t("today") :

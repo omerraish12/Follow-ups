@@ -69,7 +69,7 @@ async function initializeDatabase() {
 
         // Create users table
         await query(`
-      CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
@@ -78,6 +78,9 @@ async function initializeDatabase() {
         role user_role DEFAULT 'STAFF',
         status VARCHAR(20) DEFAULT 'active',
         notification_settings JSONB,
+        permissions TEXT[] DEFAULT ARRAY[]::TEXT[],
+        entry_type VARCHAR(20) DEFAULT 'clinic',
+        entry_code VARCHAR(50),
         reset_token VARCHAR(255),
         reset_token_exp TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -89,7 +92,17 @@ async function initializeDatabase() {
         // Ensure status column exists for older databases
         await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';`);
         await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_settings JSONB;`);
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT ARRAY[]::TEXT[];`);
         await query(`UPDATE users SET status = 'active' WHERE status IS NULL;`);
+        await query(`
+          UPDATE users
+          SET permissions = CASE
+            WHEN role IN ('ADMIN', 'SUPER_ADMIN') THEN ARRAY['all']::TEXT[]
+            WHEN role = 'MANAGER' THEN ARRAY['leads','analytics','team']::TEXT[]
+            ELSE ARRAY['leads']::TEXT[]
+          END
+          WHERE permissions IS NULL;
+        `);
 
         // Ensure clinic settings columns exist for older databases
         await query(`ALTER TABLE clinics ADD COLUMN IF NOT EXISTS timezone VARCHAR(100) DEFAULT 'Asia/Jerusalem';`);
@@ -98,9 +111,14 @@ async function initializeDatabase() {
         await query(`ALTER TABLE clinics ADD COLUMN IF NOT EXISTS logo TEXT;`);
         await query(`ALTER TABLE clinics ADD COLUMN IF NOT EXISTS integration_settings JSONB;`);
         await query(`ALTER TABLE clinics ADD COLUMN IF NOT EXISTS backup_settings JSONB;`);
+        await query(`ALTER TABLE clinics ADD COLUMN IF NOT EXISTS whatsapp_number VARCHAR(50);`);
         await query(`UPDATE clinics SET timezone = 'Asia/Jerusalem' WHERE timezone IS NULL;`);
         await query(`UPDATE clinics SET language = 'he' WHERE language IS NULL;`);
         await query(`UPDATE clinics SET currency = 'ILS' WHERE currency IS NULL;`);
+        await query(`UPDATE clinics SET whatsapp_number = '' WHERE whatsapp_number IS NULL;`);
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS entry_type VARCHAR(20) DEFAULT 'clinic';`);
+        await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS entry_code VARCHAR(50);`);
+        await query(`UPDATE users SET entry_type = 'clinic' WHERE entry_type IS NULL;`);
         await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`);
 
         // Create leads table

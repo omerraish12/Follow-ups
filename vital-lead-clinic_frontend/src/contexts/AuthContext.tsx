@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '@/services/authService';
 import { toast } from '@/hooks/use-toast';
-import type { User, LoginCredentials, SignupCredentials } from '@/types/auth';
+import type { User, LoginCredentials, SignupCredentials, EntryType } from '@/types/auth';
 import { normalizeRole } from '@/lib/roles';
 
 type AuthContextValue = {
@@ -17,11 +17,21 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const normalizeUserRecord = (user?: Partial<User> | null): User | null => {
+const normalizeUserRecord = (user?: Partial<User> & Record<string, any> | null): User | null => {
     if (!user) return null;
+    const entryType: EntryType = (user.entryType || user.entry_type || 'clinic') as EntryType;
+    const normalizedPhone = user.phone ?? user.contact ?? undefined;
     return {
-        ...user,
+        id: String(user.id),
+        email: user.email ?? '',
+        name: user.name ?? '',
+        clinicName: user.clinicName ?? user.clinic_name,
+        clinicId: user.clinicId ?? user.clinic_id,
+        phone: normalizedPhone,
         role: normalizeRole(user.role),
+        entryType,
+        emailVerified: user.emailVerified ?? user.verified ?? false,
+        createdAt: user.createdAt ?? user.created_at,
     } as User;
 };
 

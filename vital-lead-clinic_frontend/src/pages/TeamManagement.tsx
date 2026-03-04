@@ -131,6 +131,13 @@ const permissionFlagsToList = (flags: PermissionFlags): string[] => {
     return entries;
 };
 
+const createDefaultMemberPermissions = (): PermissionFlags => ({
+    leads: true,
+    analytics: false,
+    team: false,
+    settings: false
+});
+
 const permissionOptions: Array<{ key: keyof PermissionFlags; label: string; description: string }> = [
     { key: "leads", label: "permission_leads_label", description: "permission_leads_description" },
     { key: "analytics", label: "permission_analytics_label", description: "permission_analytics_description" },
@@ -151,6 +158,7 @@ export default function TeamManagement() {
     const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isPermissionSaving, setIsPermissionSaving] = useState(false);
     const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
     const [clinics, setClinics] = useState<Clinic[]>([]);
     const [showPermissionDialog, setShowPermissionDialog] = useState(false);
@@ -165,12 +173,7 @@ export default function TeamManagement() {
         phone: '',
         role: 'staff' as TeamRole,
         clinicId: '',
-        permissions: {
-            leads: true,
-            analytics: false,
-            team: false,
-            settings: false
-        }
+        permissions: createDefaultMemberPermissions()
     });
 
     const [editMember, setEditMember] = useState({
@@ -225,6 +228,18 @@ export default function TeamManagement() {
         const conversions = toNumber(member.conversions);
         const revenue = toNumber(member.revenue);
         const successRate = leadsAssigned > 0 ? conversions / leadsAssigned : 0;
+        const normalizedPermissions = Array.isArray(member.permissions)
+            ? Array.from(
+                  new Set(
+                      member.permissions
+                          .filter((value): value is string => !!value)
+                          .map((value) => value.toLowerCase())
+                  )
+              )
+            : [];
+        const permissions = normalizedPermissions.length > 0
+            ? normalizedPermissions
+            : roleToPermissions(normalizeRole(member.role));
 
         return {
             id: String(member.id),
@@ -236,7 +251,7 @@ export default function TeamManagement() {
             clinicName: member.clinic_name || user?.clinicName,
             status: normalizeStatus(member.status),
             lastActive: member.last_active || member.created_at || new Date().toISOString(),
-            permissions: roleToPermissions(normalizeRole(member.role)),
+            permissions,
             performance: {
                 leadsAssigned,
                 conversions,
@@ -312,11 +327,13 @@ export default function TeamManagement() {
 
         setIsSaving(true);
         try {
+            const permissions = permissionFlagsToList(newMember.permissions);
             await teamService.createMember({
                 name: newMember.name,
                 email: newMember.email,
                 phone: newMember.phone,
-                role: newMember.role
+                role: newMember.role,
+                permissions
             });
 
             await loadTeamMembers();
@@ -326,7 +343,8 @@ export default function TeamManagement() {
                 name: '',
                 email: '',
                 phone: '',
-                role: 'staff'
+                role: 'staff',
+                permissions: createDefaultMemberPermissions()
             }));
 
             toast({
@@ -429,19 +447,31 @@ export default function TeamManagement() {
         setPermissionFlags(initialPermissionFlags);
     };
 
-    const handleSavePermissions = () => {
+    const handleSavePermissions = async () => {
         if (!permissionMember) return;
         const permissions = permissionFlagsToList(permissionFlags);
-        setTeamMembers((prev) =>
-            prev.map((m) =>
-                m.id === permissionMember.id ? { ...m, permissions } : m
-            )
-        );
-        toast({
-            title: t("permissions_updated"),
-            description: t("permissions_updated_description"),
-        });
-        closePermissionDialog();
+        setIsPermissionSaving(true);
+        try {
+            await teamService.updateMember(permissionMember.id, { permissions });
+            setTeamMembers((prev) =>
+                prev.map((m) =>
+                    m.id === permissionMember.id ? { ...m, permissions } : m
+                )
+            );
+            toast({
+                title: t("permissions_updated"),
+                description: t("permissions_updated_description"),
+            });
+            closePermissionDialog();
+        } catch (error) {
+            toast({
+                title: t("error"),
+                description: t("update_failed"),
+                variant: "destructive"
+            });
+        } finally {
+            setIsPermissionSaving(false);
+        }
     };
 
     const openClinicDialog = (clinic: Clinic) => {
@@ -1201,7 +1231,10 @@ export default function TeamManagement() {
                         <Button variant="outline" onClick={closePermissionDialog} className="rounded-xl">
                             {t("cancel")}
                         </Button>
-                        <Button onClick={handleSavePermissions} className="rounded-xl">
+                        <Button onClick={handleSavePermissions} className="rounded-xl" disabled={isPermissionSaving}>
+                            {isPermissionSaving && (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            )}
                             {t("save_changes")}
                         </Button>
                     </DialogFooter>
@@ -1239,24 +1272,40 @@ export default function TeamManagement() {
                                     {t("clinic_copy_email")}
                                 </Button>
                             </div>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
-                                <Button
-                                    asChild
-                                    variant="secondary"
-                                    className="w-full rounded-xl"
-                                >
-                                    <a href={`tel:${activeClinic.phone.replace(/[^\d+]/g, "")}`}>
-                                        {t("clinic_call_phone")}
-                                    </a>
-                                </Button>
-                                <Button
-                                    asChild
-                                    variant="secondary"
-                                    className="w-full rounded-xl"
-                                >
-                                    <a href={`mailto:${activeClinic.email}`}>{t("clinic_view_email")}</a>
-                                </Button>
-                            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+                <Button
+                    asChild
+                    variant="secondary"
+                    className="w-full rounded-xl"
+                >
+                    <a
+                        href={`tel:${activeClinic?.phone?.replace(/[^\d+]/g, "") || ""}`}
+                        onClick={(event) => {
+                            if (!activeClinic?.phone) {
+                                event.preventDefault();
+                            }
+                        }}
+                    >
+                        {t("clinic_call_phone")}
+                    </a>
+                </Button>
+                <Button
+                    asChild
+                    variant="secondary"
+                    className="w-full rounded-xl"
+                >
+                    <a
+                        href={`mailto:${activeClinic?.email || ""}`}
+                        onClick={(event) => {
+                            if (!activeClinic?.email) {
+                                event.preventDefault();
+                            }
+                        }}
+                    >
+                        {t("clinic_view_email")}
+                    </a>
+                </Button>
+            </div>
                             <div className="grid grid-cols-2 gap-3 text-sm text-muted-foreground">
                                 <div>
                                     <p className="text-xs uppercase tracking-[0.3em]">{t("team_members")}</p>

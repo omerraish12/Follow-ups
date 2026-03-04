@@ -176,14 +176,14 @@ const processInboundMessage = async (rawFrom, rawText) => {
 
 const handleWebhook = async (req, res) => {
   try {
+    console.log("WebHooK: ", req.body);
     const entries = req.body?.entry || [];
-    console.log(req.body);
     const isTwilio = Boolean(req.body?.Body && req.body?.From && !entries.length);
-
+    console.log("isTwilio: ", isTwilio);
     if (isTwilio) {
       await processInboundMessage(req.body.From, req.body.Body);
     } else {
-    for (const entry of entries) {
+      for (const entry of entries) {
         const changes = entry.changes || [];
         for (const change of changes) {
           const value = change.value || {};
@@ -233,22 +233,28 @@ const getLatestLeadMessageTimestamp = async (req, res) => {
 const getSenderInfo = async (req, res) => {
   try {
     const clinicResult = await query(
-      `SELECT integration_settings
-       FROM clinics
-       WHERE id = $1`,
-      [req.user?.clinic_id]
+      `SELECT whatsapp_number, integration_settings FROM clinics WHERE id = $1`,
+      [req.user.clinic_id]
     );
-    const whatsapp = clinicResult.rows?.[0]?.integration_settings?.whatsapp || {};
-    const sender = whatsapp.whatsappFrom || whatsapp.sender || process.env.TWILIO_WHATSAPP_FROM || null;
-    const messagingServiceSid = whatsapp.messagingServiceSid || process.env.TWILIO_MESSAGING_SERVICE_SID || null;
+    const clinic = clinicResult.rows?.[0] || {};
+    const integrations = clinic.integration_settings || {};
+    const whatsapp = integrations.whatsapp || {};
+    const hasCredentials = Boolean(
+      whatsapp.accountSid &&
+      whatsapp.authToken &&
+      (whatsapp.whatsappFrom || whatsapp.messagingServiceSid)
+    );
+    const status = hasCredentials ? 'connected' : 'disconnected';
+    const displayNumber = whatsapp.whatsappFrom || clinic.whatsapp_number || null;
 
     res.json({
       provider: 'twilio',
-      sender,
-      messagingServiceSid,
-      status: whatsapp.status || 'disconnected',
-      message:
-        'Messages are sent through Twilio on behalf of your clinic. Patients still see the clinic WhatsApp number (configured as the Twilio sender).',
+      sender: displayNumber,
+      displayNumber,
+      status,
+      message: displayNumber
+        ? 'Patients and staff use this clinic WhatsApp number for chat.'
+        : 'Add a clinic WhatsApp number in Settings > General to show it here.'
     });
   } catch (error) {
     console.error('Unable to load WhatsApp sender info:', error);

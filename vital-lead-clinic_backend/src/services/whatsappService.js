@@ -8,25 +8,6 @@ const DEFAULT_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID |
 
 const clinicClientCache = new Map();
 
-const getClinicTwilioSettings = async (clinicId) => {
-  if (!clinicId) {
-    return null;
-  }
-  const result = await query(
-    `SELECT integration_settings
-     FROM clinics
-     WHERE id = $1`,
-    [clinicId]
-  );
-  const whatsapp = result.rows?.[0]?.integration_settings?.whatsapp || {};
-  return {
-    accountSid: whatsapp.accountSid || null,
-    authToken: whatsapp.authToken || null,
-    messagingServiceSid: whatsapp.messagingServiceSid || null,
-    whatsappFrom: whatsapp.whatsappFrom || whatsapp.sender || null
-  };
-};
-
 const ensureCredentials = (creds) => {
   if (!creds.accountSid || !creds.authToken) {
     throw new Error('Twilio credentials missing (accountSid / authToken)');
@@ -36,28 +17,66 @@ const ensureCredentials = (creds) => {
   }
 };
 
+const trimValue = (value) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+const getClinicIntegrationSettings = async (clinicId) => {
+  if (!clinicId) {
+    return {};
+  }
+  const result = await query(
+    `SELECT integration_settings FROM clinics WHERE id = $1`,
+    [clinicId]
+  );
+  const settings = result.rows?.[0]?.integration_settings;
+  return settings || {};
+};
+
+const getClinicWhatsappConfig = async (clinicId) => {
+  const integrations = await getClinicIntegrationSettings(clinicId);
+  const whatsapp = integrations.whatsapp || {};
+  return whatsapp;
+};
+
+const pickCredential = (clinicValue, defaultValue) => {
+  const trimmed = trimValue(clinicValue);
+  if (trimmed !== null && trimmed !== undefined) {
+    return trimmed;
+  }
+  return defaultValue || null;
+};
+
 const resolveTwilioCredentials = async (clinicId) => {
-  const clinicSettings = await getClinicTwilioSettings(clinicId);
-  const credentials = clinicSettings?.accountSid && clinicSettings?.authToken
-    ? {
-        accountSid: clinicSettings.accountSid,
-        authToken: clinicSettings.authToken,
-        messagingServiceSid: clinicSettings.messagingServiceSid || DEFAULT_MESSAGING_SERVICE_SID || null,
-        whatsappFrom: clinicSettings.whatsappFrom || DEFAULT_WHATSAPP_FROM || null
-      }
-    : {
-        accountSid: DEFAULT_ACCOUNT_SID || null,
-        authToken: DEFAULT_AUTH_TOKEN || null,
-        messagingServiceSid: DEFAULT_MESSAGING_SERVICE_SID || null,
-        whatsappFrom: DEFAULT_WHATSAPP_FROM || null
-      };
+  const clinicWhatsapp = await getClinicWhatsappConfig(clinicId);
+  const credentials = {
+    accountSid: pickCredential(clinicWhatsapp.accountSid, DEFAULT_ACCOUNT_SID),
+    authToken: pickCredential(clinicWhatsapp.authToken, DEFAULT_AUTH_TOKEN),
+    messagingServiceSid: pickCredential(clinicWhatsapp.messagingServiceSid, DEFAULT_MESSAGING_SERVICE_SID),
+    whatsappFrom: pickCredential(clinicWhatsapp.whatsappFrom, DEFAULT_WHATSAPP_FROM)
+  };
   ensureCredentials(credentials);
   return credentials;
 };
 
+const isWhatsAppConfiguredForClinic = async (clinicId) => {
+  try {
+    await resolveTwilioCredentials(clinicId);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+const getCacheKey = (clinicId) =>
+  clinicId ? `clinic-${clinicId}` : 'system';
+
 const getTwilioClientForClinic = async (clinicId) => {
   const credentials = await resolveTwilioCredentials(clinicId);
-  const cacheKey = clinicId || 'default';
+  const cacheKey = getCacheKey(clinicId);
   const cached = clinicClientCache.get(cacheKey);
   if (cached && cached.accountSid === credentials.accountSid && cached.authToken === credentials.authToken) {
     return { client: cached.client, credentials };
@@ -87,6 +106,13 @@ const buildWhatsAppAddress = (value) => {
   return normalized.startsWith('whatsapp:') ? normalized : `whatsapp:${normalized}`;
 };
 
+const formatSenderAddress = (value) => {
+  if (!value) {
+    return null;
+  }
+  return buildWhatsAppAddress(value);
+};
+
 const buildMessagePayload = (toAddress, config = {}, additionalFields = {}) => {
   const payload = {
     to: toAddress,
@@ -95,8 +121,11 @@ const buildMessagePayload = (toAddress, config = {}, additionalFields = {}) => {
 
   if (config.messagingServiceSid) {
     payload.messagingServiceSid = config.messagingServiceSid;
-  } else if (config.whatsappFrom) {
-    payload.from = config.whatsappFrom;
+  }
+
+  const formattedSender = formatSenderAddress(config.whatsappFrom);
+  if (formattedSender) {
+    payload.from = formattedSender;
   }
 
   return payload;
@@ -258,30 +287,45 @@ async function sendTemplateMessage({ to, templateName, language, components = []
   return client.messages.create(messagePayload);
 }
 
-async function sendWhatsAppMessage({ to, body, mediaUrl, clinicId }) {
-  if (!body && !mediaUrl) {
-    throw new Error('Message body or media URL is required');
+async function sendWhatsAppMessage({
+  to,
+  body,
+  mediaUrl,
+  clinicId,
+  contentSid = null,
+  requiresTemplate = false
+}) {
+  if (requiresTemplate && !contentSid) {
+    throw new Error('The 24-hour free-text window has closed; send a template using contentSid.');
+  }
+  if (!body && !mediaUrl && !contentSid) {
+    throw new Error('Message body, contentSid, or media URL is required');
   }
 
   const { client, credentials } = await getTwilioClientForClinic(clinicId);
-  console.log("send", to, body, mediaUrl);
   const toAddress = buildWhatsAppAddress(to);
+  const messageFields = contentSid
+    ? { contentSid }
+    : { body: body ? String(body).trim() : ' ' };
+
   const payload = buildMessagePayload(
     toAddress,
     {
       messagingServiceSid: credentials.messagingServiceSid,
       whatsappFrom: credentials.whatsappFrom
     },
-    {
-      body: body ? String(body).trim() : ' '
-    }
+    messageFields
   );
 
-  console.log("payload", payload);
+  if (contentSid) {
+    payload.contentSid = contentSid;
+  }
+
   if (mediaUrl) {
     payload.mediaUrl = Array.isArray(mediaUrl) ? mediaUrl : [mediaUrl];
   }
 
+  console.log("___________client____________", client, client.messages.create, payload);
   return client.messages.create(payload);
 }
 
@@ -350,5 +394,6 @@ module.exports = {
   sendTemplateMessage,
   sendWhatsAppMessage,
   submitTemplateForApproval,
-  refreshTemplateApprovalStatus
+  refreshTemplateApprovalStatus,
+  isWhatsAppConfiguredForClinic
 };

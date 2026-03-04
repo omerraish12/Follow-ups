@@ -8,6 +8,7 @@ export interface TeamMemberApi {
   phone?: string | null;
   role: string;
   status?: string | null;
+  permissions?: string[] | null;
   clinic_id?: string | number | null;
   clinic_name?: string | null;
   created_at?: string | null;

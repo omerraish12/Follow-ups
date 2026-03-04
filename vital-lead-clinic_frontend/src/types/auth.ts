@@ -1,15 +1,19 @@
 // src/types/auth.ts
 import type { UserRole } from "@/lib/roles";
 
+export type EntryType = 'clinic' | 'patient';
+
 export interface User {
     id: string;
     email: string;
     name: string;
     clinicName?: string;
+    clinicId?: string;
     phone?: string;
     role: UserRole;
-    emailVerified: boolean;
-    createdAt: string;
+    entryType?: EntryType;
+    emailVerified?: boolean;
+    createdAt?: string;
 }
 
 export interface AuthState {
@@ -21,6 +25,8 @@ export interface AuthState {
 export interface LoginCredentials {
     email: string;
     password: string;
+    entryType?: EntryType;
+    entryCode?: string;
 }
 
 export interface SignupCredentials {

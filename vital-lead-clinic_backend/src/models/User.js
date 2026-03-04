@@ -32,13 +32,16 @@ class User {
             phone,
             clinicId,
             role = 'STAFF',
-            status = 'active'
+            status = 'active',
+            entryType = 'clinic',
+            entryCode = null,
+            permissions = []
         } = userData;
         const result = await query(
-            `INSERT INTO users (email, password, name, phone, clinic_id, role, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING id, email, name, role, status, clinic_id`,
-            [email, password, name, phone, clinicId, role, status]
+            `INSERT INTO users (email, password, name, phone, clinic_id, role, status, permissions, entry_type, entry_code) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+       RETURNING id, email, name, role, status, clinic_id, entry_type, entry_code`,
+            [email, password, name, phone, clinicId, role, status, permissions, entryType, entryCode]
         );
         return result.rows[0];
     }

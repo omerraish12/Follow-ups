@@ -1,5 +1,5 @@
 // src/pages/Settings.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   User, Bell, Shield, Database, Globe, Palette,
   Mail, Phone, Building, MapPin, Clock, Save,
@@ -7,6 +7,7 @@ import {
   Key, Smartphone, CreditCard, Users, Download,
   Upload, Trash2, Edit, Eye, EyeOff, Loader2
 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { settingsService } from "@/services/settingsService";
+import { teamService } from "@/services/teamService";
+import type { TeamMemberApi } from "@/types/team";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +61,7 @@ interface ClinicSettings {
   timezone: string;
   language: string;
   currency: string;
+  whatsappNumber?: string;
 }
 
 interface UserProfile {
@@ -79,10 +83,70 @@ interface Integration {
   description: string;
 }
 
+interface NotificationSettingsState {
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  leadAlerts: boolean;
+  automationAlerts: boolean;
+  dailyDigest: boolean;
+  weeklyReport: boolean;
+  marketingEmails: boolean;
+}
+
+interface BackupSettingsState {
+  autoBackup: boolean;
+  backupFrequency: 'hourly' | 'daily' | 'weekly' | 'monthly';
+  retentionDays: number;
+  lastBackup: string;
+  lastBackupFile: string;
+}
+
+const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettingsState = {
+  emailNotifications: true,
+  pushNotifications: true,
+  leadAlerts: true,
+  automationAlerts: true,
+  dailyDigest: false,
+  weeklyReport: true,
+  marketingEmails: false,
+};
+
+const DEFAULT_BACKUP_SETTINGS: BackupSettingsState = {
+  autoBackup: true,
+  backupFrequency: 'daily',
+  retentionDays: 30,
+  lastBackup: '2025-02-23 03:00',
+  lastBackupFile: '',
+};
+
+type NotificationSettingField = {
+  key: keyof NotificationSettingsState;
+  title: string;
+  description: string;
+  dividerAfter?: boolean;
+};
+
+type ExportFormat = "csv" | "json" | "pdf";
+
+const DATA_EXPORT_FORMATS: { format: ExportFormat; label: string }[] = [
+  { format: "csv", label: "Excel (CSV)" },
+  { format: "pdf", label: "PDF" },
+  { format: "json", label: "JSON" },
+];
+
+const CONVERSATION_EXPORT_OPTIONS: { format: ExportFormat; labelKey: string }[] = [
+  { format: "csv", labelKey: "conversation_history_export_csv" },
+  { format: "json", labelKey: "conversation_history_export_json" },
+  { format: "pdf", labelKey: "conversation_history_export_pdf" },
+];
+
+const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024; // 2MB
+
 export default function SettingsPage() {
   const { user, refreshUser, logout } = useAuth();
   const { t, language, setLanguage } = useLanguage();
   const isRTL = language === 'he' || language === 'ar';
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -106,15 +170,40 @@ export default function SettingsPage() {
     address: t('herzliya_address'),
     timezone: 'Asia/Jerusalem',
     language,
-    currency: 'ILS'
+    currency: 'ILS',
+    whatsappNumber: ''
   });
 
   const actionAlignment = isRTL ? "mr-auto" : "ml-auto";
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const languageOptions: Array<{ value: Language; label: string }> = [
+  const languageOptions = useMemo<{ value: Language; label: string }[]>(() => [
     { value: "he", label: t("hebrew") },
     { value: "en", label: t("english") },
-  ];
+  ], [t]);
+
+  const timezoneOptions = useMemo(() => [
+    { value: "Asia/Jerusalem", label: t("israel_timezone") },
+    { value: "Europe/London", label: t("london_timezone") },
+    { value: "America/New_York", label: t("ny_timezone") },
+  ], [t]);
+
+  const currencyOptions = useMemo(() => [
+    { value: "ILS", label: t("ils") },
+    { value: "USD", label: t("usd") },
+    { value: "EUR", label: t("eur") },
+  ], [t]);
+
+  const notificationToggleFields = useMemo<NotificationSettingField[]>(() => [
+    { key: "emailNotifications", title: t("email_notifications"), description: t("email_notifications_desc") },
+    { key: "pushNotifications", title: t("push_notifications"), description: t("push_notifications_desc"), dividerAfter: true },
+    { key: "leadAlerts", title: t("lead_alerts"), description: t("lead_alerts_desc") },
+    { key: "automationAlerts", title: t("automation_alerts"), description: t("automation_alerts_desc"), dividerAfter: true },
+    { key: "dailyDigest", title: t("daily_digest"), description: t("daily_digest_desc") },
+    { key: "weeklyReport", title: t("weekly_report"), description: t("weekly_report_desc") },
+    { key: "marketingEmails", title: t("marketing_updates"), description: t("marketing_updates_desc") },
+  ], [t]);
 
   // User profile
   const [profile, setProfile] = useState<UserProfile>({
@@ -171,29 +260,45 @@ export default function SettingsPage() {
   ]);
 
   // Notification settings
-  const [notificationSettings, setNotificationSettings] = useState({
-    emailNotifications: true,
-    pushNotifications: true,
-    leadAlerts: true,
-    automationAlerts: true,
-    dailyDigest: false,
-    weeklyReport: true,
-    marketingEmails: false
-  });
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettingsState>(DEFAULT_NOTIFICATION_SETTINGS);
 
   // Backup settings
-  const [backupSettings, setBackupSettings] = useState({
-    autoBackup: true,
-    backupFrequency: 'daily',
-    retentionDays: 30,
-    lastBackup: '2025-02-23 03:00',
-    lastBackupFile: ''
-  });
+  const [backupSettings, setBackupSettings] = useState<BackupSettingsState>(DEFAULT_BACKUP_SETTINGS);
+  const [teamMembers, setTeamMembers] = useState<TeamMemberApi[]>([]);
+  const [isTeamLoading, setIsTeamLoading] = useState<boolean>(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
 
   // Load data
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadTeamMembers = async () => {
+      setIsTeamLoading(true);
+      setTeamError(null);
+      try {
+        const data = await teamService.getMembers();
+        if (!cancelled) {
+          setTeamMembers(data);
+        }
+      } catch (error) {
+        console.error('Error loading team members:', error);
+        if (!cancelled) {
+          setTeamError(t("error_loading_data"));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsTeamLoading(false);
+        }
+      }
+    };
+    void loadTeamMembers();
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   const loadSettings = async () => {
     setIsLoading(true);
@@ -204,14 +309,15 @@ export default function SettingsPage() {
         const safeLanguage: Language = data.clinic.language === "he" ? "he" : "en";
         setClinicSettings({
           id: data.clinic.id,
-          name: data.clinic.name,
-          email: data.clinic.email,
-          phone: data.clinic.phone,
-          address: data.clinic.address,
+          name: data.clinic.name || "",
+          email: data.clinic.email || "",
+          phone: data.clinic.phone || "",
+          address: data.clinic.address || "",
           logo: data.clinic.logo || undefined,
-          timezone: data.clinic.timezone,
+          timezone: data.clinic.timezone || "Asia/Jerusalem",
           language: safeLanguage,
-          currency: data.clinic.currency,
+          currency: data.clinic.currency || "ILS",
+          whatsappNumber: data.clinic.whatsappNumber || "",
         });
         setLanguage(safeLanguage);
       }
@@ -234,11 +340,11 @@ export default function SettingsPage() {
 
       if (data?.backupSettings) {
         setBackupSettings({
-          autoBackup: data.backupSettings.autoBackup,
-          backupFrequency: data.backupSettings.backupFrequency,
-          retentionDays: data.backupSettings.retentionDays,
-          lastBackup: data.backupSettings.lastBackup || '',
-          lastBackupFile: data.backupSettings.lastBackupFile || ''
+          autoBackup: data.backupSettings.autoBackup ?? DEFAULT_BACKUP_SETTINGS.autoBackup,
+          backupFrequency: data.backupSettings.backupFrequency || DEFAULT_BACKUP_SETTINGS.backupFrequency,
+          retentionDays: data.backupSettings.retentionDays ?? DEFAULT_BACKUP_SETTINGS.retentionDays,
+          lastBackup: data.backupSettings.lastBackup || DEFAULT_BACKUP_SETTINGS.lastBackup,
+          lastBackupFile: data.backupSettings.lastBackupFile || DEFAULT_BACKUP_SETTINGS.lastBackupFile
         });
       }
 
@@ -278,101 +384,176 @@ export default function SettingsPage() {
     return () => clearTimeout(timeout);
   }, [backupSettings, hasLoadedSettings, t]);
 
+  const runSaving = async (action: () => Promise<void>) => {
+    setIsSaving(true);
+    try {
+      await action();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClinicFieldChange = (field: keyof ClinicSettings, value: string) => {
+    setClinicSettings((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateConversationFilterField = (field: keyof typeof conversationFilters, value: string) => {
+    setConversationFilters((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateNotificationSetting = (key: NotificationSettingField["key"], value: boolean) => {
+    setNotificationSettings((prev) => ({ ...prev, [key]: value }));
+  };
+
   const handleLanguageSelect = (value: string) => {
     const nextLanguage: Language = value === "he" ? "he" : "en";
-    setClinicSettings((prev) => ({ ...prev, language: nextLanguage }));
+    handleClinicFieldChange("language", nextLanguage);
     setLanguage(nextLanguage);
   };
 
   const handleRemoveLogo = async () => {
     if (!clinicSettings.logo) return;
-    setIsSaving(true);
-    try {
-      const updated = await settingsService.updateClinic({ logo: null });
-      setClinicSettings((prev) => ({
-        ...prev,
-        logo: updated.logo || undefined,
-      }));
-      toast({
-        title: t("settings_saved"),
-        description: t("logo_removed"),
-      });
-    } catch (error) {
+
+    await runSaving(async () => {
+      try {
+        const updated = await settingsService.updateClinic({ logo: null });
+        setClinicSettings((prev) => ({
+          ...prev,
+          logo: updated.logo || undefined,
+        }));
+        toast({
+          title: t("settings_saved"),
+          description: t("logo_removed"),
+        });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("logo_remove_failed"),
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    if (file.size > MAX_IMAGE_UPLOAD_SIZE) {
       toast({
         title: t("error"),
-        description: t("logo_remove_failed"),
-        variant: "destructive",
+        description: t("logo_format"),
+        variant: "destructive"
       });
-    } finally {
-      setIsSaving(false);
+      return;
     }
+
+    await runSaving(async () => {
+      try {
+        const formData = new FormData();
+        formData.append('logo', file);
+        const { logo } = await settingsService.uploadLogo(formData);
+        setClinicSettings((prev) => ({ ...prev, logo }));
+        toast({ title: t("settings_saved"), description: t("clinic_settings_updated") });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("settings_save_failed"),
+          variant: "destructive"
+        });
+      }
+    });
+  };
+
+  const handleProfilePhotoUpload = async (file: File) => {
+    if (file.size > MAX_IMAGE_UPLOAD_SIZE) {
+      toast({
+        title: t("error"),
+        description: t("photo_format"),
+        variant: "destructive"
+      });
+      return;
+    }
+
+    await runSaving(async () => {
+      try {
+        const formData = new FormData();
+        formData.append("photo", file);
+        const { avatar } = await settingsService.uploadProfilePhoto(formData);
+        setProfile((prev) => ({ ...prev, avatar }));
+        await refreshUser?.();
+        toast({ title: t("profile_updated"), description: t("profile_updated_success") });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("settings_save_failed"),
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   const handleSaveClinic = async () => {
-    setIsSaving(true);
-    try {
-      const updated = await settingsService.updateClinic({
-        name: clinicSettings.name,
-        email: clinicSettings.email,
-        phone: clinicSettings.phone,
-        address: clinicSettings.address,
-        timezone: clinicSettings.timezone,
-        language: clinicSettings.language,
-        currency: clinicSettings.currency,
-        logo: clinicSettings.logo,
-      });
+    await runSaving(async () => {
+      try {
+        const updated = await settingsService.updateClinic({
+          name: clinicSettings.name,
+          email: clinicSettings.email,
+          phone: clinicSettings.phone,
+          address: clinicSettings.address,
+          timezone: clinicSettings.timezone,
+          language: clinicSettings.language,
+          currency: clinicSettings.currency,
+          logo: clinicSettings.logo,
+          whatsappNumber: clinicSettings.whatsappNumber
+        });
 
-      if (updated) {
-        setClinicSettings((prev) => ({ ...prev, ...updated }));
+        if (updated) {
+          setClinicSettings((prev) => ({ ...prev, ...updated }));
+        }
+
+        toast({
+          title: t("settings_saved"),
+          description: t("clinic_settings_updated"),
+        });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("settings_save_failed"),
+          variant: "destructive"
+        });
       }
-
-      toast({
-        title: t("settings_saved"),
-        description: t("clinic_settings_updated"),
-      });
-    } catch (error) {
-      toast({
-        title: t("error"),
-        description: t("settings_save_failed"),
-        variant: "destructive"
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   const handleSaveProfile = async () => {
-    setIsSaving(true);
-    try {
-      const updated = await settingsService.updateProfile({
-        name: profile.name,
-        email: profile.email,
-        phone: profile.phone,
-      });
+    await runSaving(async () => {
+      try {
+        const updated = await settingsService.updateProfile({
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone,
+        });
 
-      if (updated) {
-        setProfile((prev) => ({
-          ...prev,
-          name: updated.name ?? prev.name,
-          email: updated.email ?? prev.email,
-          phone: updated.phone ?? prev.phone,
-        }));
-        await refreshUser?.();
+        if (updated) {
+          setProfile((prev) => ({
+            ...prev,
+            name: updated.name ?? prev.name,
+            email: updated.email ?? prev.email,
+            phone: updated.phone ?? prev.phone,
+          }));
+          await refreshUser?.();
+        }
+
+        toast({
+          title: t("profile_updated"),
+          description: t("profile_updated_success"),
+        });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("profile_update_failed"),
+          variant: "destructive"
+        });
       }
-
-      toast({
-        title: t("profile_updated"),
-        description: t("profile_updated_success"),
-      });
-    } catch (error) {
-      toast({
-        title: t("error"),
-        description: t("profile_update_failed"),
-        variant: "destructive"
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    });
   };
 
   const handleChangePassword = async () => {
@@ -393,46 +574,43 @@ export default function SettingsPage() {
       });
       return;
     }
+    await runSaving(async () => {
+      try {
+        await settingsService.changePassword(passwordData.current, passwordData.new);
 
-    setIsSaving(true);
-    try {
-      await settingsService.changePassword(passwordData.current, passwordData.new);
+        setPasswordData({ current: '', new: '', confirm: '' });
 
-      setPasswordData({ current: '', new: '', confirm: '' });
-
-      toast({
-        title: t("password_changed"),
-        description: t("password_changed_success"),
-      });
-    } catch (error) {
-      toast({
-        title: t("error"),
-        description: t("password_change_failed"),
-        variant: "destructive"
-      });
-    } finally {
-      setIsSaving(false);
-    }
+        toast({
+          title: t("password_changed"),
+          description: t("password_changed_success"),
+        });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("password_change_failed"),
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   const handleSaveNotifications = async () => {
-    setIsSaving(true);
-    try {
-      await settingsService.updateNotifications(notificationSettings);
+    await runSaving(async () => {
+      try {
+        await settingsService.updateNotifications(notificationSettings);
 
-      toast({
-        title: t("settings_saved"),
-        description: t("notification_preferences_updated"),
-      });
-    } catch (error) {
-      toast({
-        title: t("error"),
-        description: t("settings_save_failed"),
-        variant: "destructive"
-      });
-    } finally {
-      setIsSaving(false);
-    }
+        toast({
+          title: t("settings_saved"),
+          description: t("notification_preferences_updated"),
+        });
+      } catch (error) {
+        toast({
+          title: t("error"),
+          description: t("settings_save_failed"),
+          variant: "destructive"
+        });
+      }
+    });
   };
 
   const handleBackup = async () => {
@@ -459,7 +637,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleExportData = async (format: "csv" | "json" | "pdf") => {
+  const handleExportData = async (format: ExportFormat) => {
     setIsExporting(true);
     try {
       const response = await settingsService.exportData(format);
@@ -480,7 +658,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleExportConversation = async (format: "csv" | "json" | "pdf") => {
+  const handleExportConversation = async (format: ExportFormat) => {
     setIsExportingConversation(true);
     try {
       const response = await settingsService.exportData(format, {
@@ -519,6 +697,80 @@ export default function SettingsPage() {
     link.remove();
     window.URL.revokeObjectURL(url);
   };
+
+  const formatMemberDate = (value?: string | null) => {
+    if (!value) return '-';
+    try {
+      return new Date(value).toLocaleDateString(language === 'he' ? 'he-IL' : 'en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return '-';
+    }
+  };
+
+  const normalizeTeamRole = (role?: string | null): "admin" | "manager" | "staff" => {
+    const normalized = (role || '').toString().trim().toLowerCase();
+    if (normalized === 'admin') return 'admin';
+    if (normalized === 'manager') return 'manager';
+    return 'staff';
+  };
+
+  const normalizeTeamStatus = (status?: string | null): "active" | "pending" | "inactive" => {
+    const normalized = (status || '').toString().trim().toLowerCase();
+    if (normalized === 'pending') return 'pending';
+    if (normalized === 'inactive') return 'inactive';
+    return 'active';
+  };
+
+  const roleCounts = teamMembers.reduce(
+    (acc, member) => {
+      const role = normalizeTeamRole(member.role);
+      acc[role] += 1;
+      return acc;
+    },
+    { admin: 0, manager: 0, staff: 0 }
+  );
+
+  const statusCounts = teamMembers.reduce(
+    (acc, member) => {
+      const status = normalizeTeamStatus(member.status);
+      acc[status] += 1;
+      return acc;
+    },
+    { active: 0, pending: 0, inactive: 0 }
+  );
+
+  const roleSummaries = [
+    {
+      key: 'admin',
+      label: t("admin_role"),
+      description: t("team_role_description_admin"),
+      count: roleCounts.admin
+    },
+    {
+      key: 'manager',
+      label: t("manager_role"),
+      description: t("team_role_description_manager"),
+      count: roleCounts.manager
+    },
+    {
+      key: 'staff',
+      label: t("user"),
+      description: t("team_role_description_staff"),
+      count: roleCounts.staff
+    }
+  ];
+
+  const statusSummaries = [
+    { key: 'active', label: t("team_status_active"), count: statusCounts.active, variant: 'success' },
+    { key: 'pending', label: t("team_status_pending"), count: statusCounts.pending, variant: 'warning' },
+    { key: 'inactive', label: t("team_status_inactive"), count: statusCounts.inactive, variant: 'secondary' }
+  ];
+
+  const recentMembers = teamMembers.slice(0, 4);
 
   const getConversationFilterPayload = () => {
     const payload: Record<string, unknown> = {};
@@ -561,6 +813,7 @@ export default function SettingsPage() {
     try {
       const integration = integrations.find((item) => item.id === id);
       if (!integration) return;
+      if (integration.type === 'whatsapp') return;
 
       const nextStatus = integration.status === 'connected' ? 'disconnected' : 'connected';
       await settingsService.updateIntegration(integration.type, nextStatus);
@@ -578,6 +831,11 @@ export default function SettingsPage() {
       });
     } catch (error) {
       console.error('Error toggling integration:', error);
+      toast({
+        title: t("error"),
+        description: t("settings_save_failed"),
+        variant: "destructive"
+      });
     }
   };
 
@@ -603,12 +861,13 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="general" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 rounded-xl">
+        <TabsList className="grid w-full grid-cols-6 items-center rounded-xl">
           <TabsTrigger value="general">{t("general")}</TabsTrigger>
           <TabsTrigger value="profile">{t("profile")}</TabsTrigger>
           <TabsTrigger value="notifications">{t("notifications")}</TabsTrigger>
           <TabsTrigger value="integrations">{t("integrations")}</TabsTrigger>
           <TabsTrigger value="data">{t("data")}</TabsTrigger>
+          <TabsTrigger value="team">{t("team")}</TabsTrigger>
         </TabsList>
 
         {/* General Settings */}
@@ -638,40 +897,20 @@ export default function SettingsPage() {
                       type="file"
                       accept="image/png, image/jpeg"
                       className="hidden"
-                      onChange={async (e) => {
+                      ref={logoInputRef}
+                      onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (!file) return;
-                        if (file.size > 2 * 1024 * 1024) {
-                          toast({
-                            title: t("error"),
-                            description: t("logo_format"),
-                            variant: "destructive"
-                          });
-                          return;
+                        if (file) {
+                          void handleLogoUpload(file);
                         }
-                        const formData = new FormData();
-                        formData.append('logo', file);
-                        try {
-                          setIsSaving(true);
-                          const { logo } = await settingsService.uploadLogo(formData);
-                          setClinicSettings((prev) => ({ ...prev, logo }));
-                          toast({ title: t("settings_saved"), description: t("clinic_settings_updated") });
-                        } catch (error) {
-                          toast({
-                            title: t("error"),
-                            description: t("settings_save_failed"),
-                            variant: "destructive"
-                          });
-                        } finally {
-                          setIsSaving(false);
-                        }
+                        e.target.value = "";
                       }}
                     />
                     <Button
                       variant="outline"
                       size="sm"
                       className="rounded-lg"
-                      onClick={() => document.getElementById('logo-upload')?.click()}
+                      onClick={() => logoInputRef.current?.click()}
                       disabled={isSaving}
                     >
                       <Upload className="h-4 w-4 ml-2" />
@@ -700,8 +939,8 @@ export default function SettingsPage() {
                   <Label htmlFor="clinic-name">{t("clinic_name_label")}</Label>
                   <Input
                     id="clinic-name"
-                    value={clinicSettings.name}
-                    onChange={(e) => setClinicSettings({ ...clinicSettings, name: e.target.value })}
+                    value={clinicSettings.name ?? ""}
+                    onChange={(e) => handleClinicFieldChange("name", e.target.value)}
                     className="rounded-xl"
                   />
                 </div>
@@ -710,8 +949,8 @@ export default function SettingsPage() {
                   <Input
                     id="clinic-email"
                     type="email"
-                    value={clinicSettings.email}
-                    onChange={(e) => setClinicSettings({ ...clinicSettings, email: e.target.value })}
+                    value={clinicSettings.email ?? ""}
+                    onChange={(e) => handleClinicFieldChange("email", e.target.value)}
                     className="rounded-xl"
                   />
                 </div>
@@ -719,17 +958,27 @@ export default function SettingsPage() {
                   <Label htmlFor="clinic-phone">{t("phone")}</Label>
                   <Input
                     id="clinic-phone"
-                    value={clinicSettings.phone}
-                    onChange={(e) => setClinicSettings({ ...clinicSettings, phone: e.target.value })}
+                    value={clinicSettings.phone ?? ""}
+                    onChange={(e) => handleClinicFieldChange("phone", e.target.value)}
                     className="rounded-xl"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="clinic-whatsapp">{t("whatsapp_number_label")}</Label>
+                  <Input
+                    id="clinic-whatsapp"
+                    value={clinicSettings.whatsappNumber ?? ""}
+                    onChange={(e) => handleClinicFieldChange("whatsappNumber", e.target.value)}
+                    className="rounded-xl"
+                  />
+                  <p className="text-xs text-muted-foreground">{t("whatsapp_number_description")}</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="clinic-address">{t("address")}</Label>
                   <Input
                     id="clinic-address"
-                    value={clinicSettings.address}
-                    onChange={(e) => setClinicSettings({ ...clinicSettings, address: e.target.value })}
+                    value={clinicSettings.address ?? ""}
+                    onChange={(e) => handleClinicFieldChange("address", e.target.value)}
                     className="rounded-xl"
                   />
                 </div>
@@ -740,14 +989,16 @@ export default function SettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="timezone">{t("timezone")}</Label>
-                  <Select value={clinicSettings.timezone} onValueChange={(v) => setClinicSettings({ ...clinicSettings, timezone: v })}>
+                  <Select value={clinicSettings.timezone} onValueChange={(v) => handleClinicFieldChange("timezone", v)}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Asia/Jerusalem">{t("israel_timezone")}</SelectItem>
-                      <SelectItem value="Europe/London">{t("london_timezone")}</SelectItem>
-                      <SelectItem value="America/New_York">{t("ny_timezone")}</SelectItem>
+                      {timezoneOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -768,14 +1019,16 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="currency">{t("currency")}</Label>
-                  <Select value={clinicSettings.currency} onValueChange={(v) => setClinicSettings({ ...clinicSettings, currency: v })}>
+                  <Select value={clinicSettings.currency} onValueChange={(v) => handleClinicFieldChange("currency", v)}>
                     <SelectTrigger className="rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ILS">{t("ils")}</SelectItem>
-                      <SelectItem value="USD">{t("usd")}</SelectItem>
-                      <SelectItem value="EUR">{t("eur")}</SelectItem>
+                      {currencyOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -847,9 +1100,7 @@ export default function SettingsPage() {
                   <Input
                     type="date"
                     value={conversationFilters.startDate}
-                    onChange={(e) =>
-                      setConversationFilters((prev) => ({ ...prev, startDate: e.target.value }))
-                    }
+                    onChange={(e) => updateConversationFilterField("startDate", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
@@ -857,16 +1108,14 @@ export default function SettingsPage() {
                   <Input
                     type="date"
                     value={conversationFilters.endDate}
-                    onChange={(e) =>
-                      setConversationFilters((prev) => ({ ...prev, endDate: e.target.value }))
-                    }
+                    onChange={(e) => updateConversationFilterField("endDate", e.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold uppercase tracking-[0.3em]">{t("conversation_history_message_type")}</Label>
                   <Select
                     value={conversationFilters.messageType}
-                    onValueChange={(value) => setConversationFilters((prev) => ({ ...prev, messageType: value }))}
+                    onValueChange={(value) => updateConversationFilterField("messageType", value)}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -883,8 +1132,7 @@ export default function SettingsPage() {
                   <Input
                     type="number"
                     value={conversationFilters.limit}
-                    onChange={(e) =>
-                      setConversationFilters((prev) => ({ ...prev, limit: e.target.value }))}
+                    onChange={(e) => updateConversationFilterField("limit", e.target.value)}
                     min={1}
                     max={5000}
                   />
@@ -892,45 +1140,22 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isExportingConversation}
-                  onClick={() => handleExportConversation("csv")}
-                >
-                  {isExportingConversation ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
-                  {t("conversation_history_export_csv")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isExportingConversation}
-                  onClick={() => handleExportConversation("json")}
-                >
-                  {isExportingConversation ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
-                  {t("conversation_history_export_json")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isExportingConversation}
-                  onClick={() => handleExportConversation("pdf")}
-                >
-                  {isExportingConversation ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
-                  {t("conversation_history_export_pdf")}
-                </Button>
+                {CONVERSATION_EXPORT_OPTIONS.map((option) => (
+                  <Button
+                    key={option.format}
+                    variant="outline"
+                    size="sm"
+                    disabled={isExportingConversation}
+                    onClick={() => handleExportConversation(option.format)}
+                  >
+                    {isExportingConversation ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    {t(option.labelKey)}
+                  </Button>
+                ))}
               </div>
               <p className="text-xs text-muted-foreground">
                 {t("conversation_history_note")}
@@ -965,34 +1190,13 @@ export default function SettingsPage() {
                     type="file"
                     accept="image/png,image/jpeg"
                     className="hidden"
-                    onChange={async (e) => {
+                    ref={avatarInputRef}
+                    onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast({
-                          title: t("error"),
-                          description: t("photo_format"),
-                          variant: "destructive",
-                        });
-                        return;
+                      if (file) {
+                        void handleProfilePhotoUpload(file);
                       }
-                      const formData = new FormData();
-                      formData.append("photo", file);
-                      try {
-                        setIsSaving(true);
-                        const { avatar } = await settingsService.uploadProfilePhoto(formData);
-                        setProfile((prev) => ({ ...prev, avatar }));
-                        await refreshUser?.();
-                        toast({ title: t("profile_updated"), description: t("profile_updated_success") });
-                      } catch (error) {
-                        toast({
-                          title: t("error"),
-                          description: t("settings_save_failed"),
-                          variant: "destructive"
-                        });
-                      } finally {
-                        setIsSaving(false);
-                      }
+                      e.target.value = "";
                     }}
                   />
                   <div className="flex gap-2">
@@ -1000,7 +1204,7 @@ export default function SettingsPage() {
                       variant="outline"
                       size="sm"
                       className="rounded-lg"
-                      onClick={() => document.getElementById("avatar-upload")?.click()}
+                      onClick={() => avatarInputRef.current?.click()}
                       disabled={isSaving}
                     >
                       <Upload className="h-4 w-4 ml-2" />
@@ -1026,7 +1230,7 @@ export default function SettingsPage() {
                   <Label htmlFor="profile-name">{t("full_name")}</Label>
                   <Input
                     id="profile-name"
-                    value={profile.name}
+                    value={profile.name ?? ""}
                     onChange={(e) => setProfile({ ...profile, name: e.target.value })}
                     className="rounded-xl"
                   />
@@ -1036,7 +1240,7 @@ export default function SettingsPage() {
                   <Input
                     id="profile-email"
                     type="email"
-                    value={profile.email}
+                    value={profile.email ?? ""}
                     onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                     className="rounded-xl"
                   />
@@ -1045,7 +1249,7 @@ export default function SettingsPage() {
                   <Label htmlFor="profile-phone">{t("phone")}</Label>
                   <Input
                     id="profile-phone"
-                    value={profile.phone}
+                    value={profile.phone ?? ""}
                     onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                     className="rounded-xl"
                   />
@@ -1189,100 +1393,21 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("email_notifications")}</p>
-                  <p className="text-sm text-muted-foreground">{t("email_notifications_desc")}</p>
+              {notificationToggleFields.map((field) => (
+                <div key={field.key} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">{field.title}</p>
+                      <p className="text-sm text-muted-foreground">{field.description}</p>
+                    </div>
+                    <Switch
+                      checked={notificationSettings[field.key]}
+                      onCheckedChange={(checked) => updateNotificationSetting(field.key, checked)}
+                    />
+                  </div>
+                  {field.dividerAfter && <Separator />}
                 </div>
-                <Switch
-                  checked={notificationSettings.emailNotifications}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, emailNotifications: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("push_notifications")}</p>
-                  <p className="text-sm text-muted-foreground">{t("push_notifications_desc")}</p>
-                </div>
-                <Switch
-                  checked={notificationSettings.pushNotifications}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, pushNotifications: checked })
-                  }
-                />
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("lead_alerts")}</p>
-                  <p className="text-sm text-muted-foreground">{t("lead_alerts_desc")}</p>
-                </div>
-                <Switch
-                  checked={notificationSettings.leadAlerts}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, leadAlerts: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("automation_alerts")}</p>
-                  <p className="text-sm text-muted-foreground">{t("automation_alerts_desc")}</p>
-                </div>
-                <Switch
-                  checked={notificationSettings.automationAlerts}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, automationAlerts: checked })
-                  }
-                />
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("daily_digest")}</p>
-                  <p className="text-sm text-muted-foreground">{t("daily_digest_desc")}</p>
-                </div>
-                <Switch
-                  checked={notificationSettings.dailyDigest}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, dailyDigest: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("weekly_report")}</p>
-                  <p className="text-sm text-muted-foreground">{t("weekly_report_desc")}</p>
-                </div>
-                <Switch
-                  checked={notificationSettings.weeklyReport}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, weeklyReport: checked })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{t("marketing_updates")}</p>
-                  <p className="text-sm text-muted-foreground">{t("marketing_updates_desc")}</p>
-                </div>
-                <Switch
-                  checked={notificationSettings.marketingEmails}
-                  onCheckedChange={(checked) =>
-                    setNotificationSettings({ ...notificationSettings, marketingEmails: checked })
-                  }
-                />
-              </div>
+              ))}
             </CardContent>
             <CardFooter className="border-t pt-4">
               <Button onClick={handleSaveNotifications} disabled={isSaving} className={actionAlignment}>
@@ -1314,6 +1439,8 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               {integrations.map((integration) => {
                 const Icon = integration.icon;
+                const isWhatsApp = integration.type === 'whatsapp';
+                const whatsappSender = integration.whatsappFrom || integration.messagingServiceSid;
                 return (
                   <div
                     key={integration.id}
@@ -1347,13 +1474,31 @@ export default function SettingsPage() {
                         {integration.status === 'error' && t("error")}
                         {integration.status === 'disconnected' && t("disconnected")}
                       </Badge>
-                      <Button
-                        variant={integration.status === 'connected' ? "outline" : "default"}
-                        size="sm"
-                        onClick={() => toggleIntegration(integration.id)}
-                      >
-                        {integration.status === 'connected' ? t("disconnect") : t("connect")}
-                      </Button>
+                      {isWhatsApp ? (
+                        <div className="flex flex-col items-end gap-1 text-right text-xs text-muted-foreground">
+                          <span className="uppercase tracking-[0.3em]">{t("system_number_label")}</span>
+                          <span className="font-mono text-[11px] text-foreground">
+                            {whatsappSender || t("not_available")}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">{t("system_number_managed_note")}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate("/whatsapp")}
+                            className="rounded-lg text-xs font-medium"
+                          >
+                            {t("view_sender_info")}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant={integration.status === 'connected' ? "outline" : "default"}
+                          size="sm"
+                          onClick={() => toggleIntegration(integration.id)}
+                        >
+                          {integration.status === 'connected' ? t("disconnect") : t("connect")}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1372,25 +1517,25 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
-                <div>
-                  <p className="font-medium">{t("auto_backup")}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {t("auto_backup_desc")}
-                  </p>
+                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl">
+                  <div>
+                    <p className="font-medium">{t("auto_backup")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("auto_backup_desc")}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={backupSettings.autoBackup}
+                    onCheckedChange={(checked) =>
+                      setBackupSettings((prev) => ({ ...prev, autoBackup: checked }))
+                    }
+                  />
                 </div>
-                <Switch
-                  checked={backupSettings.autoBackup}
-                  onCheckedChange={(checked) =>
-                    setBackupSettings({ ...backupSettings, autoBackup: checked })
-                  }
-                />
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{t("backup_frequency")}</Label>
-                  <Select value={backupSettings.backupFrequency} onValueChange={(v) => setBackupSettings({ ...backupSettings, backupFrequency: v })}>
+                  <Select value={backupSettings.backupFrequency} onValueChange={(v) => setBackupSettings((prev) => ({ ...prev, backupFrequency: v }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -1407,7 +1552,13 @@ export default function SettingsPage() {
                   <Input
                     type="number"
                     value={backupSettings.retentionDays}
-                    onChange={(e) => setBackupSettings({ ...backupSettings, retentionDays: parseInt(e.target.value) })}
+                    onChange={(e) => {
+                      const parsed = Number.parseInt(e.target.value, 10);
+                      setBackupSettings((prev) => ({
+                        ...prev,
+                        retentionDays: Number.isNaN(parsed) ? prev.retentionDays : parsed
+                      }));
+                    }}
                   />
                 </div>
               </div>
@@ -1432,45 +1583,22 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button
-                  variant="outline"
-                  className="h-auto py-4"
-                  disabled={isExporting}
-                  onClick={() => handleExportData("csv")}
-                >
-                  {isExporting ? (
-                    <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
-                  ) : (
-                    <Download className="h-5 w-5 mb-2 mx-auto" />
-                  )}
-                  <span>Excel (CSV)</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-4"
-                  disabled={isExporting}
-                  onClick={() => handleExportData("pdf")}
-                >
-                  {isExporting ? (
-                    <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
-                  ) : (
-                    <Download className="h-5 w-5 mb-2 mx-auto" />
-                  )}
-                  <span>PDF</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-4"
-                  disabled={isExporting}
-                  onClick={() => handleExportData("json")}
-                >
-                  {isExporting ? (
-                    <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
-                  ) : (
-                    <Download className="h-5 w-5 mb-2 mx-auto" />
-                  )}
-                  <span>JSON</span>
-                </Button>
+                {DATA_EXPORT_FORMATS.map((format) => (
+                  <Button
+                    key={format.format}
+                    variant="outline"
+                    className="h-auto py-4"
+                    disabled={isExporting}
+                    onClick={() => handleExportData(format.format)}
+                  >
+                    {isExporting ? (
+                      <Loader2 className="h-5 w-5 mb-2 mx-auto animate-spin" />
+                    ) : (
+                      <Download className="h-5 w-5 mb-2 mx-auto" />
+                    )}
+                    <span>{format.label}</span>
+                  </Button>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -1493,6 +1621,126 @@ export default function SettingsPage() {
                   {t("select_file")}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Team Tab */}
+        <TabsContent value="team" className="space-y-4">
+          <Card className="rounded-2xl border-border space-y-0">
+            <CardHeader>
+              <CardTitle className="text-lg">{t("team_summary_title")}</CardTitle>
+              <CardDescription>
+                {t("team_summary_description")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {roleSummaries.map((summary) => (
+                  <div
+                    key={summary.key}
+                    className="rounded-2xl border border-border bg-muted/30 p-4 space-y-2"
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                      {summary.label}
+                    </p>
+                    <p className="text-3xl font-semibold">{summary.count}</p>
+                    <p className="text-xs text-muted-foreground">{summary.description}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                {statusSummaries.map((status) => (
+                  <div
+                    key={status.key}
+                    className="flex items-center justify-between rounded-2xl border border-border bg-muted/30 px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-[0.3em]">
+                        {status.label}
+                      </p>
+                      <p className="text-lg font-semibold">{status.count}</p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="rounded-full px-3 text-[10px] font-semibold uppercase tracking-[0.3em]"
+                    >
+                      {status.label}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+            <CardFooter className="flex items-center justify-between border-t pt-3">
+              <div className="text-sm text-muted-foreground">
+                {teamMembers.length > 0
+                  ? `${teamMembers.length} ${t("team_members_title")}`
+                  : t("team_no_members")}
+              </div>
+              <Link to="/team">
+                <Button variant="outline" size="sm" className="rounded-xl inline-flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  {t("team_view_all")}
+                </Button>
+              </Link>
+            </CardFooter>
+          </Card>
+
+          <Card className="rounded-2xl border-border">
+            <CardHeader>
+              <CardTitle className="text-lg">{t("team_members_title")}</CardTitle>
+              <CardDescription>
+                {t("team_tab_description")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {isTeamLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, index) => (
+                    <Skeleton key={index} className="h-16 rounded-2xl" />
+                  ))}
+                </div>
+              ) : teamError ? (
+                <p className="text-sm text-destructive">{teamError}</p>
+              ) : recentMembers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("team_no_members")}</p>
+              ) : (
+                <div className="space-y-3">
+                  {recentMembers.map((member) => {
+                    const roleKey = normalizeTeamRole(member.role);
+                    const statusKey = normalizeTeamStatus(member.status);
+                    const roleLabel =
+                      roleKey === 'admin'
+                        ? t("admin_role")
+                        : roleKey === 'manager'
+                          ? t("manager_role")
+                          : t("user");
+                    return (
+                      <div
+                        key={member.id}
+                        className="flex items-center justify-between rounded-2xl border border-border p-4"
+                      >
+                        <div>
+                          <p className="font-medium">{member.name}</p>
+                          <p className="text-xs text-muted-foreground">{member.email}</p>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] uppercase tracking-[0.3em]"
+                          >
+                            {t(`team_status_${statusKey}`)}
+                          </Badge>
+                          <p className="text-xs text-muted-foreground">{roleLabel}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {formatMemberDate(member.last_active || member.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

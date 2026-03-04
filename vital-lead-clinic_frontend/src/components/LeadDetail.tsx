@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, Phone, Mail, Calendar, MessageSquare, Clock, Tag, User, Building, Edit, Trash2, Send } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
-import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import type { Lead, LeadMessage } from '@/types/leads';
 import StatusBadge from './StatusBadge';
+import EditLeadDialog from './EditLeadDialog';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -25,37 +26,13 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { whatsappService, type WhatsAppTemplate } from '@/services/whatsappService';
-
-interface Lead {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  service?: string;
-  assigned_to_name?: string;
-  assigned_to?: string;
-  source?: string;
-  value?: number;
-  created_at: string;
-  last_contacted?: string;
-  notes?: string;
-  messages?: Message[];
-  status: string;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  type: 'SENT' | 'RECEIVED';
-  timestamp: string;
-  is_business: boolean;
-}
+import { getTranslatedServiceLabel } from '@/lib/serviceOptions';
 
 interface LeadDetailProps {
   lead: Lead | null;
   onBack?: () => void;
   onUpdate?: (leadId: string, updatedLead: Lead) => void;
-  onAddMessage?: (leadId: string, message: Message) => void;
+  onAddMessage?: (leadId: string, message: LeadMessage) => void;
   onDelete?: (leadId: string) => void;
 }
 
@@ -68,7 +45,6 @@ export default function LeadDetail({
 }: LeadDetailProps) {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
   const { t, language } = useLanguage();
   const { getLead, updateLead, addMessage: addMessageService, deleteLead: deleteLeadService } = useLeads();
 
@@ -82,6 +58,8 @@ export default function LeadDetail({
   const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(null);
   const [isSendingTemplate, setIsSendingTemplate] = useState<boolean>(false);
   const [isUpdatingConsent, setIsUpdatingConsent] = useState<boolean>(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
+  const [hasLoadedFullLead, setHasLoadedFullLead] = useState<boolean>(Boolean(propLead?.messages && propLead.messages.length > 0));
 
   useEffect(() => {
     if (!propLead && id) {
@@ -91,14 +69,22 @@ export default function LeadDetail({
 
   useEffect(() => {
     if (!propLead) {
+      setHasLoadedFullLead(false);
       return;
     }
 
     setLead(propLead);
 
-    if (propLead.messages && propLead.messages.length > 0) {
+    const propHasMessages = Boolean(propLead.messages && propLead.messages.length > 0);
+    setHasLoadedFullLead(propHasMessages);
+
+    if (propHasMessages) {
       return;
     }
+
+    setTemplates([]);
+    setSelectedTemplate(null);
+    setTemplatesError(null);
 
     let cancelled = false;
 
@@ -107,6 +93,7 @@ export default function LeadDetail({
         const detailedLead = await getLead(propLead.id);
         if (!cancelled) {
           setLead(detailedLead);
+          setHasLoadedFullLead(true);
         }
       } catch (error) {
         console.error("Failed to refresh lead messages:", error);
@@ -119,7 +106,11 @@ export default function LeadDetail({
   }, [propLead, getLead]);
 
   useEffect(() => {
-    if (!lead || lead.can_use_free_text) {
+    if (!hasLoadedFullLead || !lead) {
+      return;
+    }
+
+    if (lead.can_use_free_text) {
       setTemplates([]);
       setSelectedTemplate(null);
       setTemplatesError(null);
@@ -145,13 +136,29 @@ export default function LeadDetail({
     };
 
     fetchTemplates();
-  }, [lead?.id, lead?.can_use_free_text, templates.length, templatesLoading, t]);
+  }, [lead?.id, lead?.can_use_free_text, templates.length, templatesLoading, t, hasLoadedFullLead]);
 
-  const loadLead = async (): Promise<void> => {
-    setIsLoading(true);
+  const loadLead = async (
+    leadId?: string,
+    options: { showLoading?: boolean } = {}
+  ): Promise<Lead | null> => {
+    const { showLoading = true } = options;
+    if (showLoading) {
+      setIsLoading(true);
+    }
+    setHasLoadedFullLead(false);
+    setTemplates([]);
+    setSelectedTemplate(null);
+    setTemplatesError(null);
     try {
-      const data = await getLead(id);
+      const targetId = leadId || id;
+      if (!targetId) {
+        return null;
+      }
+      const data = await getLead(targetId);
       setLead(data);
+      setHasLoadedFullLead(true);
+      return data;
     } catch (error) {
       console.error('Error loading lead:', error);
       toast({
@@ -160,9 +167,18 @@ export default function LeadDetail({
         variant: "destructive",
       });
       navigate('/leads');
+      return null;
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const handleLeadEditSuccess = async (updatedLead: Lead) => {
+    const refreshedLead = await loadLead(updatedLead.id, { showLoading: false });
+    const leadForCallback = refreshedLead || updatedLead;
+    onUpdate?.(leadForCallback.id, leadForCallback);
   };
 
   const handleSendMessage = async (): Promise<void> => {
@@ -182,6 +198,8 @@ export default function LeadDetail({
       }));
 
       setNewMessage('');
+
+      console.log("send message", message, lead.id);
 
       toast({
         title: t("message_sent"),
@@ -225,7 +243,7 @@ export default function LeadDetail({
         description: t("template_send_success"),
       });
       setSelectedTemplate(null);
-      await loadLead();
+      await loadLead(lead.id);
     } catch (error) {
       console.error('Error sending template:', error);
       toast({
@@ -294,26 +312,32 @@ export default function LeadDetail({
   };
 
   const FREE_TEXT_WINDOW_DURATION = 24 * 60 * 60 * 1000;
-  const freeTextOpen = Boolean(lead?.can_use_free_text);
+  const freeTextStatusKnown = hasLoadedFullLead && Boolean(lead);
+  const freeTextOpen = freeTextStatusKnown ? Boolean(lead?.can_use_free_text) : false;
   const consentLabel = lead?.consent_given ? t("consent_banner_granted") : t("consent_banner_missing");
   const consentBadgeClasses = lead?.consent_given
     ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
     : 'bg-destructive/10 text-destructive border-destructive/20';
-  const lastInboundDate = lead?.last_inbound_message_at
+  const lastInboundDate = freeTextStatusKnown && lead?.last_inbound_message_at
     ? new Date(lead.last_inbound_message_at)
     : null;
-  const windowExpiresAt = lastInboundDate
+  const windowExpiresAt = freeTextOpen && lastInboundDate
     ? new Date(lastInboundDate.getTime() + FREE_TEXT_WINDOW_DURATION)
     : null;
   const formattedWindowExpires = windowExpiresAt
     ? windowExpiresAt.toLocaleString(language === 'he' ? 'he-IL' : 'en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
     : null;
+  const freeTextBadgeClasses = freeTextStatusKnown
+    ? (freeTextOpen
+      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+      : 'bg-warning/10 text-warning border-warning/20')
+    : 'bg-muted/10 text-muted-foreground border-border';
 
   if (isLoading) {
     return (
@@ -348,7 +372,7 @@ export default function LeadDetail({
             <Trash2 className="h-4 w-4 ml-2" />
             {t("delete")}
           </Button>
-          <Button>
+          <Button onClick={() => setIsEditDialogOpen(true)}>
             <Edit className="h-4 w-4 ml-2" />
             {t("edit")}
           </Button>
@@ -411,7 +435,7 @@ export default function LeadDetail({
               {lead.service && (
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-muted-foreground" />
-                  <span>{lead.service}</span>
+                  <span>{getTranslatedServiceLabel(lead.service, t)}</span>
                 </div>
               )}
               {lead.assigned_to_name && (
@@ -492,22 +516,22 @@ export default function LeadDetail({
               <div className="flex items-center gap-2">
                 <Badge
                   variant="outline"
-                  className={`px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${
-                    freeTextOpen
-                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                      : 'bg-warning/10 text-warning border-warning/20'
-                  }`}
+                  className={`px-3 py-1 text-[11px] uppercase tracking-[0.2em] ${freeTextBadgeClasses}`}
                 >
-                  {freeTextOpen ? t("free_text_window_open") : t("free_text_window_closed")}
+                  {freeTextStatusKnown
+                    ? (freeTextOpen ? t("free_text_window_open") : t("free_text_window_closed"))
+                    : t("loading")}
                 </Badge>
-                {freeTextOpen && formattedWindowExpires && (
+                {freeTextStatusKnown && freeTextOpen && formattedWindowExpires && (
                   <span className="text-xs text-muted-foreground">
                     {t("free_text_window_expires_at").replace("{time}", formattedWindowExpires)}
                   </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                {freeTextOpen ? t("free_text_window_open_hint") : t("free_text_window_closed_hint")}
+                {freeTextStatusKnown
+                  ? (freeTextOpen ? t("free_text_window_open_hint") : t("free_text_window_closed_hint"))
+                  : t("loading")}
               </p>
             </div>
 
@@ -566,7 +590,7 @@ export default function LeadDetail({
               </Button>
             </div>
 
-            {!freeTextOpen && (
+            {!freeTextOpen && hasLoadedFullLead && (
               <div className="space-y-3 border-t pt-4">
                 <Label
                   htmlFor="template-select"
@@ -635,6 +659,14 @@ export default function LeadDetail({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {lead && (
+        <EditLeadDialog
+          lead={lead}
+          open={isEditDialogOpen}
+          onOpenChange={(open) => setIsEditDialogOpen(open)}
+          onSuccess={handleLeadEditSuccess}
+        />
+      )}
     </div>
   );
 }

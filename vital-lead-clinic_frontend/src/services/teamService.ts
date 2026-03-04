@@ -12,6 +12,7 @@ export const teamService = {
     email: string;
     phone?: string;
     role?: string;
+    permissions?: string[];
   }): Promise<TeamMemberApi> => {
     const response = await api.post('/team/members', data);
     return response.data;
@@ -25,6 +26,7 @@ export const teamService = {
       phone?: string;
       role?: string;
       status?: string;
+      permissions?: string[];
     }
   ): Promise<TeamMemberApi> => {
     const response = await api.put(`/team/members/${id}`, data);

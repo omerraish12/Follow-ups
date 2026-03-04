@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { leadService } from '@/services/leadService';
 import { toast } from '@/hooks/use-toast';
 import type { Lead, LeadMessage } from '@/types/leads';
@@ -21,12 +21,12 @@ export const useLeads = (initialFilters: Filters = {}) => {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(initialFilters);
 
-  const fetchLeads = async (): Promise<void> => {
+  const fetchLeads = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await leadService.getLeads(filters);
-      setLeads(data); 
+      setLeads(data);
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || 'Unable to load leads.';
       setError(msg);
@@ -38,13 +38,13 @@ export const useLeads = (initialFilters: Filters = {}) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filters]);
 
   useEffect(() => {
     fetchLeads();
-  }, [filters]);
+  }, [fetchLeads]);
 
-  const getLead = async (id: string): Promise<Lead> => {
+  const getLead = useCallback(async (id: string): Promise<Lead> => {
     try {
       return await leadService.getLead(id);
     } catch (err: ErrorResponse) {
@@ -55,7 +55,7 @@ export const useLeads = (initialFilters: Filters = {}) => {
       });
       throw err;
     }
-  };
+  }, []);
 
   const addLead = async (leadData: Omit<Lead, 'id'>): Promise<Lead> => {
     try {

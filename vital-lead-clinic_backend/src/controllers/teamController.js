@@ -23,6 +23,37 @@ const normalizeStatus = (status) => {
     return undefined;
 };
 
+const VALID_PERMISSIONS = new Set(['leads', 'analytics', 'team', 'settings', 'all']);
+const DEFAULT_ROLE_PERMISSIONS = {
+    admin: ['all'],
+    manager: ['leads', 'analytics', 'team'],
+    staff: ['leads'],
+    super_admin: ['all']
+};
+
+const sanitizePermissions = (permissions) => {
+    if (!Array.isArray(permissions)) return undefined;
+    const normalized = Array.from(
+        new Set(
+            permissions
+                .filter((value) => typeof value === 'string')
+                .map((value) => value.trim().toLowerCase())
+                .filter((value) => VALID_PERMISSIONS.has(value))
+        )
+    );
+    return normalized;
+};
+
+const resolvePermissions = (role, requestedPermissions) => {
+    const sanitized = sanitizePermissions(requestedPermissions);
+    if (sanitized !== undefined) {
+        return sanitized;
+    }
+
+    const normalizedRole = normalizeRole(role).toLowerCase();
+    return DEFAULT_ROLE_PERMISSIONS[normalizedRole] || ['leads'];
+};
+
 // @desc    Get team members with performance stats
 // @route   GET /api/team/members
 const getMembers = async (req, res) => {
@@ -39,7 +70,7 @@ const getMembers = async (req, res) => {
 // @route   POST /api/team/members
 const createMember = async (req, res) => {
     try {
-        const { name, email, phone, role } = req.body;
+        const { name, email, phone, role, permissions } = req.body;
 
         if (!name || !email) {
             return res.status(400).json({ message: 'Name and email are required' });
@@ -54,14 +85,18 @@ const createMember = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(randomPassword, salt);
 
+        const normalizedRole = normalizeRole(role);
+        const resolvedPermissions = resolvePermissions(normalizedRole, permissions);
+
         const newUser = await User.create({
             email,
             password: hashedPassword,
             name,
             phone,
             clinicId: req.user.clinic_id,
-            role: normalizeRole(role),
-            status: 'pending'
+            role: normalizedRole,
+            status: 'pending',
+            permissions: resolvedPermissions
         });
 
         // Create reset token to set password
@@ -90,7 +125,7 @@ const createMember = async (req, res) => {
 const updateMember = async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, email, phone, role, status } = req.body;
+        const { name, email, phone, role, status, permissions } = req.body;
 
         const user = await User.findById(id);
         if (!user || user.clinic_id !== req.user.clinic_id) {
@@ -104,6 +139,10 @@ const updateMember = async (req, res) => {
         if (role !== undefined) updateData.role = normalizeRole(role);
         const normalizedStatus = normalizeStatus(status);
         if (normalizedStatus !== undefined) updateData.status = normalizedStatus;
+        const sanitizedPermissions = sanitizePermissions(permissions);
+        if (sanitizedPermissions !== undefined) {
+            updateData.permissions = sanitizedPermissions;
+        }
 
         if (Object.keys(updateData).length === 0) {
             return res.status(400).json({ message: 'No valid fields to update' });

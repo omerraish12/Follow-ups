@@ -1,6 +1,6 @@
 // src/pages/WhatsAppIntegration.tsx
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Phone, Send } from "lucide-react";
+import { Phone, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import {
   type WhatsAppIntegrationConfig,
   type WhatsAppSenderInfo,
 } from "@/services/whatsappService";
+import { settingsService } from "@/services/settingsService";
 
 const formatDate = (value: string | null | undefined, locale: string, fallback: string) => {
   if (!value) {
@@ -50,24 +52,31 @@ export default function WhatsAppIntegration() {
   const { t, language } = useLanguage();
   const [whatsappConfig, setWhatsAppConfig] = useState<WhatsAppIntegrationConfig>(getDefaultWhatsAppConfig());
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingStatus, setIsSavingStatus] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
-  const [isConfirmingJoin, setIsConfirmingJoin] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [testTemplate, setTestTemplate] = useState("");
   const [testLanguage, setTestLanguage] = useState(language === "he" ? "he" : "en");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [senderInfo, setSenderInfo] = useState<WhatsAppSenderInfo | null>(null);
   const [faqItems, setFaqItems] = useState<WhatsAppFAQItem[]>([]);
-  const [twilioAccountSid, setTwilioAccountSid] = useState("");
-  const [twilioAuthToken, setTwilioAuthToken] = useState("");
-  const [twilioMessagingServiceSid, setTwilioMessagingServiceSid] = useState("");
-  const [twilioWhatsappFrom, setTwilioWhatsappFrom] = useState("");
-  const [hasStoredAuthToken, setHasStoredAuthToken] = useState(false);
+  const [twilioCredentials, setTwilioCredentials] = useState({
+    accountSid: "",
+    authToken: "",
+    messagingServiceSid: "",
+    whatsappFrom: ""
+  });
   const [isSavingTwilio, setIsSavingTwilio] = useState(false);
+  const [authTokenStored, setAuthTokenStored] = useState(false);
 
   const syncFromConfig = useCallback((config: WhatsAppIntegrationConfig) => {
     setWhatsAppConfig(config);
+    setTwilioCredentials({
+      accountSid: config.accountSid || "",
+      authToken: "",
+      messagingServiceSid: config.messagingServiceSid || "",
+      whatsappFrom: config.whatsappFrom || ""
+    });
+    setAuthTokenStored(Boolean(config.authTokenSet));
   }, []);
 
   const loadConfig = useCallback(async () => {
@@ -114,83 +123,6 @@ export default function WhatsAppIntegration() {
   useEffect(() => {
     setTestLanguage(language === "he" ? "he" : "en");
   }, [language]);
-
-  useEffect(() => {
-    setTwilioAccountSid(whatsappConfig.accountSid || "");
-    setTwilioMessagingServiceSid(whatsappConfig.messagingServiceSid || "");
-    setTwilioWhatsappFrom(whatsappConfig.whatsappFrom || "");
-    setHasStoredAuthToken(Boolean(whatsappConfig.authToken));
-    setTwilioAuthToken("");
-  }, [
-    whatsappConfig.accountSid,
-    whatsappConfig.messagingServiceSid,
-    whatsappConfig.whatsappFrom,
-    whatsappConfig.authToken
-  ]);
-
-  const buildConfig = useCallback(
-    (overrides: Partial<WhatsAppIntegrationConfig> = {}) => ({
-      ...whatsappConfig,
-      ...overrides,
-    }),
-    [whatsappConfig]
-  );
-
-  const saveToBackend = useCallback(
-    async (overrides: Partial<WhatsAppIntegrationConfig> = {}, successMessage?: string) => {
-      setIsSavingStatus(true);
-      try {
-        const saved = await whatsappService.saveConfig(buildConfig(overrides));
-        syncFromConfig(saved);
-        if (successMessage) {
-          toast({
-            title: t("success"),
-            description: successMessage,
-          });
-        }
-      } catch (error) {
-        console.error("Error saving WhatsApp config:", error);
-        toast({
-          title: t("error"),
-          description: t("settings_save_failed"),
-          variant: "destructive",
-        });
-        throw error;
-      } finally {
-        setIsSavingStatus(false);
-      }
-    },
-    [buildConfig, syncFromConfig, t]
-  );
-
-  const handleStatusChange = (status: WhatsAppIntegrationConfig["status"]) => {
-    if (status === whatsappConfig.status) {
-      return;
-    }
-    saveToBackend({ status }, t("whatsapp_status_saved"));
-  };
-
-  const handleSaveTwilioConfig = async () => {
-    const payload: Partial<WhatsAppIntegrationConfig> = {
-      accountSid: twilioAccountSid.trim() || null,
-      messagingServiceSid: twilioMessagingServiceSid.trim() || null,
-      whatsappFrom: twilioWhatsappFrom.trim() || null
-    };
-    const tokenValue = twilioAuthToken.trim();
-    if (tokenValue) {
-      payload.authToken = tokenValue;
-    }
-    setIsSavingTwilio(true);
-    try {
-      await saveToBackend(payload, t("twilio_provision_saved"));
-      setHasStoredAuthToken(Boolean(tokenValue || whatsappConfig.authToken));
-      setTwilioAuthToken("");
-    } catch (error) {
-      setHasStoredAuthToken(Boolean(whatsappConfig.authToken));
-    } finally {
-      setIsSavingTwilio(false);
-    }
-  };
 
   const handleSendTest = async () => {
     const cleanedPhone = testPhone.trim();
@@ -258,6 +190,85 @@ export default function WhatsAppIntegration() {
     [templateOptions]
   );
 
+  const handleCredentialChange = (field: keyof typeof twilioCredentials, value: string) => {
+    setTwilioCredentials((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveTwilioCredentials = async () => {
+    const accountSid = twilioCredentials.accountSid.trim();
+    const messagingServiceSid = twilioCredentials.messagingServiceSid.trim();
+    const whatsappFrom = twilioCredentials.whatsappFrom.trim();
+    const authToken = twilioCredentials.authToken.trim();
+
+    if (!accountSid || !authToken || (!messagingServiceSid && !whatsappFrom)) {
+      toast({
+        title: t("error"),
+        description: t("twilio_credentials_incomplete"),
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSavingTwilio(true);
+    try {
+      await settingsService.updateIntegration("whatsapp", "connected", {
+        accountSid,
+        authToken,
+        messagingServiceSid: messagingServiceSid || null,
+        whatsappFrom: whatsappFrom || null
+      });
+      setAuthTokenStored(true);
+      setTwilioCredentials((prev) => ({ ...prev, authToken: "" }));
+      await loadConfig();
+      toast({
+        title: t("success"),
+        description: t("twilio_provision_saved")
+      });
+    } catch (error) {
+      console.error("Twilio credentials save failed:", error);
+      toast({
+        title: t("error"),
+        description: t("settings_save_failed"),
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingTwilio(false);
+    }
+  };
+
+  const handleDisconnectTwilio = async () => {
+    setIsSavingTwilio(true);
+    try {
+      await settingsService.updateIntegration("whatsapp", "disconnected", {
+        accountSid: null,
+        authToken: null,
+        messagingServiceSid: null,
+        whatsappFrom: null
+      });
+      setAuthTokenStored(false);
+      setTwilioCredentials({
+        accountSid: "",
+        authToken: "",
+        messagingServiceSid: "",
+        whatsappFrom: ""
+      });
+      await loadConfig();
+      toast({
+        title: t("settings_saved"),
+        description: t("twilio_disconnected")
+      });
+    } catch (error) {
+      console.error("Twilio disconnect failed:", error);
+      toast({
+        title: t("error"),
+        description: t("settings_save_failed"),
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingTwilio(false);
+    }
+  };
+
   useEffect(() => {
     if (selectedTemplateId && !templateOptions.some((option) => option.id === selectedTemplateId)) {
       setSelectedTemplateId("");
@@ -294,27 +305,6 @@ export default function WhatsAppIntegration() {
     window.open(whatsappConfig.sandbox.link, "_blank", "noopener,noreferrer");
   }, [whatsappConfig.sandbox.link]);
 
-  const handleConfirmSandboxJoin = useCallback(async () => {
-    setIsConfirmingJoin(true);
-    try {
-      const updatedConfig = await whatsappService.confirmSandboxJoin();
-      syncFromConfig(updatedConfig);
-      toast({
-        title: t("success"),
-        description: t("whatsapp_sandbox_join_confirmed"),
-      });
-    } catch (error) {
-      console.error("WhatsApp sandbox join failed:", error);
-      toast({
-        title: t("error"),
-        description: t("whatsapp_sandbox_join_failed"),
-        variant: "destructive",
-      });
-    } finally {
-      setIsConfirmingJoin(false);
-    }
-  }, [syncFromConfig, t, toast]);
-
   const languageOptions = useMemo(
     () => [
       { value: "en", label: t("english") },
@@ -331,6 +321,10 @@ export default function WhatsAppIntegration() {
         ? "bg-amber-400"
         : "bg-slate-500"
   );
+
+  const darkFieldClass =
+    "rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/50 shadow-[0_20px_45px_rgba(2,6,23,0.45)] transition focus:border-white/30 focus-visible:ring focus-visible:ring-white/30";
+  const sandboxDetailBoxClass = "rounded-2xl border border-dashed border-white/20 bg-white/5 p-4";
 
   const locale = language === "he" ? "he-IL" : "en-US";
   const fallbackDate = t("not_available");
@@ -367,180 +361,178 @@ export default function WhatsAppIntegration() {
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap justify-end gap-3">
-            <Button
-              disabled={isLoading || whatsappConfig.status === "connected" || isSavingStatus}
-              onClick={() => handleStatusChange("connected")}
-              className="rounded-full bg-white px-6 py-1.5 text-sm font-semibold text-slate-900 shadow-[0_20px_45px_rgba(15,23,42,0.35)] transition hover:opacity-90"
-            >
-              {t("whatsapp_mark_connected")}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={isLoading || whatsappConfig.status === "disconnected" || isSavingStatus}
-              onClick={() => handleStatusChange("disconnected")}
-              className="rounded-full border border-white/50 px-6 py-1.5 text-sm font-semibold uppercase tracking-[0.3em] text-white/80 transition hover:border-white hover:text-white"
-            >
-              {t("whatsapp_mark_disconnected")}
-            </Button>
-          </div>
-    </CardContent>
-  </Card>
-
-  <Card className="rounded-[32px] border border-slate-200 bg-white shadow-[0_25px_40px_rgba(15,20,40,0.08)]">
-    <CardHeader className="space-y-2">
-      <div>
-        <CardTitle className="text-2xl text-slate-900">{t("whatsapp_twilio_provisioning_title")}</CardTitle>
-        <CardDescription className="text-sm text-slate-500">
-          {t("whatsapp_twilio_provisioning_description")}
-        </CardDescription>
-      </div>
-    </CardHeader>
-    <CardContent className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="twilio-account">{t("twilio_account_sid_label")}</Label>
-          <Input
-            id="twilio-account"
-            value={twilioAccountSid}
-            placeholder={t("twilio_account_sid_placeholder")}
-            onChange={(event) => setTwilioAccountSid(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="twilio-messaging-service">{t("twilio_messaging_service_label")}</Label>
-          <Input
-            id="twilio-messaging-service"
-            value={twilioMessagingServiceSid}
-            placeholder={t("twilio_messaging_service_placeholder")}
-            onChange={(event) => setTwilioMessagingServiceSid(event.target.value)}
-          />
-        </div>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="twilio-whatsapp-from">{t("twilio_whatsapp_from_label")}</Label>
-        <Input
-          id="twilio-whatsapp-from"
-          value={twilioWhatsappFrom}
-          placeholder={t("twilio_whatsapp_from_placeholder")}
-          onChange={(event) => setTwilioWhatsappFrom(event.target.value)}
-        />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="twilio-auth-token">{t("twilio_auth_token_label")}</Label>
-        <Input
-          id="twilio-auth-token"
-          type="password"
-          value={twilioAuthToken}
-          placeholder={t("twilio_auth_token_placeholder")}
-          onChange={(event) => setTwilioAuthToken(event.target.value)}
-        />
-        <p className="text-xs text-muted-foreground">
-          {hasStoredAuthToken ? t("twilio_auth_token_configured") : t("twilio_auth_token_help")}
-        </p>
-      </div>
-      <div className="flex justify-end">
-        <Button
-          onClick={handleSaveTwilioConfig}
-          disabled={isSavingTwilio || isSavingStatus}
-          className="rounded-full px-6 py-2 text-sm font-semibold"
-        >
-          {isSavingTwilio ? t("saving") : t("twilio_save_button")}
-        </Button>
-      </div>
-    </CardContent>
-  </Card>
-
-  <Card className="rounded-[32px] border border-slate-200 bg-gradient-to-br from-[#f6f8ff] via-[#eef2ff] to-white text-slate-900 shadow-[0_25px_40px_rgba(15,20,40,0.08)]">
-    <CardHeader className="space-y-2">
-      <div>
-        <CardTitle className="text-2xl text-slate-900">{t("whatsapp_sender_info_title")}</CardTitle>
-        <CardDescription className="text-sm text-slate-500">{t("whatsapp_sender_info_description")}</CardDescription>
-      </div>
-    </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex items-center gap-3">
-          <Phone className="h-6 w-6 text-slate-400" />
-          <div>
-            <p className="text-lg font-semibold text-slate-900">{senderInfo?.sender || t("not_available")}</p>
-            <p className="text-sm text-slate-500">{t("whatsapp_sender_note")}</p>
-          </div>
-        </div>
-        {senderInfo?.messagingServiceSid && (
-          <p className="text-xs text-slate-500">
-            {t("whatsapp_messaging_service_label")}: {senderInfo.messagingServiceSid}
-          </p>
-        )}
-        {senderInfo?.message && (
-          <p className="text-xs text-slate-500">{senderInfo.message}</p>
-        )}
-        <p className="text-xs text-slate-500">{t("whatsapp_sender_info_note")}</p>
       </CardContent>
     </Card>
 
-  <Card className="rounded-[36px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,20,40,0.15)]">
+    <Card className="space-y-2 rounded-[32px] border border-white/15 bg-slate-900/80 text-white shadow-[0_25px_60px_rgba(3,7,18,0.6)]">
+      <CardHeader className="space-y-2">
+        <CardTitle className="text-2xl text-white">{t("whatsapp_twilio_provisioning_title")}</CardTitle>
+        <CardDescription className="text-sm text-white/70">{t("whatsapp_twilio_provisioning_description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-white/70">{t("twilio_account_sid_label")}</Label>
+            <Input
+              placeholder={t("twilio_account_sid_placeholder")}
+              value={twilioCredentials.accountSid}
+              onChange={(e) => handleCredentialChange("accountSid", e.target.value)}
+              className={darkFieldClass}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-white/70">{t("twilio_auth_token_label")}</Label>
+            <Input
+              placeholder={t("twilio_auth_token_placeholder")}
+              value={twilioCredentials.authToken}
+              onChange={(e) => handleCredentialChange("authToken", e.target.value)}
+              className={darkFieldClass}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-white/70">{t("twilio_messaging_service_label")}</Label>
+            <Input
+              placeholder={t("twilio_messaging_service_placeholder")}
+              value={twilioCredentials.messagingServiceSid}
+              onChange={(e) => handleCredentialChange("messagingServiceSid", e.target.value)}
+              className={darkFieldClass}
+            />
+            <p className="text-xs text-white/60">{t("whatsapp_sender_info_description")}</p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold text-white/70">{t("twilio_whatsapp_from_label")}</Label>
+            <Input
+              placeholder={t("twilio_whatsapp_from_placeholder")}
+              value={twilioCredentials.whatsappFrom}
+              onChange={(e) => handleCredentialChange("whatsappFrom", e.target.value)}
+              className={darkFieldClass}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-white/60">
+          {authTokenStored ? t("twilio_auth_token_configured") : t("twilio_auth_token_help")}
+        </p>
+      </CardContent>
+      <CardFooter className="flex flex-wrap items-center gap-3 text-white">
+        <Button
+          onClick={handleSaveTwilioCredentials}
+          disabled={isSavingTwilio}
+          className="rounded-full px-6 py-2 text-sm font-semibold bg-white/10 text-white shadow-[0_10px_35px_rgba(0,0,0,0.35)] hover:bg-white/20"
+        >
+          {isSavingTwilio ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin text-white" />
+              <span>{t("twilio_save_button")}</span>
+            </div>
+          ) : (
+            <span>{t("twilio_save_button")}</span>
+          )}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleDisconnectTwilio}
+          disabled={isSavingTwilio}
+          className="rounded-full px-6 py-2 text-sm font-semibold text-white/80 border-white/25 hover:text-white hover:border-white/40"
+        >
+          {t("twilio_disconnect_button")}
+        </Button>
+      </CardFooter>
+    </Card>
+
+    <Card className="rounded-[32px] border border-white/15 bg-gradient-to-br from-[#050b1a] via-[#0b1022] to-[#030617] text-white shadow-[0_25px_60px_rgba(2,6,23,0.75)]">
+      <CardHeader className="space-y-2">
+        <div>
+          <CardTitle className="text-2xl text-white">{t("whatsapp_sender_info_title")}</CardTitle>
+          <CardDescription className="text-sm text-white/60">{t("whatsapp_sender_info_description")}</CardDescription>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-3">
+          <Phone className="h-6 w-6 text-white/60" />
+          <div>
+            <p className="text-lg font-semibold text-white">
+              {senderInfo?.displayNumber || t("whatsapp_sender_info_placeholder")}
+            </p>
+            <p className="text-sm text-white/60">
+              {senderInfo?.displayNumber ? t("whatsapp_sender_info_description") : t("whatsapp_sender_info_missing")}
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-white/50">{t("whatsapp_sender_info_note")}</p>
+      </CardContent>
+    </Card>
+
+  <Card className="rounded-[36px] border border-white/15 bg-slate-900/70 text-white shadow-[0_25px_60px_rgba(2,6,23,0.65)]">
     <CardHeader className="space-y-2">
-      <CardTitle className="text-2xl text-slate-900">{t("whatsapp_faq_title")}</CardTitle>
-      <CardDescription className="text-sm text-slate-500">{t("whatsapp_faq_description")}</CardDescription>
+      <CardTitle className="text-2xl text-white">{t("whatsapp_faq_title")}</CardTitle>
+      <CardDescription className="text-sm text-white/60">{t("whatsapp_faq_description")}</CardDescription>
     </CardHeader>
     <CardContent className="space-y-4">
       {faqItems.length ? (
         faqItems.map((item) => (
-          <div key={item.questionKey} className="space-y-1 border-b border-slate-200 pb-3 last:border-0 last:pb-0">
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-              {t(item.questionKey)}
-            </p>
-            <p className="text-sm text-slate-600">{t(item.answerKey)}</p>
+          <div key={item.questionKey} className="space-y-1 border-b border-white/10 pb-3 last:border-0 last:pb-0">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">{t(item.questionKey)}</p>
+            <p className="text-sm text-white/80">{t(item.answerKey)}</p>
           </div>
         ))
       ) : (
-        <p className="text-sm text-muted-foreground">{t("whatsapp_faq_loading")}</p>
+        <p className="text-sm text-white/60">{t("whatsapp_faq_loading")}</p>
       )}
     </CardContent>
   </Card>
 
-  <Card className="rounded-[36px] border border-slate-200 bg-white shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
+  <Card className="rounded-[36px] border border-white/15 bg-slate-900/75 text-white shadow-[0_25px_60px_rgba(2,6,23,0.7)]">
       <CardHeader className="space-y-3">
         <div>
-          <CardTitle className="text-2xl text-slate-900">{t("whatsapp_sandbox_title")}</CardTitle>
-          <CardDescription className="text-sm text-slate-500">{t("whatsapp_sandbox_description")}</CardDescription>
+          <CardTitle className="text-2xl text-white">{t("whatsapp_sandbox_title")}</CardTitle>
+          <CardDescription className="text-sm text-white/60">{t("whatsapp_sandbox_description")}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500">{t("whatsapp_sandbox_join_code_label")}</p>
+          <div className={sandboxDetailBoxClass}>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-white/60">{t("whatsapp_sandbox_join_code_label")}</p>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="font-mono text-base text-slate-900">{whatsappConfig.sandbox.joinCode}</span>
-              <Button size="sm" variant="outline" onClick={() => handleCopyValue(whatsappConfig.sandbox.joinCode, t("whatsapp_sandbox_join_code_label"))}>
+              <span className="font-mono text-base text-white">{whatsappConfig.sandbox.joinCode}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCopyValue(whatsappConfig.sandbox.joinCode, t("whatsapp_sandbox_join_code_label"))}
+                className="border-white/20 text-white/70 hover:border-white/40"
+              >
                 {t("copy")}
               </Button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{t("whatsapp_sandbox_join_code_help")}</p>
+            <p className="mt-1 text-xs text-white/60">{t("whatsapp_sandbox_join_code_help")}</p>
           </div>
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500">{t("whatsapp_sandbox_number_label")}</p>
+          <div className={sandboxDetailBoxClass}>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-white/60">{t("whatsapp_sandbox_number_label")}</p>
             <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="font-mono text-base text-slate-900">{whatsappConfig.sandbox.number}</span>
-              <Button size="sm" variant="outline" onClick={() => handleCopyValue(whatsappConfig.sandbox.number, t("whatsapp_sandbox_number_label"))}>
+              <span className="font-mono text-base text-white">{whatsappConfig.sandbox.number}</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleCopyValue(whatsappConfig.sandbox.number, t("whatsapp_sandbox_number_label"))}
+                className="border-white/20 text-white/70 hover:border-white/40"
+              >
                 {t("copy")}
               </Button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">{t("whatsapp_sandbox_number_help")}</p>
+            <p className="mt-1 text-xs text-white/60">{t("whatsapp_sandbox_number_help")}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-          <p className="font-semibold text-slate-900">{t("whatsapp_sandbox_steps_title")}</p>
-          <ol className="mt-3 space-y-2 list-decimal list-inside text-slate-600">
+        <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-4 text-sm text-white/70">
+          <p className="font-semibold text-white">{t("whatsapp_sandbox_steps_title")}</p>
+          <ol className="mt-3 space-y-2 list-decimal list-inside text-white/70">
             <li>{t("whatsapp_sandbox_step_scan")}</li>
             <li>{t("whatsapp_sandbox_step_join_number")}</li>
             <li>{t("whatsapp_sandbox_step_confirm")}</li>
           </ol>
         </div>
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between text-xs text-slate-500">
+          <div className="flex items-center justify-between text-xs text-white/60">
             <span>{t("whatsapp_sandbox_last_joined")}</span>
-            <span className="font-mono text-xs text-slate-500">
+            <span className="font-mono text-xs text-white/70">
               {whatsappConfig.sandbox.lastJoinedAt
                 ? formatDate(whatsappConfig.sandbox.lastJoinedAt, locale, fallbackDate)
                 : t("whatsapp_sandbox_not_joined")}
@@ -548,13 +540,11 @@ export default function WhatsAppIntegration() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Button
-              onClick={handleConfirmSandboxJoin}
-              disabled={isConfirmingJoin}
-              className="rounded-full bg-gradient-to-r from-[#5a5bd9] to-[#8458ff] px-6 py-2 text-sm font-semibold text-white shadow-[0_15px_40px_rgba(90,91,217,0.4)] transition hover:opacity-90 disabled:opacity-60"
+              variant="outline"
+              size="sm"
+              onClick={handleOpenSandboxPortal}
+              className="rounded-full border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 hover:border-white/50 hover:text-white"
             >
-              {isConfirmingJoin ? t("whatsapp_sandbox_marking") : t("whatsapp_sandbox_button")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleOpenSandboxPortal} className="rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
               {t("whatsapp_open_sandbox")}
             </Button>
           </div>
@@ -562,96 +552,96 @@ export default function WhatsAppIntegration() {
       </CardContent>
     </Card>
 
-    <Card className="rounded-[36px] border border-slate-200 bg-gradient-to-br from-[#fdfbf7] to-[#f4efe6] text-slate-900 shadow-[0_25px_60px_rgba(15,20,40,0.12)]">
-        <CardHeader className="space-y-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <CardTitle className="text-2xl text-slate-900">{t("send_test_message")}</CardTitle>
-              <CardDescription className="text-sm text-slate-500">{t("send_test_message_desc")}</CardDescription>
-            </div>
-            <Send className="h-6 w-6 text-slate-400" />
+    <Card className="rounded-[36px] border border-white/15 bg-gradient-to-br from-[#020616] via-[#030c25] to-[#010512] text-white shadow-[0_25px_60px_rgba(2,6,23,0.8)]">
+      <CardHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-2xl text-white">{t("send_test_message")}</CardTitle>
+            <CardDescription className="text-sm text-white/60">{t("send_test_message_desc")}</CardDescription>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500" htmlFor="test-phone">
-              {t("phone_number")}
-            </Label>
+          <Send className="h-6 w-6 text-white/70" />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60" htmlFor="test-phone">
+            {t("phone_number")}
+          </Label>
+          <Input
+            id="test-phone"
+            placeholder="+972501234567"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            className={darkFieldClass}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60" htmlFor="test-template">
+            {t("template_name")}
+          </Label>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
             <Input
-              id="test-phone"
-              placeholder="+972501234567"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 shadow-sm"
+              id="test-template"
+              placeholder={t("template_name_placeholder")}
+              value={testTemplate}
+              onChange={(e) => handleTemplateInputChange(e.target.value)}
+              className={darkFieldClass}
             />
+            {templateOptions.length > 0 ? (
+              <Select value={selectedTemplateId} onValueChange={(value) => handleTemplateSelect(value)}>
+                <SelectTrigger
+                  className={darkFieldClass}
+                  aria-label={t("template_select_label")}
+                >
+                  <SelectValue placeholder={t("template_select_placeholder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {templateOptions.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-xs text-white/60">
+                {t("template_select_empty")}
+              </div>
+            )}
           </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500" htmlFor="test-template">
-              {t("template_name")}
-            </Label>
-            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <Input
-                id="test-template"
-                placeholder={t("template_name_placeholder")}
-                value={testTemplate}
-                onChange={(e) => handleTemplateInputChange(e.target.value)}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-400 shadow-sm"
-              />
-              {templateOptions.length > 0 ? (
-                <Select value={selectedTemplateId} onValueChange={(value) => handleTemplateSelect(value)}>
-                  <SelectTrigger
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm"
-                    aria-label={t("template_select_label")}
-                  >
-                    <SelectValue placeholder={t("template_select_placeholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templateOptions.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="flex items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 px-4 py-3 text-xs text-slate-500">
-                  {t("template_select_empty")}
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500" htmlFor="test-language">
-              {t("language")}
-            </Label>
-            <Select value={testLanguage} onValueChange={(value) => setTestLanguage(value)}>
-              <SelectTrigger id="test-language" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm">
-                <SelectValue placeholder={t("language")} />
-              </SelectTrigger>
-              <SelectContent>
-                {languageOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-2 items-end">
-            <p className="text-[11px] text-slate-500">
-              {!isConnected ? t("whatsapp_not_connected_notice") : readyToSendTest ? t("whatsapp_ready_to_send") : t("fill_required_fields")}
-            </p>
-            <Button
-              onClick={handleSendTest}
-              disabled={!isConnected || !readyToSendTest || isSendingTest}
-              className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#5a5bd9] to-[#8458ff] px-6 py-2 text-sm font-semibold text-white shadow-[0_15px_40px_rgba(90,91,217,0.4)] transition hover:opacity-90 disabled:opacity-60"
-            >
-              <span>{isSendingTest ? t("sending") : t("send_test_message")}</span>
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold uppercase tracking-[0.35em] text-white/60" htmlFor="test-language">
+            {t("language")}
+          </Label>
+          <Select value={testLanguage} onValueChange={(value) => setTestLanguage(value)}>
+            <SelectTrigger id="test-language" className={darkFieldClass}>
+              <SelectValue placeholder={t("language")} />
+            </SelectTrigger>
+            <SelectContent>
+              {languageOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2 items-end">
+          <p className="text-[11px] text-white/60">
+            {!isConnected ? t("whatsapp_not_connected_notice") : readyToSendTest ? t("whatsapp_ready_to_send") : t("fill_required_fields")}
+          </p>
+          <Button
+            onClick={handleSendTest}
+            disabled={!isConnected || !readyToSendTest || isSendingTest}
+            className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#5a5bd9] to-[#8458ff] px-6 py-2 text-sm font-semibold text-white shadow-[0_15px_40px_rgba(90,91,217,0.4)] transition hover:opacity-90 disabled:opacity-60"
+          >
+            <span>{isSendingTest ? t("sending") : t("send_test_message")}</span>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
     </div>
   );
 }

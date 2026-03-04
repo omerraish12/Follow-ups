@@ -6,6 +6,17 @@ const User = require('../models/User');
 const Automation = require('../models/Automation');
 const emailService = require('../utils/emailService');
 
+const buildUserPayload = (user) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone,
+    clinicId: user.clinic_id,
+    clinicName: user.clinic_name,
+    entryType: user.entry_type || 'clinic',
+});
+
 // Generate JWT Token
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -77,7 +88,7 @@ const signup = async (req, res) => {
 // @route   POST /api/auth/login
 const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, entryType = 'clinic', entryCode } = req.body;
 
         // Find user
         const user = await User.findByEmail(email);
@@ -91,6 +102,25 @@ const login = async (req, res) => {
 
         if (!isMatch) {
             return res.status(401).json({ message: 'Invalid email or password' });
+        }
+
+        const requestedEntryType = entryType === 'patient' ? 'patient' : 'clinic';
+        const configuredEntryType = user.entry_type || 'clinic';
+
+        if (requestedEntryType !== configuredEntryType) {
+            const label = configuredEntryType === 'patient' ? 'patient portal' : 'clinic portal';
+            return res.status(403).json({
+                message: `Please log in through the ${label}.`
+            });
+        }
+
+        if (requestedEntryType === 'patient' && user.entry_code) {
+            if (!entryCode) {
+                return res.status(403).json({ message: 'Patient access code is required.' });
+            }
+            if (entryCode !== user.entry_code) {
+                return res.status(403).json({ message: 'Invalid patient access code.' });
+            }
         }
 
         // Generate token
@@ -107,16 +137,12 @@ const login = async (req, res) => {
             await User.update(user.id, { status: 'active' });
         }
 
+        const redirectPath = requestedEntryType === 'patient' ? '/patient/dashboard' : '/dashboard';
+
         res.json({
             token,
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                clinicId: user.clinic_id,
-                clinicName: user.clinic_name
-            }
+            redirectPath,
+            user: buildUserPayload(user)
         });
     } catch (error) {
         console.error(error);
@@ -192,9 +218,11 @@ const getMe = async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
 
-        delete user.password;
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
 
-        res.json(user);
+        res.json(buildUserPayload(user));
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

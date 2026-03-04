@@ -27,13 +27,15 @@ export interface WhatsAppIntegrationConfig {
   authToken?: string | null;
   messagingServiceSid?: string | null;
   whatsappFrom?: string | null;
+  authTokenSet?: boolean;
 }
 
 export interface WhatsAppSenderInfo {
   provider: string;
   sender: string | null;
-  messagingServiceSid: string | null;
-  message: string;
+  displayNumber: string | null;
+  status?: string;
+  message?: string;
 }
 
 const DEFAULT_SANDBOX: WhatsAppSandboxInfo = {
@@ -53,6 +55,8 @@ export const getDefaultWhatsAppConfig = (): WhatsAppIntegrationConfig => ({
   authToken: null,
   messagingServiceSid: null,
   whatsappFrom: null
+  ,
+  authTokenSet: false
 });
 
 const getIntegrations = async () => {
@@ -68,29 +72,12 @@ export const whatsappService = {
 
   getConfig: async (): Promise<WhatsAppIntegrationConfig> => {
     const integrations = await getIntegrations();
-    return integrations.whatsapp || getDefaultWhatsAppConfig();
-  },
-
-  saveConfig: async (config: Partial<WhatsAppIntegrationConfig>): Promise<WhatsAppIntegrationConfig> => {
-    const response = await api.post("/settings/integrations", {
-      type: "whatsapp",
-      status: config.status || "disconnected",
-      data: config,
-    });
-    return response.data?.whatsapp || getDefaultWhatsAppConfig();
-  },
-
-  confirmSandboxJoin: async (): Promise<WhatsAppIntegrationConfig> => {
-    const response = await api.post("/settings/integrations", {
-      type: "whatsapp",
-      status: "connected",
-      data: {
-        sandbox: {
-          lastJoinedAt: new Date().toISOString(),
-        },
-      },
-    });
-    return response.data?.whatsapp || getDefaultWhatsAppConfig();
+    const config = integrations.whatsapp || {};
+    return {
+      ...getDefaultWhatsAppConfig(),
+      ...config,
+      authTokenSet: Boolean(config.authTokenSet || config.authToken)
+    };
   },
 
   sendTemplate: async (payload: { to: string; templateName: string; language?: string; components?: any[]; mediaUrl?: string }) => {

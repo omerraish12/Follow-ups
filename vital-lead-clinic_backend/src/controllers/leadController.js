@@ -3,7 +3,7 @@ const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
-const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { sendWhatsAppMessage, isWhatsAppConfiguredForClinic } = require('../services/whatsappService');
 const { canUseFreeText } = require('../utils/freeTextWindow');
 
 const ALLOWED_LEAD_STATUSES = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
@@ -295,6 +295,7 @@ const addMessage = async (req, res) => {
         const { content, type, isBusiness } = req.body;
 
         const lead = await Lead.findById(req.params.id, req.user.clinic_id);
+        console.log("_________Lead @nd Clinic: _________", lead, req.user);
 
         if (!lead) {
             return res.status(404).json({ message: 'Lead not found' });
@@ -303,6 +304,10 @@ const addMessage = async (req, res) => {
         const freeTextAllowed = canUseFreeText(lead.last_inbound_message_at);
 
         if (type === 'SENT') {
+            const whatsappConfigured = await isWhatsAppConfiguredForClinic(req.user.clinic_id);
+            if (!whatsappConfigured) {
+                return res.status(400).json({ message: 'WhatsApp integration is not configured for this clinic.' });
+            }
             if (!freeTextAllowed) {
                 return res.status(403).json({
                     message: 'The 24-hour free-text window has closed. Please send an approved template instead.'
@@ -313,6 +318,7 @@ const addMessage = async (req, res) => {
             }
 
             try {
+                console.log("_____________send______________", lead.phone, content, req.user.clinic_id);
                 await sendWhatsAppMessage({
                     to: lead.phone,
                     body: content,

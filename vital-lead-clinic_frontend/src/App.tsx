@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ThemeProvider } from "@/components/theme-provider";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import PatientRoute from "@/components/PatientRoute";
 import AppLayout from "@/components/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -33,6 +34,7 @@ import PlatformClinics from "@/pages/PlatformClinics";
 import PlatformAnalytics from "@/pages/PlatformAnalytics";
 import NotFound from "./pages/NotFound";
 import ForgotPassword from "./pages/auth/ForgotPassword";
+import PatientDashboard from "@/pages/PatientDashboard";
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -10,6 +10,16 @@ const TWILIO_SANDBOX_JOIN_CODE = process.env.TWILIO_SANDBOX_JOIN_CODE || 'join w
 const TWILIO_SANDBOX_NUMBER =
     process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
 
+const PLATFORM_TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const PLATFORM_TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const PLATFORM_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || '';
+const PLATFORM_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
+const PLATFORM_WHATSAPP_READY = Boolean(
+    PLATFORM_TWILIO_ACCOUNT_SID &&
+    PLATFORM_TWILIO_AUTH_TOKEN &&
+    (PLATFORM_WHATSAPP_FROM || PLATFORM_MESSAGING_SERVICE_SID)
+);
+
 const defaultWhatsappIntegration = {
     status: 'disconnected',
     sandbox: {
@@ -27,15 +37,32 @@ const defaultWhatsappIntegration = {
     whatsappFrom: null
 };
 
-const mergeWhatsappDefaults = (whatsapp = {}) => {
-    return {
+const getSystemWhatsAppOverrides = () => ({
+    status: PLATFORM_WHATSAPP_READY ? 'connected' : 'disconnected',
+    accountSid: PLATFORM_TWILIO_ACCOUNT_SID || null,
+    authToken: null,
+    messagingServiceSid: PLATFORM_MESSAGING_SERVICE_SID || null,
+    whatsappFrom: PLATFORM_WHATSAPP_FROM || null
+});
+
+const mergeWhatsappDefaults = (incoming = {}) => {
+    const base = {
         ...defaultWhatsappIntegration,
-        ...whatsapp,
-        sandbox: {
-            ...defaultWhatsappIntegration.sandbox,
-            ...(whatsapp.sandbox || {})
-        }
+        ...getSystemWhatsAppOverrides(),
+        ...incoming
     };
+    const hasCredentials = Boolean(
+        base.accountSid &&
+        base.authToken &&
+        (base.whatsappFrom || base.messagingServiceSid)
+    );
+    base.status = incoming.status || (hasCredentials ? 'connected' : base.status);
+    base.templates = incoming.templates || base.templates;
+    base.sandbox = {
+        ...defaultWhatsappIntegration.sandbox,
+        ...(incoming.sandbox || {})
+    };
+    return base;
 };
 
 const mergeIntegrationDefaults = (incoming = {}) => {
@@ -44,10 +71,23 @@ const mergeIntegrationDefaults = (incoming = {}) => {
         calendar: { status: 'connected' },
         payment: { status: 'disconnected' }
     };
+    const whatsappIncoming = incoming.whatsapp || {};
     return {
         ...defaults,
         ...incoming,
-        whatsapp: mergeWhatsappDefaults(incoming.whatsapp)
+        whatsapp: mergeWhatsappDefaults(whatsappIncoming)
+    };
+};
+
+const sanitizeIntegrationsForResponse = (integrations = {}) => {
+    const whatsapp = integrations.whatsapp || {};
+    return {
+        ...integrations,
+        whatsapp: {
+            ...whatsapp,
+            authTokenSet: Boolean(whatsapp.authToken),
+            authToken: null
+        }
     };
 };
 
@@ -74,7 +114,7 @@ const BACKUP_DIR = path.join(__dirname, '..', '..', 'backups');
 const collectClinicData = async (clinicId) => {
     const [clinicResult, usersResult, leadsResult, automationsResult, notificationsResult] = await Promise.all([
         query(
-            `SELECT id, name, email, phone, address, timezone, language, currency, logo
+            `SELECT id, name, email, phone, address, timezone, language, currency, logo, whatsapp_number
              FROM clinics
              WHERE id = $1`,
             [clinicId]
@@ -303,7 +343,8 @@ const getSettings = async (req, res) => {
         );
         const profile = userResult.rows[0] || {};
 
-        const integrations = mergeIntegrationDefaults(clinic.integration_settings || {});
+        const mergedIntegrations = mergeIntegrationDefaults(clinic.integration_settings || {});
+        const integrations = sanitizeIntegrationsForResponse(mergedIntegrations);
         const backupSettings = clinic.backup_settings || defaultBackupSettings;
         const notificationSettings = profile.notification_settings || defaultNotificationSettings;
 
@@ -317,7 +358,8 @@ const getSettings = async (req, res) => {
                 timezone: clinic.timezone,
                 language: clinic.language,
                 currency: clinic.currency,
-                logo: clinic.logo || null
+                logo: clinic.logo || null,
+                whatsappNumber: clinic.whatsapp_number || null
             },
             profile: {
                 id: profile.id,
@@ -340,7 +382,7 @@ const getSettings = async (req, res) => {
 
 const updateClinic = async (req, res) => {
     try {
-        const { name, email, phone, address, timezone, language, currency, logo } = req.body;
+        const { name, email, phone, address, timezone, language, currency, logo, whatsappNumber, whatsapp_number } = req.body;
         const fields = [];
         const values = [];
         let paramIndex = 1;
@@ -361,6 +403,7 @@ const updateClinic = async (req, res) => {
         setField('language', language);
         setField('currency', currency);
         setField('logo', logo);
+        setField('whatsapp_number', whatsappNumber ?? whatsapp_number);
 
         if (fields.length === 0) {
             return res.status(400).json({ message: 'No valid fields to update' });
@@ -371,11 +414,15 @@ const updateClinic = async (req, res) => {
             `UPDATE clinics
              SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP
              WHERE id = $${paramIndex}
-             RETURNING id, name, email, phone, address, timezone, language, currency, logo`,
+             RETURNING id, name, email, phone, address, timezone, language, currency, logo, whatsapp_number`,
             values
         );
 
-        res.json(result.rows[0]);
+        const updatedClinic = result.rows[0];
+        res.json({
+            ...updatedClinic,
+            whatsappNumber: updatedClinic.whatsapp_number || null
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
@@ -501,6 +548,20 @@ const runBackup = async (req, res) => {
     }
 };
 
+const normalizeWhatsappField = (value) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? null : trimmed;
+};
+
+const normalizeWhatsappPayload = (payload = {}) => ({
+    accountSid: normalizeWhatsappField(payload.accountSid),
+    authToken: normalizeWhatsappField(payload.authToken),
+    messagingServiceSid: normalizeWhatsappField(payload.messagingServiceSid),
+    whatsappFrom: normalizeWhatsappField(payload.whatsappFrom)
+});
+
 const updateIntegration = async (req, res) => {
     try {
         const { type, status, data } = req.body;
@@ -509,15 +570,56 @@ const updateIntegration = async (req, res) => {
         }
 
         const safeData = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-        const sanitizedData = Object.fromEntries(
-            Object.entries(safeData).filter(([, value]) => value !== undefined)
-        );
-
         const clinicResult = await query(
             `SELECT integration_settings FROM clinics WHERE id = $1`,
             [req.user.clinic_id]
         );
-        const current = mergeIntegrationDefaults(clinicResult.rows[0]?.integration_settings || {});
+        const stored = clinicResult.rows[0]?.integration_settings || {};
+
+        if (type === 'whatsapp') {
+            const existingWhatsapp = stored.whatsapp || {};
+            const nextWhatsapp = {
+                ...existingWhatsapp,
+                ...normalizeWhatsappPayload(safeData),
+                status,
+                updatedAt: new Date().toISOString()
+            };
+            if (status === 'connected') {
+                const hasCredentials =
+                    nextWhatsapp.accountSid &&
+                    nextWhatsapp.authToken &&
+                    (nextWhatsapp.whatsappFrom || nextWhatsapp.messagingServiceSid);
+                if (!hasCredentials) {
+                    return res.status(400).json({ message: 'Complete Twilio credentials are required to connect' });
+                }
+                nextWhatsapp.lastConnectedAt = new Date().toISOString();
+            } else {
+                nextWhatsapp.accountSid = null;
+                nextWhatsapp.authToken = null;
+                nextWhatsapp.messagingServiceSid = null;
+                nextWhatsapp.whatsappFrom = null;
+            }
+            const next = {
+                ...stored,
+                whatsapp: nextWhatsapp
+            };
+            const result = await query(
+                `UPDATE clinics
+                 SET integration_settings = $1, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $2
+                 RETURNING integration_settings`,
+                [next, req.user.clinic_id]
+            );
+            const savedIntegrations = result.rows[0]?.integration_settings || next;
+            const merged = mergeIntegrationDefaults(savedIntegrations);
+            return res.json(sanitizeIntegrationsForResponse(merged));
+        }
+
+        const sanitizedData = Object.fromEntries(
+            Object.entries(safeData).filter(([, value]) => value !== undefined)
+        );
+
+        const current = mergeIntegrationDefaults(stored);
         const currentTypeSettings = current?.[type] || {};
         const next = {
             ...current,
@@ -538,7 +640,7 @@ const updateIntegration = async (req, res) => {
         );
 
         const savedIntegrations = result.rows[0]?.integration_settings || next;
-        res.json(mergeIntegrationDefaults(savedIntegrations));
+        res.json(sanitizeIntegrationsForResponse(mergeIntegrationDefaults(savedIntegrations)));
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });

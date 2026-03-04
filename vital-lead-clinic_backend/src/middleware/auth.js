@@ -22,6 +22,7 @@ const protect = async (req, res, next) => {
         }
 
         req.user = user;
+        console.log(`User action: role=${user.role} userId=${user.id} ${req.method} ${req.originalUrl}`);
         next();
     } catch (error) {
         return res.status(401).json({ message: 'Not authorized, token failed' });

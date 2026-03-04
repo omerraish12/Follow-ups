@@ -10,16 +10,16 @@ import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
 import type { Lead } from "@/types/leads";
+import { SERVICE_OPTIONS } from "@/lib/serviceOptions";
 
 interface EditLeadDialogProps {
   lead: Lead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (updatedLead: Lead) => void;
 }
 
 const sources = ["WhatsApp", "Website", "Instagram", "Referral", "Google Ads"];
-const services = ["Dental Cleaning", "Orthodontics", "Root Canal", "Implants", "Cosmetic Dentistry", "Check-up"];
 
 const getInitialForm = (lead: Lead) => ({
   name: lead.name || "",
@@ -64,20 +64,20 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
 
     setIsSubmitting(true);
     try {
-        await updateLead(lead.id, {
-          name: form.name.trim(),
-          phone: form.phone.trim(),
-          email: form.email.trim(),
-          service: form.service,
-          source: form.source,
-          status: form.status.toUpperCase() as Lead["status"],
-          notes: form.notes.trim(),
-          value: Number(form.value) || 0,
-          next_follow_up: form.nextFollowUp || null,
-          consentGiven: form.consentGiven,
-          consentTimestamp: form.consentGiven ? new Date().toISOString() : null,
-        });
-      onSuccess?.();
+      const updatedLead = await updateLead(lead.id, {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        service: form.service,
+        source: form.source,
+        status: form.status.toUpperCase() as Lead["status"],
+        notes: form.notes.trim(),
+        value: Number(form.value) || 0,
+        next_follow_up: form.nextFollowUp || null,
+        consentGiven: form.consentGiven,
+        consentTimestamp: form.consentGiven ? new Date().toISOString() : null,
+      });
+      onSuccess?.(updatedLead);
       handleClose();
     } catch (error) {
       console.error("Error updating lead:", error);
@@ -138,9 +138,9 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
                 <SelectValue placeholder={t("select_service")} />
               </SelectTrigger>
               <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service} value={service}>
-                    {service}
+                {SERVICE_OPTIONS.map(({ value, labelKey }) => (
+                  <SelectItem key={value} value={value}>
+                    {t(labelKey)}
                   </SelectItem>
                 ))}
               </SelectContent>

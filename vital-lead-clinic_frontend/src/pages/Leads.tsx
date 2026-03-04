@@ -45,6 +45,7 @@ import {
 import type { Lead, LeadStatus } from "@/types/leads";
 import { Progress } from "@/components/ui/progress";
 import { whatsappService } from "@/services/whatsappService";
+import { getTranslatedServiceLabel } from "@/lib/serviceOptions";
 
 export default function Leads() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -395,7 +396,7 @@ export default function Leads() {
               lead.name || "-",
               lead.phone || "-",
               lead.email || "-",
-              lead.service || "-",
+              getTranslatedServiceLabel(lead.service, t, "-"),
               lead.status || "-",
               lead.source || "-",
               lead.value || 0,
@@ -797,7 +798,9 @@ export default function Leads() {
                   </div>
                   <div>
                     <p className="font-bold text-foreground">{lead.name}</p>
-                    <p className="text-xs text-muted-foreground">{lead.service || t("no_service")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {getTranslatedServiceLabel(lead.service, t, t("no_service"))}
+                    </p>
                   </div>
                 </div>
                 <StatusBadge status={lead.status} />
@@ -929,7 +932,9 @@ export default function Leads() {
                     <td className="px-5 py-3.5 text-center text-muted-foreground font-mono text-xs" dir="ltr">
                       {lead.phone}
                     </td>
-                    <td className="px-5 py-3.5 text-center text-muted-foreground">{lead.service || '-'}</td>
+                    <td className="px-5 py-3.5 text-center text-muted-foreground">
+                      {getTranslatedServiceLabel(lead.service, t, "-")}
+                    </td>
                     <td className="px-5 py-3.5 text-center"><StatusBadge status={lead.status} /></td>
                     <td className="px-5 py-3.5 text-center text-muted-foreground">{lead.source || '-'}</td>
                     <td className="px-5 py-3.5 text-center font-bold text-foreground">
@@ -1057,7 +1062,7 @@ export default function Leads() {
               setIsEditDialogOpen(true);
             }
           }}
-          onSuccess={handleLeadUpdated}
+          onSuccess={() => handleLeadUpdated()}
         />
       )}
 

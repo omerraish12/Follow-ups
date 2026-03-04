@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
 import type { LeadStatus } from "@/types/leads";
+import { SERVICE_OPTIONS } from "@/lib/serviceOptions";
 
 interface AddLeadDialogProps {
   onSuccess?: () => void;
@@ -27,15 +28,6 @@ const sources = [
   { value: "Referral", labelKey: "source_referral" },
   { value: "Google Ads", labelKey: "source_google_ads" },
 ];
-const services = [
-  { value: "Dental Cleaning", labelKey: "service_option_dental_cleaning" },
-  { value: "Orthodontics", labelKey: "service_option_orthodontics" },
-  { value: "Root Canal", labelKey: "service_option_root_canal" },
-  { value: "Implants", labelKey: "service_option_implants" },
-  { value: "Cosmetic Dentistry", labelKey: "service_option_cosmetic_dentistry" },
-  { value: "Check-up", labelKey: "service_option_checkup" },
-];
-
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
@@ -162,7 +154,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
             <Select value={form.service} onValueChange={(v) => setForm({ ...form, service: v })} disabled={isSubmitting}>
               <SelectTrigger className="rounded-xl"><SelectValue placeholder={t("select_service")} /></SelectTrigger>
               <SelectContent>
-                {services.map(({ value, labelKey }) => (
+                {SERVICE_OPTIONS.map(({ value, labelKey }) => (
                   <SelectItem key={value} value={value}>
                     {t(labelKey)}
                   </SelectItem>
