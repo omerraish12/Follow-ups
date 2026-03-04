@@ -10,16 +10,6 @@ const TWILIO_SANDBOX_JOIN_CODE = process.env.TWILIO_SANDBOX_JOIN_CODE || 'join w
 const TWILIO_SANDBOX_NUMBER =
     process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
 
-const PLATFORM_TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const PLATFORM_TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const PLATFORM_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || '';
-const PLATFORM_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
-const PLATFORM_WHATSAPP_READY = Boolean(
-    PLATFORM_TWILIO_ACCOUNT_SID &&
-    PLATFORM_TWILIO_AUTH_TOKEN &&
-    (PLATFORM_WHATSAPP_FROM || PLATFORM_MESSAGING_SERVICE_SID)
-);
-
 const defaultWhatsappIntegration = {
     status: 'disconnected',
     sandbox: {
@@ -37,18 +27,9 @@ const defaultWhatsappIntegration = {
     whatsappFrom: null
 };
 
-const getSystemWhatsAppOverrides = () => ({
-    status: PLATFORM_WHATSAPP_READY ? 'connected' : 'disconnected',
-    accountSid: PLATFORM_TWILIO_ACCOUNT_SID || null,
-    authToken: null,
-    messagingServiceSid: PLATFORM_MESSAGING_SERVICE_SID || null,
-    whatsappFrom: PLATFORM_WHATSAPP_FROM || null
-});
-
 const mergeWhatsappDefaults = (incoming = {}) => {
     const base = {
         ...defaultWhatsappIntegration,
-        ...getSystemWhatsAppOverrides(),
         ...incoming
     };
     const hasCredentials = Boolean(
@@ -327,7 +308,7 @@ const buildPdfBuffer = (data) => new Promise((resolve, reject) => {
 const getSettings = async (req, res) => {
     try {
         const clinicResult = await query(
-            `SELECT id, name, email, phone, address, timezone, language, currency, logo,
+        `SELECT id, name, email, phone, address, timezone, language, currency, logo, whatsapp_number,
                     integration_settings, backup_settings
              FROM clinics
              WHERE id = $1`,

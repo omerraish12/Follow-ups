@@ -1,16 +1,25 @@
 // src/models/User.js
 const { query } = require('../config/database');
 
+const canonicalizeEmail = (value) => {
+    if (!value) return '';
+    return value.trim().toLowerCase();
+};
+
 class User {
     static async findByEmail(email) {
+        if (!email) return null;
+        const normalizedEmail = canonicalizeEmail(email);
         const result = await query(
             `SELECT u.*, c.name as clinic_name, c.email as clinic_email 
        FROM users u 
        LEFT JOIN clinics c ON u.clinic_id = c.id 
-       WHERE u.email = $1`,
-            [email]
+       WHERE LOWER(u.email) = $1`,
+            [normalizedEmail]
         );
-        return result.rows[0];
+        const user = result.rows[0];
+        console.log(`User.findByEmail (${normalizedEmail}) returned`, user);
+        return user;
     }
 
     static async findById(id) {
@@ -37,13 +46,24 @@ class User {
             entryCode = null,
             permissions = []
         } = userData;
+        const storedEmail = email ? email.trim().toLowerCase() : '';
         const result = await query(
             `INSERT INTO users (email, password, name, phone, clinic_id, role, status, permissions, entry_type, entry_code) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
        RETURNING id, email, name, role, status, clinic_id, entry_type, entry_code`,
-            [email, password, name, phone, clinicId, role, status, permissions, entryType, entryCode]
+            [storedEmail, password, name, phone, clinicId, role, status, permissions, entryType, entryCode]
         );
         return result.rows[0];
+    }
+
+    static async findAll() {
+        const result = await query(
+            `SELECT u.*, c.name as clinic_name, c.email as clinic_email 
+       FROM users u 
+       LEFT JOIN clinics c ON u.clinic_id = c.id
+       ORDER BY u.created_at DESC`
+        );
+        return result.rows;
     }
 
     static async update(id, userData) {
@@ -138,6 +158,10 @@ class User {
             [clinicId]
         );
         return result.rows;
+    }
+
+    static canonicalizeEmail(value) {
+        return canonicalizeEmail(value);
     }
 }
 

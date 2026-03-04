@@ -43,10 +43,7 @@ Express/Node API for the clinic platform (auth, leads, automations, notification
 - `/api/whatsapp` – WhatsApp connection, message dispatch, webhooks
 
 ## WhatsApp checklist
-You can send WhatsApp messages either through Meta’s Business Cloud or via Twilio. The backend currently uses Twilio, so fill these `TWILIO_*` variables in `.env`:
-1. `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`.
-2. A WhatsApp sender (`TWILIO_WHATSAPP_FROM` or `TWILIO_MESSAGING_SERVICE_SID`).
-The Meta `WHATSAPP_*` keys are optional unless you want to switch providers later; leave them blank when using Twilio.
+Each clinic connects its own WhatsApp/Twilio account from the **WhatsApp integration** page in the frontend. The backend stores those per-clinic credentials in `integration_settings.whatsapp`, so you no longer need to set `TWILIO_*` values in `.env`—deployments just need a running database and the usual credentials for your database+auth providers.
 
 ### Automations & templates
 - Automations follow patients who remain quiet for 2, 3, 7, or 14 days (default rules are seeded) and run on a schedule. Each rule references a WhatsApp template so Twilio can send a pre-approved message that your clinic crafted.

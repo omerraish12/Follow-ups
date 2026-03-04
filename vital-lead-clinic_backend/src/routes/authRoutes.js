@@ -17,7 +17,12 @@ router.post(
         body('email')
             .isEmail()
             .withMessage('Valid email is required')
-            .normalizeEmail(),
+            .normalizeEmail({
+                all_lowercase: false,
+                gmail_remove_dots: false,
+                gmail_remove_subaddress: false,
+                gmail_convert_googlemaildotcom: false
+            }),
         body('password')
             .isLength({ min: 6 })
             .withMessage('Password must be at least 6 characters'),

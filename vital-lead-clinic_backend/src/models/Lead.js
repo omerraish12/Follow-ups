@@ -1,5 +1,35 @@
 const { query } = require('../config/database');
 
+const normalizePhoneInput = (value) => (value || '').replace(/[^0-9+]/g, '');
+
+const generatePhoneVariants = (phone) => {
+  const normalized = normalizePhoneInput(phone);
+  if (!normalized) {
+    return [];
+  }
+
+  const digitsOnly = normalized.replace(/[^0-9]/g, '');
+  const variants = new Set();
+  variants.add(normalized);
+  if (digitsOnly) {
+    variants.add(digitsOnly);
+    variants.add(digitsOnly.replace(/^0+/, ''));
+  }
+
+  const suffixLengths = [9, 10, 11];
+  for (const length of suffixLengths) {
+    if (digitsOnly.length >= length) {
+      const suffix = digitsOnly.slice(-length);
+      if (suffix) {
+        variants.add(suffix);
+        variants.add(`0${suffix}`);
+      }
+    }
+  }
+
+  return Array.from(variants).filter(Boolean);
+};
+
 class Lead {
     static async findAll(filters = {}) {
         let sql = `
@@ -117,15 +147,19 @@ class Lead {
     }
 
     static async findByPhone(phone) {
-        if (!phone) return null;
-        const normalized = phone.replace(/[^0-9+]/g, '');
+        const variants = generatePhoneVariants(phone);
+        if (!variants.length) {
+            return null;
+        }
+
         const result = await query(
             `SELECT * FROM leads 
-             WHERE regexp_replace(phone, '[^0-9+]', '', 'g') = $1
+             WHERE regexp_replace(phone, '[^0-9+]', '', 'g') = ANY($1)
+             OR regexp_replace(phone, '[^0-9]', '', 'g') = ANY($1)
              LIMIT 1`,
-            [normalized]
+            [variants]
         );
-        return result.rows[0];
+        return result.rows[0] || null;
     }
 
     static async update(id, clinicId, leadData) {

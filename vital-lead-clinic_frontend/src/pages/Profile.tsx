@@ -1,5 +1,5 @@
 // src/pages/Profile.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { toast } from "@/hooks/use-toast";
+import { settingsService } from "@/services/settingsService";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { t, language } = useLanguage();
   const isRtl = language === "he";
 
@@ -25,12 +27,93 @@ export default function Profile() {
     next: "",
     confirm: ""
   });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, scope: "profile" | "password") => {
     const { name, value } = e.target;
     scope === "profile"
       ? setForm(prev => ({ ...prev, [name]: value }))
       : setPasswordForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  useEffect(() => {
+    setForm({
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+      clinic: user?.clinicName || ""
+    });
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (isSavingProfile) return;
+    setIsSavingProfile(true);
+    try {
+      const updated = await settingsService.updateProfile({
+        name: form.name,
+        email: form.email,
+        phone: form.phone
+      });
+      if (updated) {
+        setForm(prev => ({
+          ...prev,
+          name: updated.name ?? prev.name,
+          email: updated.email ?? prev.email,
+          phone: updated.phone ?? prev.phone
+        }));
+      }
+      await refreshUser?.();
+      toast({
+        title: t("profile_updated"),
+        description: t("profile_updated_success")
+      });
+    } catch (error) {
+      toast({
+        title: t("error"),
+        description: t("profile_update_failed"),
+        variant: "destructive"
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (passwordForm.next !== passwordForm.confirm) {
+      toast({
+        title: t("error"),
+        description: t("passwords_dont_match"),
+        variant: "destructive"
+      });
+      return;
+    }
+    if (passwordForm.next.length < 6) {
+      toast({
+        title: t("error"),
+        description: t("password_too_short"),
+        variant: "destructive"
+      });
+      return;
+    }
+    if (isChangingPassword) return;
+    setIsChangingPassword(true);
+    try {
+      await settingsService.changePassword(passwordForm.current, passwordForm.next);
+      setPasswordForm({ current: "", next: "", confirm: "" });
+      toast({
+        title: t("password_changed"),
+        description: t("password_changed_success")
+      });
+    } catch (error) {
+      toast({
+        title: t("error"),
+        description: t("password_change_failed"),
+        variant: "destructive"
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -89,7 +172,14 @@ export default function Profile() {
             </div>
 
             <div className="flex justify-end">
-              <Button className="rounded-xl">{t("save")}</Button>
+              <Button
+                type="button"
+                className="rounded-xl"
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile}
+              >
+                {isSavingProfile ? t("saving") : t("save")}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -137,7 +227,15 @@ export default function Profile() {
               </div>
             </div>
             <div className="flex justify-end">
-              <Button variant="outline" className="rounded-xl">{t("save")}</Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={handleChangePassword}
+                disabled={isChangingPassword}
+              >
+                {isChangingPassword ? t("saving") : t("save")}
+              </Button>
             </div>
           </CardContent>
         </Card>

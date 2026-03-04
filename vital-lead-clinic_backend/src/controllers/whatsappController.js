@@ -62,7 +62,7 @@ const sendImmediateTemplateReply = async (rawTo, clinicId = null, options = {}) 
       try {
         await Message.create({
           content: `Template: ${templateName}`,
-          type: 'OUTGOING',
+          type: 'SENT',
           isBusiness: true,
           leadId: options.leadId
         });
@@ -109,6 +109,13 @@ const processInboundMessage = async (rawFrom, rawText) => {
   if (!from || !text) {
     return;
   }
+
+  console.log('Personal WhatsApp message received:', {
+    rawFrom,
+    from,
+    text,
+    receivedAt: new Date().toISOString()
+  });
 
   console.info('Inbound WhatsApp message', { from, text, receivedAt: new Date().toISOString() });
 
@@ -281,7 +288,7 @@ const sendTemplate = async (req, res, next) => {
     if (lead) {
       await Message.create({
         content: `Template: ${templateName}`,
-        type: 'OUTGOING',
+        type: 'SENT',
         isBusiness: true,
         leadId: lead.id
       });

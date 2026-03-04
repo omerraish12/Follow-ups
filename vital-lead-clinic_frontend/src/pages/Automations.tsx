@@ -73,6 +73,9 @@ export default function Automations() {
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [quickReplies, setQuickReplies] = useState<AutomationComponent[]>([]);
 
+  const INACTIVE_TRIGGER_KEY = "inactive_no_visit";
+  const DEFAULT_INACTIVE_DAYS = 60;
+
   const addQuickReply = () => {
     setQuickReplies((prev) =>
       prev.length >= MAX_QUICK_REPLIES
@@ -158,6 +161,19 @@ export default function Automations() {
     high_value: 1
   };
 
+  const resolveTriggerDays = () => {
+    const numericInactiveDays = Number(inactiveDays) || DEFAULT_INACTIVE_DAYS;
+    return Array.from(
+      new Set(
+        selectedTriggers.map((trigger) =>
+          trigger === INACTIVE_TRIGGER_KEY
+            ? numericInactiveDays
+            : triggerDayMap[trigger] ?? 3
+        )
+      )
+    );
+  };
+
   const handleCreateTemplate = async () => {
     if (!templateName.trim() || !templateMessage.trim()) {
       toast({
@@ -170,11 +186,7 @@ export default function Automations() {
 
     setIsSavingTemplate(true);
     try {
-      const triggerDays = Array.from(
-        new Set(
-          selectedTriggers.map((trigger) => triggerDayMap[trigger] ?? 3)
-        )
-      );
+      const triggerDays = resolveTriggerDays();
       const messageText = templateMessage.trim();
       const quickReplyComponents = quickReplies
         .map((reply) => {
@@ -187,7 +199,6 @@ export default function Automations() {
           };
         })
         .filter(Boolean);
-      const inactiveDaysValue = selectedTriggers.includes("inactive_no_visit") ? Number(inactiveDays) || 60 : null;
 
       await addAutomation({
         name: templateName.trim(),
@@ -571,7 +582,7 @@ export default function Automations() {
                   );
                 })}
              </div>
-              {selectedTriggers.includes("inactive_no_visit") && (
+              {selectedTriggers.includes(INACTIVE_TRIGGER_KEY) && (
                 <div className="mt-2 text-xs text-muted-foreground">
                   <label className="mr-2">{t("inactive_days_label")}</label>
                   <Input

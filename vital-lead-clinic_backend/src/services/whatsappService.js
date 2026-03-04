@@ -1,10 +1,6 @@
 const twilio = require('twilio');
 const { query } = require('../config/database');
 
-const DEFAULT_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const DEFAULT_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
-const DEFAULT_WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM || '';
-const DEFAULT_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
 
 const clinicClientCache = new Map();
 
@@ -42,22 +38,17 @@ const getClinicWhatsappConfig = async (clinicId) => {
   return whatsapp;
 };
 
-const pickCredential = (clinicValue, defaultValue) => {
-  const trimmed = trimValue(clinicValue);
-  if (trimmed !== null && trimmed !== undefined) {
-    return trimmed;
-  }
-  return defaultValue || null;
-};
+const pickCredential = (clinicValue) => trimValue(clinicValue);
 
 const resolveTwilioCredentials = async (clinicId) => {
   const clinicWhatsapp = await getClinicWhatsappConfig(clinicId);
   const credentials = {
-    accountSid: pickCredential(clinicWhatsapp.accountSid, DEFAULT_ACCOUNT_SID),
-    authToken: pickCredential(clinicWhatsapp.authToken, DEFAULT_AUTH_TOKEN),
-    messagingServiceSid: pickCredential(clinicWhatsapp.messagingServiceSid, DEFAULT_MESSAGING_SERVICE_SID),
-    whatsappFrom: pickCredential(clinicWhatsapp.whatsappFrom, DEFAULT_WHATSAPP_FROM)
+    accountSid: pickCredential(clinicWhatsapp.accountSid),
+    authToken: pickCredential(clinicWhatsapp.authToken),
+    messagingServiceSid: pickCredential(clinicWhatsapp.messagingServiceSid),
+    whatsappFrom: pickCredential(clinicWhatsapp.whatsappFrom)
   };
+  console.log("_______correct clinic credentials___________: ", credentials.authToken, credentials.accountSid);
   ensureCredentials(credentials);
   return credentials;
 };
@@ -76,6 +67,7 @@ const getCacheKey = (clinicId) =>
 
 const getTwilioClientForClinic = async (clinicId) => {
   const credentials = await resolveTwilioCredentials(clinicId);
+  console.log("_______correct clinic credentials___________: ", credentials.authToken, credentials.accountSid);
   const cacheKey = getCacheKey(clinicId);
   const cached = clinicClientCache.get(cacheKey);
   if (cached && cached.accountSid === credentials.accountSid && cached.authToken === credentials.authToken) {
@@ -266,6 +258,7 @@ const buildTemplatePayload = ({ templateName, language, components, mediaUrl }) 
 
 async function sendTemplateMessage({ to, templateName, language, components = [], mediaUrl, body, clinicId }) {
   const { client, credentials } = await getTwilioClientForClinic(clinicId);
+  console.log("credentials, ", credentials);
   const toAddress = buildWhatsAppAddress(to);
 
   const templatePayload = buildTemplatePayload({ templateName, language, components, mediaUrl });

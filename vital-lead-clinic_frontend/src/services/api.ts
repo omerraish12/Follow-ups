@@ -25,11 +25,18 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        const status = error.response?.status;
+        const url = (error.config?.url || '').toLowerCase();
+        const skipRedirect = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/reset-password'].some((path) =>
+            url.includes(path)
+        );
+
+        if (status === 401 && !skipRedirect) {
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
             window.location.href = '/login';
         }
+
         return Promise.reject(error);
     }
 );

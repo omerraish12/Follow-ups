@@ -125,6 +125,7 @@ class Automation {
         } = automationData;
 
         const normalizedComponents = normalizeComponents(components);
+        const componentsPayload = normalizedComponents.length ? JSON.stringify(normalizedComponents) : '[]';
         const result = await query(
             `INSERT INTO automations 
             (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid) 
@@ -137,7 +138,7 @@ class Automation {
                 templateName,
                 templateLanguage || 'en',
                 mediaUrl,
-                normalizedComponents,
+                componentsPayload,
                 targetStatus,
                 notifyOnReply,
                 personalization,
