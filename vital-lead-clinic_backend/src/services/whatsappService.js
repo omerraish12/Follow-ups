@@ -67,7 +67,6 @@ const getCacheKey = (clinicId) =>
 
 const getTwilioClientForClinic = async (clinicId) => {
   const credentials = await resolveTwilioCredentials(clinicId);
-  console.log("_______correct clinic credentials___________: ", credentials.authToken, credentials.accountSid);
   const cacheKey = getCacheKey(clinicId);
   const cached = clinicClientCache.get(cacheKey);
   if (cached && cached.accountSid === credentials.accountSid && cached.authToken === credentials.authToken) {
@@ -277,7 +276,35 @@ async function sendTemplateMessage({ to, templateName, language, components = []
     messagePayload.template = templatePayload.template;
   }
 
-  return client.messages.create(messagePayload);
+  console.info('Sending WhatsApp template message', {
+    to: toAddress,
+    templateName,
+    language,
+    componentsCount: Array.isArray(templatePayload?.template?.components)
+      ? templatePayload.template.components.length
+      : 0,
+    payload: {
+      messagePayload,
+      templatePayload: templatePayload?.template
+    }
+  });
+
+  try {
+    const result = await client.messages.create(messagePayload);
+    console.info("WhatsApp template message created", {
+      sid: result?.sid,
+      to: result?.to,
+      status: result?.status
+    });
+    return result;
+  } catch (error) {
+    console.error("WhatsApp template send failed", {
+      to: toAddress,
+      templateName,
+      error: error?.response?.data || error?.message || error
+    });
+    throw error;
+  }
 }
 
 async function sendWhatsAppMessage({
@@ -318,7 +345,7 @@ async function sendWhatsAppMessage({
     payload.mediaUrl = Array.isArray(mediaUrl) ? mediaUrl : [mediaUrl];
   }
 
-  console.log("___________client____________", client, client.messages.create, payload);
+  console.log("___________client____________||", client, client.messages.create, payload);
   return client.messages.create(payload);
 }
 

@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -29,6 +30,8 @@ import {
   type WhatsAppSenderInfo,
 } from "@/services/whatsappService";
 import { settingsService } from "@/services/settingsService";
+import { automationService } from "@/services/automationService";
+import type { AutomationTemplateOption } from "@/types/automation";
 
 const formatDate = (value: string | null | undefined, locale: string, fallback: string) => {
   if (!value) {
@@ -67,6 +70,10 @@ export default function WhatsAppIntegration() {
   });
   const [isSavingTwilio, setIsSavingTwilio] = useState(false);
   const [authTokenStored, setAuthTokenStored] = useState(false);
+  const [templateApprovals, setTemplateApprovals] = useState<AutomationTemplateOption[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [approvingTemplateId, setApprovingTemplateId] = useState<string | null>(null);
+  const [refreshingTemplateId, setRefreshingTemplateId] = useState<string | null>(null);
 
   const syncFromConfig = useCallback((config: WhatsAppIntegrationConfig) => {
     setWhatsAppConfig(config);
@@ -123,6 +130,27 @@ export default function WhatsAppIntegration() {
   useEffect(() => {
     setTestLanguage(language === "he" ? "he" : "en");
   }, [language]);
+
+  const loadTemplateApprovals = useCallback(async () => {
+    setTemplatesLoading(true);
+    try {
+      const templates = await automationService.getTemplates();
+      setTemplateApprovals(templates);
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || t("whatsapp_templates_load_failed");
+      toast({
+        title: t("error"),
+        description: message,
+        variant: "destructive"
+      });
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    loadTemplateApprovals();
+  }, [loadTemplateApprovals]);
 
   const handleSendTest = async () => {
     const cleanedPhone = testPhone.trim();
@@ -269,6 +297,48 @@ export default function WhatsAppIntegration() {
     }
   };
 
+  const handleApproveAutomationTemplate = async (template: AutomationTemplateOption) => {
+    setApprovingTemplateId(template.automationId);
+    try {
+      await automationService.approveTemplate(template.automationId);
+      toast({
+        title: t("whatsapp_template_approved_title"),
+        description: t("whatsapp_template_approved_description"),
+      });
+      await loadTemplateApprovals();
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || t("whatsapp_template_approval_failed");
+      toast({
+        title: t("error"),
+        description: message,
+        variant: "destructive"
+      });
+    } finally {
+      setApprovingTemplateId(null);
+    }
+  };
+
+  const handleRefreshAutomationTemplate = async (template: AutomationTemplateOption) => {
+    setRefreshingTemplateId(template.automationId);
+    try {
+      await automationService.refreshTemplateStatus(template.automationId);
+      toast({
+        title: t("refresh_template_status"),
+        description: t("template_status_refreshed_message"),
+      });
+      await loadTemplateApprovals();
+    } catch (error) {
+      const message = (error as any)?.response?.data?.message || t("whatsapp_template_refresh_failed");
+      toast({
+        title: t("error"),
+        description: message,
+        variant: "destructive"
+      });
+    } finally {
+      setRefreshingTemplateId(null);
+    }
+  };
+
   useEffect(() => {
     if (selectedTemplateId && !templateOptions.some((option) => option.id === selectedTemplateId)) {
       setSelectedTemplateId("");
@@ -298,13 +368,6 @@ export default function WhatsAppIntegration() {
     [t, toast]
   );
 
-  const handleOpenSandboxPortal = useCallback(() => {
-    if (!whatsappConfig.sandbox.link) {
-      return;
-    }
-    window.open(whatsappConfig.sandbox.link, "_blank", "noopener,noreferrer");
-  }, [whatsappConfig.sandbox.link]);
-
   const languageOptions = useMemo(
     () => [
       { value: "en", label: t("english") },
@@ -324,10 +387,11 @@ export default function WhatsAppIntegration() {
 
   const darkFieldClass =
     "rounded-2xl border border-white/20 bg-white/5 px-4 py-3 text-sm text-white placeholder:text-white/50 shadow-[0_20px_45px_rgba(2,6,23,0.45)] transition focus:border-white/30 focus-visible:ring focus-visible:ring-white/30";
-  const sandboxDetailBoxClass = "rounded-2xl border border-dashed border-white/20 bg-white/5 p-4";
-
   const locale = language === "he" ? "he-IL" : "en-US";
   const fallbackDate = t("not_available");
+  const actionableTemplates = templateApprovals.filter(
+    (template) => (template.templateStatus || "pending").toLowerCase() !== "approved"
+  );
 
   return (
     <div className="space-y-6" dir={language === "he" ? "rtl" : "ltr"}>
@@ -462,7 +526,77 @@ export default function WhatsAppIntegration() {
       </CardContent>
     </Card>
 
-  <Card className="rounded-[36px] border border-white/15 bg-slate-900/70 text-white shadow-[0_25px_60px_rgba(2,6,23,0.65)]">
+    <Card className="rounded-[36px] border border-white/15 bg-slate-900/75 text-white shadow-[0_25px_60px_rgba(2,6,23,0.75)]">
+      <CardHeader className="space-y-2">
+        <CardTitle className="text-2xl text-white">{t("whatsapp_template_panel_title")}</CardTitle>
+        <CardDescription className="text-sm text-white/60">{t("whatsapp_template_panel_description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {templatesLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-6 w-6 text-white/70 animate-spin" />
+          </div>
+        ) : !actionableTemplates.length ? (
+          <p className="text-sm text-white/60">{t("whatsapp_template_list_empty")}</p>
+        ) : (
+          <div className="space-y-3">
+            {actionableTemplates.map((template) => {
+              const templateStatus = (template.templateStatus || "pending").toLowerCase();
+              const statusLabelKey =
+                templateStatus === "approved"
+                  ? "template_status_approved_tag"
+                  : templateStatus === "rejected"
+                    ? "template_status_rejected_tag"
+                    : "template_status_pending_tag";
+              const statusHelpKey =
+                templateStatus === "rejected"
+                  ? "template_status_rejected_help"
+                  : "template_status_pending_help";
+              return (
+                <div key={template.automationId} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{template.automationName}</p>
+                      <p className="text-xs text-white/60">{template.templateName}</p>
+                    </div>
+                    <Badge variant="outline" className="rounded-full px-2 text-[10px] uppercase">
+                      {t(statusLabelKey)}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-white/60">{t(statusHelpKey)}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => handleApproveAutomationTemplate(template)}
+                      disabled={approvingTemplateId === template.automationId}
+                      className="uppercase tracking-[0.3em]"
+                    >
+                      {approvingTemplateId === template.automationId
+                        ? t("whatsapp_template_approving")
+                        : t("whatsapp_template_approval_button")}
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => handleRefreshAutomationTemplate(template)}
+                      disabled={refreshingTemplateId === template.automationId}
+                      className="uppercase tracking-[0.3em]"
+                    >
+                      {refreshingTemplateId === template.automationId
+                        ? t("whatsapp_template_refreshing")
+                        : t("whatsapp_template_refresh_button")}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+
+    <Card className="rounded-[36px] border border-white/15 bg-slate-900/70 text-white shadow-[0_25px_60px_rgba(2,6,23,0.65)]">
     <CardHeader className="space-y-2">
       <CardTitle className="text-2xl text-white">{t("whatsapp_faq_title")}</CardTitle>
       <CardDescription className="text-sm text-white/60">{t("whatsapp_faq_description")}</CardDescription>
@@ -480,77 +614,6 @@ export default function WhatsAppIntegration() {
       )}
     </CardContent>
   </Card>
-
-  <Card className="rounded-[36px] border border-white/15 bg-slate-900/75 text-white shadow-[0_25px_60px_rgba(2,6,23,0.7)]">
-      <CardHeader className="space-y-3">
-        <div>
-          <CardTitle className="text-2xl text-white">{t("whatsapp_sandbox_title")}</CardTitle>
-          <CardDescription className="text-sm text-white/60">{t("whatsapp_sandbox_description")}</CardDescription>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className={sandboxDetailBoxClass}>
-            <p className="text-[10px] uppercase tracking-[0.35em] text-white/60">{t("whatsapp_sandbox_join_code_label")}</p>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="font-mono text-base text-white">{whatsappConfig.sandbox.joinCode}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleCopyValue(whatsappConfig.sandbox.joinCode, t("whatsapp_sandbox_join_code_label"))}
-                className="border-white/20 text-white/70 hover:border-white/40"
-              >
-                {t("copy")}
-              </Button>
-            </div>
-            <p className="mt-1 text-xs text-white/60">{t("whatsapp_sandbox_join_code_help")}</p>
-          </div>
-          <div className={sandboxDetailBoxClass}>
-            <p className="text-[10px] uppercase tracking-[0.35em] text-white/60">{t("whatsapp_sandbox_number_label")}</p>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="font-mono text-base text-white">{whatsappConfig.sandbox.number}</span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleCopyValue(whatsappConfig.sandbox.number, t("whatsapp_sandbox_number_label"))}
-                className="border-white/20 text-white/70 hover:border-white/40"
-              >
-                {t("copy")}
-              </Button>
-            </div>
-            <p className="mt-1 text-xs text-white/60">{t("whatsapp_sandbox_number_help")}</p>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-dashed border-white/20 bg-white/5 p-4 text-sm text-white/70">
-          <p className="font-semibold text-white">{t("whatsapp_sandbox_steps_title")}</p>
-          <ol className="mt-3 space-y-2 list-decimal list-inside text-white/70">
-            <li>{t("whatsapp_sandbox_step_scan")}</li>
-            <li>{t("whatsapp_sandbox_step_join_number")}</li>
-            <li>{t("whatsapp_sandbox_step_confirm")}</li>
-          </ol>
-        </div>
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between text-xs text-white/60">
-            <span>{t("whatsapp_sandbox_last_joined")}</span>
-            <span className="font-mono text-xs text-white/70">
-              {whatsappConfig.sandbox.lastJoinedAt
-                ? formatDate(whatsappConfig.sandbox.lastJoinedAt, locale, fallbackDate)
-                : t("whatsapp_sandbox_not_joined")}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenSandboxPortal}
-              className="rounded-full border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70 hover:border-white/50 hover:text-white"
-            >
-              {t("whatsapp_open_sandbox")}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
 
     <Card className="rounded-[36px] border border-white/15 bg-gradient-to-br from-[#020616] via-[#030c25] to-[#010512] text-white shadow-[0_25px_60px_rgba(2,6,23,0.8)]">
       <CardHeader className="space-y-3">
