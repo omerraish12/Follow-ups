@@ -23,6 +23,7 @@ type LeadUpsertPayload = Omit<Lead, 'id'> & {
   id?: string;
   nextFollowUp?: string;
   assignedToId?: string | number;
+  entryCode?: string;
   consentGiven?: boolean;
   consentTimestamp?: string | null;
 };

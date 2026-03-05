@@ -53,6 +53,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
     notes: "",
     value: "",
     nextFollowUp: "",
+    entryCode: "",
     consentGiven: false
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -85,6 +86,7 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
 
     setIsSubmitting(true);
     try {
+      const trimmedEntryCode = form.entryCode.trim();
       await addLead({
         name: form.name.trim(),
         phone: form.phone.trim(),
@@ -95,12 +97,13 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
         notes: form.notes.trim(),
         value: Number(form.value) || 0,
         nextFollowUp: form.nextFollowUp || undefined,
+        entryCode: trimmedEntryCode || undefined,
         consentGiven: form.consentGiven,
         consentTimestamp: form.consentGiven ? new Date().toISOString() : null
       });
 
       // Reset form
-      setForm({ name: "", phone: "", email: "", service: "", source: "", status: "NEW", notes: "", value: "", nextFollowUp: "", consentGiven: false });
+      setForm({ name: "", phone: "", email: "", service: "", source: "", status: "NEW", notes: "", value: "", nextFollowUp: "", entryCode: "", consentGiven: false });
       setErrors({});
       setDialogOpen(false);
       onSuccess?.();
@@ -146,6 +149,12 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
           </Field>
           <Field label={t("email")} error={errors.email}>
             <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder={t("email_placeholder")} className="rounded-xl" dir="ltr" maxLength={255} disabled={isSubmitting} />
+          </Field>
+          <Field label={t("lead_entry_code_label")}>
+            <>
+              <Input value={form.entryCode} onChange={(e) => setForm({ ...form, entryCode: e.target.value })} placeholder={t("lead_entry_code_placeholder")} className="rounded-xl" dir="ltr" maxLength={50} disabled={isSubmitting} />
+              <p className="text-[10px] text-muted-foreground">{t("lead_entry_code_help")}</p>
+            </>
           </Field>
           <Field label={t("value") + " (ILS)"}>
             <Input type="number" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="0" className="rounded-xl" dir="ltr" min={0} disabled={isSubmitting} />

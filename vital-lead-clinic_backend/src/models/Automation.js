@@ -207,7 +207,8 @@ class Automation {
 
                 let normalizedValue = value;
                 if (key === 'components') {
-                    normalizedValue = normalizeComponents(value);
+                    const normalizedComponents = normalizeComponents(value);
+                    normalizedValue = normalizedComponents.length ? JSON.stringify(normalizedComponents) : '[]';
                 }
 
                 fields.push(`${dbKey} = $${paramIndex}`);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { automationService } from "@/services/automationService";
 import { toast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { Automation, AutomationPerformanceResponse } from "@/types/automation";
 
 interface ErrorResponse {
@@ -16,6 +17,8 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<AutomationPerformanceResponse | null>(null);
+  const [approvingTemplateId, setApprovingTemplateId] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   const fetchAutomations = useCallback(async () => {
     setIsLoading(true);
@@ -134,6 +137,60 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
     }
   };
 
+  const resubmitTemplate = async (id: string) => {
+    try {
+      const updated = await automationService.resubmitTemplate(id);
+      setAutomations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      toast({
+        title: "Template resubmitted",
+        description: "Template was sent for approval.",
+      });
+      await fetchStats();
+      return updated;
+    } catch (err: ErrorResponse) {
+      const msg = err.response?.data?.message || "Unable to resubmit template.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      throw err;
+    }
+  };
+
+  const refreshTemplateStatus = async (id: string) => {
+    try {
+      const updated = await automationService.refreshTemplateStatus(id);
+      setAutomations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      toast({
+        title: t("refresh_template_status"),
+        description: t("template_status_refreshed_message"),
+      });
+      await fetchStats();
+      return updated;
+    } catch (err: ErrorResponse) {
+      const msg = err.response?.data?.message || "Unable to refresh template status.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      throw err;
+    }
+  };
+
+  const approveTemplate = async (id: string) => {
+    setApprovingTemplateId(id);
+    try {
+      const updated = await automationService.approveTemplate(id);
+      setAutomations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      toast({
+        title: "Template approved",
+        description: "Automation is ready to send.",
+      });
+      await fetchStats();
+      return updated;
+    } catch (err: ErrorResponse) {
+      const msg = err.response?.data?.message || "Unable to approve template.";
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      throw err;
+    } finally {
+      setApprovingTemplateId(null);
+    }
+  };
+
   return {
     automations,
     isLoading,
@@ -146,5 +203,9 @@ export const useAutomations = ({ seedDefaultsOnEmpty = false }: UseAutomationsOp
     updateAutomation,
     deleteAutomation,
     toggleAutomation,
+    resubmitTemplate,
+    refreshTemplateStatus,
+    approveTemplate,
+    approvingTemplateId,
   };
 };

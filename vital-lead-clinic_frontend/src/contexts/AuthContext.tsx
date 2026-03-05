@@ -108,6 +108,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const normalized = applyUser(data?.user);
             if (normalized) {
                 localStorage.setItem('user', JSON.stringify(normalized));
+                data.user = normalized;
             }
             toast({
                 title: "Account created",

@@ -2,7 +2,8 @@ const Automation = require('../models/Automation');
 const Execution = require('../models/Execution');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
-const { submitTemplateForApproval } = require('../services/whatsappService');
+const { query } = require('../config/database');
+const { submitTemplateForApproval, refreshTemplateApprovalStatus } = require('../services/whatsappService');
 
 const submitTemplateApprovalForAutomation = async (automationId, clinicId, templatePayload) => {
     if (!templatePayload || !templatePayload.templateName || !templatePayload.message) {
@@ -40,6 +41,55 @@ const submitTemplateApprovalForAutomation = async (automationId, clinicId, templ
         });
     }
     return null;
+};
+
+const parseAutomationComponents = (components) => {
+    if (!components) {
+        return [];
+    }
+    if (Array.isArray(components)) {
+        return components;
+    }
+    try {
+        const parsed = JSON.parse(components);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+};
+
+const getTemplateLogLevel = (status) => {
+    if (status === 'rejected') return 'warning';
+    if (status === 'approved') return 'info';
+    return 'info';
+};
+
+const logTemplateStatusChange = async ({
+    automation,
+    templateStatus,
+    clinicId,
+    templateSid,
+    previousStatus,
+    source = 'submission'
+}) => {
+    try {
+        await IntegrationLog.create({
+            type: 'template_status',
+            level: getTemplateLogLevel(templateStatus),
+            message: `Template "${automation.template_name || automation.name}" status is ${templateStatus}`,
+            metadata: {
+                automationId: automation.id,
+                templateName: automation.template_name || automation.name,
+                templateStatus,
+                previousStatus,
+                templateSid,
+                source
+            },
+            clinicId
+        });
+    } catch (error) {
+        console.error('Failed to log template status change:', error);
+    }
 };
 
 // @desc    Get all automations for clinic
@@ -110,6 +160,85 @@ const getAutomation = async (req, res) => {
     }
 };
 
+const getAutomationTemplates = async (req, res) => {
+    try {
+        const statusFilter = req.query.status;
+        const conditions = ['clinic_id = $1', 'template_name IS NOT NULL'];
+        const params = [req.user.clinic_id];
+        if (statusFilter) {
+            params.push(statusFilter);
+            conditions.push(`template_status = $${params.length}`);
+        }
+        const result = await query(
+            `SELECT id, name, template_name, template_language, template_status, template_sid, template_approval_sid, components
+             FROM automations
+             WHERE ${conditions.join(' AND ')}
+             ORDER BY template_status, name`,
+            params
+        );
+
+        const templates = result.rows.map((row) => ({
+            automationId: row.id,
+            automationName: row.name,
+            templateName: row.template_name,
+            templateLanguage: row.template_language || 'en',
+            templateStatus: (row.template_status || 'pending').toLowerCase(),
+            templateSid: row.template_sid || null,
+            templateApprovalSid: row.template_approval_sid || null,
+            components: parseAutomationComponents(row.components)
+        }));
+
+        res.json(templates);
+    } catch (error) {
+        console.error('Error fetching automation templates:', error);
+        res.status(500).json({ message: 'Unable to fetch automation templates' });
+    }
+};
+
+const refreshTemplateStatus = async (req, res) => {
+    try {
+        const automation = await Automation.findById(req.params.id, req.user.clinic_id);
+        if (!automation) {
+            return res.status(404).json({ message: 'Automation not found' });
+        }
+
+        if (!automation.template_sid) {
+            return res.status(400).json({ message: 'Automation does not have a submitted template' });
+        }
+
+        const statusUpdate = await refreshTemplateApprovalStatus({
+            clinicId: req.user.clinic_id,
+            contentSid: automation.template_sid
+        });
+
+        if (!statusUpdate) {
+            return res.status(404).json({ message: 'Unable to fetch template approval status' });
+        }
+
+        const updated = await Automation.updateTemplateMetadata(automation.id, req.user.clinic_id, {
+            templateStatus: statusUpdate.status,
+            templateSid: statusUpdate.contentSid,
+            templateApprovalSid: statusUpdate.approvalSid
+        });
+
+        if (updated) {
+            await logTemplateStatusChange({
+                automation,
+                templateStatus: statusUpdate.status,
+                previousStatus: automation.template_status,
+                templateSid: statusUpdate.contentSid,
+                clinicId: req.user.clinic_id,
+                source: 'manual_refresh'
+            });
+        }
+
+        res.json(updated || automation);
+    } catch (error) {
+        console.error('Error refreshing template status:', error);
+        res.status(500).json({ message: 'Unable to refresh template status' });
+    }
+};
+
 // @desc    Create automation
 // @route   POST /api/automations
 const createAutomation = async (req, res) => {
@@ -150,6 +279,17 @@ const createAutomation = async (req, res) => {
         };
         const submittedAutomation = await submitTemplateApprovalForAutomation(automation.id, req.user.clinic_id, templatePayload);
         const automationResponse = submittedAutomation || automation;
+
+        if (submittedAutomation) {
+            await logTemplateStatusChange({
+                automation,
+                templateStatus: automationResponse.template_status,
+                previousStatus: automation.template_status,
+                templateSid: automationResponse.template_sid,
+                clinicId: req.user.clinic_id,
+                source: 'initial_submission'
+            });
+        }
 
         await Notification.create({
             type: 'system',
@@ -216,6 +356,17 @@ const updateAutomation = async (req, res) => {
         };
         const submittedAutomation = await submitTemplateApprovalForAutomation(updated.id, req.user.clinic_id, templatePayload);
         const automationResponse = submittedAutomation || updated;
+
+        if (submittedAutomation) {
+            await logTemplateStatusChange({
+                automation: updated,
+                templateStatus: automationResponse.template_status,
+                previousStatus: updated.template_status,
+                templateSid: automationResponse.template_sid,
+                clinicId: req.user.clinic_id,
+                source: 'update_submission'
+            });
+        }
         res.json(automationResponse);
     } catch (error) {
         console.error(error);
@@ -273,18 +424,102 @@ const toggleAutomation = async (req, res) => {
     }
 };
 
+// @desc    Resubmit automation template for approval
+// @route   POST /api/automations/:id/resubmit-template
+const resubmitTemplateApproval = async (req, res) => {
+    try {
+        const automation = await Automation.findById(req.params.id, req.user.clinic_id);
+        if (!automation) {
+            return res.status(404).json({ message: 'Automation not found' });
+        }
+
+        const templatePayload = {
+            templateName: automation.template_name,
+            language: automation.template_language,
+            message: automation.message,
+            components: automation.components,
+            personalization: automation.personalization
+        };
+
+        if (!templatePayload.templateName) {
+            return res.status(400).json({ message: 'Automation does not have a template configured' });
+        }
+
+        const submittedAutomation = await submitTemplateApprovalForAutomation(automation.id, req.user.clinic_id, templatePayload);
+        const automationResponse = submittedAutomation || automation;
+        if (submittedAutomation) {
+            await logTemplateStatusChange({
+                automation,
+                templateStatus: automationResponse.template_status,
+                previousStatus: automation.template_status,
+                templateSid: automationResponse.template_sid,
+                clinicId: req.user.clinic_id,
+                source: 'resubmission'
+            });
+        }
+        console.log('Template resubmission result', {
+            automationId: automation.id,
+            templateStatus: automationResponse?.template_status,
+            templateSid: automationResponse?.template_sid,
+            templateApprovalSid: automationResponse?.template_approval_sid
+        });
+        res.json(automationResponse);
+    } catch (error) {
+        console.error('Template resubmission failed:', error);
+        res.status(500).json({ message: 'Unable to resubmit template for approval' });
+    }
+};
+
+// @desc    Manually mark an automation template as approved (used when templates are approved via app)
+// @route   POST /api/automations/:id/approve-template
+const approveTemplate = async (req, res) => {
+    try {
+        const automation = await Automation.findById(req.params.id, req.user.clinic_id);
+        if (!automation) {
+            return res.status(404).json({ message: 'Automation not found' });
+        }
+
+        if (!automation.template_name) {
+            return res.status(400).json({ message: 'Automation does not have a template configured' });
+        }
+
+        const templateSid = req.body.templateSid || automation.template_sid;
+        const templateApprovalSid = req.body.templateApprovalSid || automation.template_approval_sid;
+        const updated = await Automation.updateTemplateMetadata(automation.id, req.user.clinic_id, {
+            templateStatus: 'approved',
+            templateSid: templateSid || null,
+            templateApprovalSid: templateApprovalSid || null
+        });
+
+        if (updated) {
+            await logTemplateStatusChange({
+                automation,
+                templateStatus: 'approved',
+                previousStatus: automation.template_status,
+                templateSid: updated.template_sid,
+                clinicId: req.user.clinic_id,
+                source: 'manual_approval'
+            });
+        }
+
+        res.json(updated || automation);
+    } catch (error) {
+        console.error('Template approval override failed:', error);
+        res.status(500).json({ message: 'Unable to mark template as approved' });
+    }
+};
+
 // @desc    Get automation performance stats
 // @route   GET /api/automations/stats/performance
 const getPerformanceStats = async (req, res) => {
     try {
         const stats = await Automation.getPerformanceStats(req.user.clinic_id);
         const totals = await Automation.getTotals(req.user.clinic_id);
-
-    res.json({ stats, totals });
-  } catch (error) {
+        res.json({ stats, totals });
+    } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
-  }
+    }
 };
 
 // @desc    Get recent automation replies
@@ -303,10 +538,14 @@ module.exports = {
     getAutomations,
     seedDefaultAutomations,
     getAutomation,
+    getAutomationTemplates,
+    refreshTemplateStatus,
     createAutomation,
     updateAutomation,
     deleteAutomation,
     toggleAutomation,
     getPerformanceStats,
+    resubmitTemplateApproval,
+    approveTemplate,
     getRecentReplies
 };

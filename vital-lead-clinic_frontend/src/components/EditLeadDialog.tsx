@@ -31,6 +31,7 @@ const getInitialForm = (lead: Lead) => ({
   notes: lead.notes || "",
   value: String(lead.value || 0),
   nextFollowUp: lead.next_follow_up ?? lead.nextFollowUp ?? "",
+  entryCode: lead.entry_code ?? lead.entryCode ?? "",
   consentGiven: lead.consent_given ?? false
 });
 
@@ -64,6 +65,7 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
 
     setIsSubmitting(true);
     try {
+      const trimmedEntryCode = form.entryCode.trim();
       const updatedLead = await updateLead(lead.id, {
         name: form.name.trim(),
         phone: form.phone.trim(),
@@ -73,6 +75,7 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
         status: form.status.toUpperCase() as Lead["status"],
         notes: form.notes.trim(),
         value: Number(form.value) || 0,
+        entryCode: trimmedEntryCode ? trimmedEntryCode : null,
         next_follow_up: form.nextFollowUp || null,
         consentGiven: form.consentGiven,
         consentTimestamp: form.consentGiven ? new Date().toISOString() : null,
@@ -126,6 +129,19 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
               maxLength={255}
               disabled={isSubmitting}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">{t("lead_entry_code_label")}</Label>
+            <Input
+              value={form.entryCode}
+              onChange={(e) => setForm({ ...form, entryCode: e.target.value })}
+              className="rounded-xl"
+              placeholder={t("lead_entry_code_placeholder")}
+              dir="ltr"
+              maxLength={50}
+              disabled={isSubmitting}
+            />
+            <p className="text-[10px] text-muted-foreground">{t("lead_entry_code_help")}</p>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">{t("service")}</Label>

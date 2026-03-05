@@ -133,6 +133,7 @@ async function initializeDatabase() {
         source VARCHAR(100),
         value DECIMAL(10,2) DEFAULT 0,
         notes TEXT,
+        entry_code VARCHAR(50),
         last_contacted TIMESTAMP,
         last_inbound_message_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -149,6 +150,7 @@ async function initializeDatabase() {
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_sent BOOLEAN DEFAULT FALSE;`);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_given BOOLEAN DEFAULT FALSE;`);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_timestamp TIMESTAMP;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS entry_code VARCHAR(50);`);
 
         // Create messages table
         await query(`

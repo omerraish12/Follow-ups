@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowRight, Phone, Mail, Calendar, MessageSquare, Clock, Tag, User, Building, Edit, Trash2, Send } from 'lucide-react';
+import { ArrowRight, Phone, Mail, Calendar, MessageSquare, Clock, Tag, User, Building, Info, Edit, Trash2, Send } from 'lucide-react';
 import { useLeads } from '@/hooks/useLeads';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { Lead, LeadMessage } from '@/types/leads';
@@ -25,7 +25,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
-import { whatsappService, type WhatsAppTemplate } from '@/services/whatsappService';
+import { whatsappService } from '@/services/whatsappService';
+import { automationService } from '@/services/automationService';
+import type { AutomationTemplateOption } from '@/types/automation';
 import { getTranslatedServiceLabel } from '@/lib/serviceOptions';
 
 interface LeadDetailProps {
@@ -52,10 +54,10 @@ export default function LeadDetail({
   const [isLoading, setIsLoading] = useState<boolean>(!propLead);
   const [newMessage, setNewMessage] = useState<string>('');
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
-  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [approvedTemplates, setApprovedTemplates] = useState<AutomationTemplateOption[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState<boolean>(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<AutomationTemplateOption | null>(null);
   const [isSendingTemplate, setIsSendingTemplate] = useState<boolean>(false);
   const [isUpdatingConsent, setIsUpdatingConsent] = useState<boolean>(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
@@ -82,7 +84,7 @@ export default function LeadDetail({
       return;
     }
 
-    setTemplates([]);
+    setApprovedTemplates([]);
     setSelectedTemplate(null);
     setTemplatesError(null);
 
@@ -111,32 +113,29 @@ export default function LeadDetail({
     }
 
     if (lead.can_use_free_text) {
-      setTemplates([]);
+      setApprovedTemplates([]);
       setSelectedTemplate(null);
       setTemplatesError(null);
+      setTemplatesLoading(false);
       return;
     }
 
-    if (templatesLoading || templates.length > 0) {
-      return;
-    }
-
-    const fetchTemplates = async () => {
+    const fetchApprovedTemplates = async () => {
       setTemplatesLoading(true);
       setTemplatesError(null);
       try {
-        const config = await whatsappService.getConfig();
-        setTemplates(config.templates || []);
+        const templates = await automationService.getTemplates('approved');
+        setApprovedTemplates(templates);
       } catch (error) {
-        console.error('Failed to load WhatsApp templates:', error);
+        console.error('Failed to load approved templates:', error);
         setTemplatesError(t("template_fetch_error"));
       } finally {
         setTemplatesLoading(false);
       }
     };
 
-    fetchTemplates();
-  }, [lead?.id, lead?.can_use_free_text, templates.length, templatesLoading, t, hasLoadedFullLead]);
+    fetchApprovedTemplates();
+  }, [lead?.id, lead?.can_use_free_text, hasLoadedFullLead, t]);
 
   const loadLead = async (
     leadId?: string,
@@ -147,9 +146,10 @@ export default function LeadDetail({
       setIsLoading(true);
     }
     setHasLoadedFullLead(false);
-    setTemplates([]);
+    setApprovedTemplates([]);
     setSelectedTemplate(null);
     setTemplatesError(null);
+    setTemplatesLoading(false);
     try {
       const targetId = leadId || id;
       if (!targetId) {
@@ -235,8 +235,9 @@ export default function LeadDetail({
     try {
       await whatsappService.sendTemplate({
         to: lead.phone,
-        templateName: selectedTemplate.name,
-        language: selectedTemplate.language || "en",
+        templateName: selectedTemplate.templateName,
+        language: selectedTemplate.templateLanguage || "en",
+        components: selectedTemplate.components || []
       });
       toast({
         title: t("message_sent"),
@@ -444,6 +445,14 @@ export default function LeadDetail({
                   <span>{t("assigned_to")}: {lead.assigned_to_name}</span>
                 </div>
               )}
+              {lead.entry_code && (
+                <div className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {t("lead_entry_code_label")}: <span dir="ltr" className="font-semibold">{lead.entry_code}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground border-t pt-4">
@@ -602,11 +611,11 @@ export default function LeadDetail({
                   <div className="rounded-2xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground text-center">
                     {t("loading")}
                   </div>
-                ) : templates.length > 0 ? (
+                ) : approvedTemplates.length > 0 ? (
                   <Select
-                    value={selectedTemplate?.id || ''}
+                    value={selectedTemplate?.automationId || ''}
                     onValueChange={(value) => {
-                      const template = templates.find((item) => item.id === value);
+                      const template = approvedTemplates.find((item) => item.automationId === value);
                       setSelectedTemplate(template || null);
                     }}
                     id="template-select"
@@ -615,10 +624,11 @@ export default function LeadDetail({
                       <SelectValue placeholder={t("template_select_placeholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      {templates.map((template) => (
-                        <SelectItem key={template.id} value={template.id}>
-                          {template.name}
-                          {template.language ? ` (${template.language.toUpperCase()})` : ''}
+                      {approvedTemplates.map((template) => (
+                        <SelectItem key={template.automationId} value={template.automationId}>
+                          {template.templateName}
+                          {template.templateLanguage ? ` (${template.templateLanguage.toUpperCase()})` : ''}
+                          {template.automationName ? ` — ${template.automationName}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>

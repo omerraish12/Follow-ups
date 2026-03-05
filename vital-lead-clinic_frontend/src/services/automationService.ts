@@ -2,7 +2,8 @@ import api from './api';
 import type {
     Automation,
     AutomationPerformanceResponse,
-    SeedDefaultAutomationsResponse
+    SeedDefaultAutomationsResponse,
+    AutomationTemplateOption
 } from "@/types/automation";
 
 export const automationService = {
@@ -39,6 +40,28 @@ export const automationService = {
     // Toggle automation active status
     toggleAutomation: async (id: string): Promise<Automation> => {
         const response = await api.patch(`/automations/${id}/toggle`);
+        return response.data;
+    },
+
+    // Resubmit template for approval
+    resubmitTemplate: async (id: string): Promise<Automation> => {
+        const response = await api.post(`/automations/${id}/resubmit-template`);
+        return response.data;
+    },
+
+    approveTemplate: async (id: string): Promise<Automation> => {
+        const response = await api.post(`/automations/${id}/approve-template`);
+        return response.data;
+    },
+
+    getTemplates: async (status?: string): Promise<AutomationTemplateOption[]> => {
+        const suffix = status ? `?status=${encodeURIComponent(status)}` : '';
+        const response = await api.get(`/automations/templates${suffix}`);
+        return response.data;
+    },
+
+    refreshTemplateStatus: async (id: string): Promise<Automation> => {
+        const response = await api.post(`/automations/${id}/refresh-template-status`);
         return response.data;
     },
 

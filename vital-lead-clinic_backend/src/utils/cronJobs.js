@@ -164,6 +164,7 @@ class CronJobs {
             for (const days of triggerDays) {
                 const targetDate = new Date();
                 targetDate.setDate(targetDate.getDate() - days);
+                targetDate.setHours(0, 0, 0, 0);
 
                 const leads = await query(
                     `SELECT l.* 
@@ -182,6 +183,10 @@ class CronJobs {
                 );
 
                 for (const lead of leads.rows) {
+                    if (canUseFreeText(lead.last_inbound_message_at)) {
+                        continue;
+                    }
+
                     if (!lead.phone) {
                         continue;
                     }

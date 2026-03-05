@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 const { query } = require('../config/database');
+const { FREE_TEXT_WINDOW_MS } = require('../utils/freeTextWindow');
 const User = require('../models/User');
 
 const TWILIO_SANDBOX_URL = process.env.TWILIO_SANDBOX_URL || 'https://www.twilio.com/console/sms/whatsapp/sandbox';
@@ -149,6 +150,32 @@ const parseDateFilter = (value) => {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const MAX_AUTOMATION_MERGE_WINDOW_MS = 15 * 60 * 1000;
+
+const mergeRepeatingAutomationMessages = (rows) => {
+    const merged = [];
+    for (const row of rows) {
+        const previous = merged[merged.length - 1];
+        if (
+            previous &&
+            previous.is_business &&
+            row.is_business &&
+            previous.lead_id === row.lead_id &&
+            previous.content === row.content &&
+            Math.abs(new Date(previous.timestamp).getTime() - new Date(row.timestamp).getTime()) <= MAX_AUTOMATION_MERGE_WINDOW_MS
+        ) {
+            previous.repeatCount = (previous.repeatCount || 1) + 1;
+            previous.latestTimestamp = row.timestamp;
+            continue;
+        }
+        merged.push({
+            ...row,
+            repeatCount: 1
+        });
+    }
+    return merged;
+};
+
 const collectConversationHistory = async (clinicId, filters = {}) => {
     const whereClauses = ['l.clinic_id = $1'];
     const values = [clinicId];
@@ -178,7 +205,8 @@ const collectConversationHistory = async (clinicId, filters = {}) => {
     const limitValue = Math.min(Math.max(parseInt(filters.limit, 10) || 1000, 1), 5000);
 
     const result = await query(
-        `SELECT m.*, l.name as lead_name, l.phone as lead_phone
+        `SELECT m.*, l.name as lead_name, l.phone as lead_phone, l.status as lead_status,
+                l.last_inbound_message_at, l.last_contacted, l.id as lead_id
          FROM messages m
          JOIN leads l ON l.id = m.lead_id
          WHERE ${whereClauses.join(' AND ')}
@@ -187,7 +215,23 @@ const collectConversationHistory = async (clinicId, filters = {}) => {
         [...values, limitValue]
     );
 
-    return result.rows;
+    const formatted = result.rows.map((row) => {
+        const formattedTimestamp = row.timestamp ? new Date(row.timestamp).toISOString() : null;
+        const lastInboundAt = row.last_inbound_message_at ? new Date(row.last_inbound_message_at) : null;
+        const freeTextWindowExpiresAt = lastInboundAt
+            ? new Date(lastInboundAt.getTime() + FREE_TEXT_WINDOW_MS).toISOString()
+            : null;
+        const freeTextWindowOpen = lastInboundAt && Date.now() <= lastInboundAt.getTime() + FREE_TEXT_WINDOW_MS;
+
+        return {
+            ...row,
+            formattedTimestamp,
+            freeTextWindowExpiresAt,
+            freeTextWindowOpen
+        };
+    });
+
+    return mergeRepeatingAutomationMessages(formatted);
 };
 
 const escapeCsvValue = (value) => {

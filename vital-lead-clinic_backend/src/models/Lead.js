@@ -113,6 +113,7 @@ class Lead {
         source,
         value,
         notes,
+        entryCode = null,
         nextFollowUp,
         assignedToId,
         lastVisitDate,
@@ -122,8 +123,8 @@ class Lead {
         clinicId
     } = leadData;
     const result = await query(
-            `INSERT INTO leads (name, phone, email, service, status, source, value, notes, next_follow_up, last_visit_date, follow_up_sent, consent_given, consent_timestamp, assigned_to_id, clinic_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) 
+            `INSERT INTO leads (name, phone, email, service, status, source, value, notes, entry_code, next_follow_up, last_visit_date, follow_up_sent, consent_given, consent_timestamp, assigned_to_id, clinic_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
        RETURNING *`,
             [
                 name,
@@ -134,6 +135,7 @@ class Lead {
                 source,
                 value,
                 notes,
+                entryCode,
                 nextFollowUp || null,
                 lastVisitDate || null,
                 followUpSent || false,
@@ -178,6 +180,7 @@ class Lead {
                 if (key === 'followUpSent') dbKey = 'follow_up_sent';
                 if (key === 'consentGiven') dbKey = 'consent_given';
                 if (key === 'consentTimestamp') dbKey = 'consent_timestamp';
+                if (key === 'entryCode') dbKey = 'entry_code';
 
                 fields.push(`${dbKey} = $${paramIndex}`);
                 values.push(value);

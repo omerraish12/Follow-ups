@@ -55,7 +55,11 @@ export default function Automations() {
     deleteAutomation,
     fetchAutomations,
     fetchStats,
-    addAutomation
+    addAutomation,
+    resubmitTemplate,
+    refreshTemplateStatus,
+    approveTemplate,
+    approvingTemplateId
   } = useAutomations({ seedDefaultsOnEmpty: true });
   const { logs, isLoading: logsLoading, error: logsError, refreshLogs } = useIntegrationLogs(5);
   const { replies, isLoading: repliesLoading, error: repliesError, refresh: refreshReplies } = useAutomationReplies(5);
@@ -72,6 +76,8 @@ export default function Automations() {
   const [inactiveDays, setInactiveDays] = useState(60);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [quickReplies, setQuickReplies] = useState<AutomationComponent[]>([]);
+  const [resubmittingTemplateId, setResubmittingTemplateId] = useState<string | null>(null);
+  const [refreshingTemplateId, setRefreshingTemplateId] = useState<string | null>(null);
 
   const INACTIVE_TRIGGER_KEY = "inactive_no_visit";
   const DEFAULT_INACTIVE_DAYS = 60;
@@ -146,6 +152,38 @@ export default function Automations() {
       setRules((prev) => prev.filter((r) => r.id !== id));
       fetchStats();
     } catch (_) { /* toast handled */ }
+  };
+
+  const handleResubmitTemplate = async (ruleId: string) => {
+    setResubmittingTemplateId(ruleId);
+    try {
+      await resubmitTemplate(ruleId);
+    } finally {
+      setResubmittingTemplateId(null);
+    }
+  };
+
+  const handleRefreshTemplateStatus = async (ruleId: string) => {
+    setRefreshingTemplateId(ruleId);
+    try {
+      await refreshTemplateStatus(ruleId);
+    } finally {
+      setRefreshingTemplateId(null);
+    }
+  };
+
+  const handleApproveTemplate = async (rule: ExtendedAutomationRule) => {
+    if (!rule.template_name) {
+      toast({
+        title: t("error"),
+        description: t("approve_template_no_template"),
+        variant: "destructive"
+      });
+      return;
+    }
+    try {
+      await approveTemplate(rule.id);
+    } catch (_) { /* toast handled in hook */ }
   };
 
   const handleToggleTrigger = (key: string) => {
@@ -813,6 +851,11 @@ export default function Automations() {
                       <span className="uppercase font-mono tracking-[0.3em]">{rule.template_language}</span>
                     )}
                   </div>
+                  {rule.template_sid && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {t("template_sid_label")}: <span className="font-mono">{rule.template_sid}</span>
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                     <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1">
@@ -855,7 +898,55 @@ export default function Automations() {
                   )}
 
                   <div className="flex items-center justify-between pt-2">
-                    <AutomationRuleDialog rule={rule} onSuccess={() => { fetchAutomations(); fetchStats(); }} />
+                    <div className="flex items-center gap-2">
+                      <AutomationRuleDialog rule={rule} onSuccess={() => { fetchAutomations(); fetchStats(); }} />
+                      {!isTemplateApproved && (
+                        <div className="flex flex-wrap gap-2">
+                          {rule.template_name && (
+                            <>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => handleResubmitTemplate(rule.id)}
+                                disabled={resubmittingTemplateId === rule.id}
+                                className="uppercase tracking-[0.2em]"
+                              >
+                                {resubmittingTemplateId === rule.id ? t("resubmitting") : t("resubmit_template")}
+                              </Button>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                onClick={() => handleRefreshTemplateStatus(rule.id)}
+                                disabled={refreshingTemplateId === rule.id}
+                                className="uppercase tracking-[0.2em]"
+                              >
+                                {refreshingTemplateId === rule.id ? t("refreshing") : t("refresh_template_status")}
+                              </Button>
+                            </>
+                          )}
+                          <TooltipProvider delayDuration={100}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() => handleApproveTemplate(rule)}
+                                  disabled={approvingTemplateId === rule.id}
+                                  className="uppercase tracking-[0.2em]"
+                                >
+                                  {approvingTemplateId === rule.id ? t("approving_template") : t("approve_template")}
+                                </Button>
+                              </TooltipTrigger>
+                              {!rule.template_name && (
+                                <TooltipContent side="top">
+                                  {t("approve_template_no_template")}
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleToggle(rule.id)}>
                         {rule.active ? <ToggleRight className="h-5 w-5 text-primary" /> : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}

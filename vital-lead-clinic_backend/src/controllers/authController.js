@@ -27,7 +27,7 @@ const generateToken = (id) => {
 // @desc    Register user
 // @route   POST /api/auth/signup
 const signup = async (req, res) => {
-    try {
+  try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             const details = errors.array();

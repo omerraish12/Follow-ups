@@ -29,6 +29,17 @@ export interface Automation {
   components?: AutomationComponent[];
 }
 
+export interface AutomationTemplateOption {
+  automationId: string;
+  automationName: string;
+  templateName: string;
+  templateLanguage?: string;
+  templateStatus: AutomationStatus;
+  templateSid?: string | null;
+  templateApprovalSid?: string | null;
+  components?: AutomationComponent[];
+}
+
 export interface AutomationPerformanceResponse {
   stats: {
     id: string;

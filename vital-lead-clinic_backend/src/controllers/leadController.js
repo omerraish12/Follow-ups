@@ -14,6 +14,13 @@ const normalizeLeadStatus = (status) => {
     return ALLOWED_LEAD_STATUSES.has(normalized) ? normalized : undefined;
 };
 
+const normalizeEntryCode = (value) => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const trimmed = String(value).trim();
+    return trimmed.length ? trimmed : null;
+};
+
 const annotateLeadWithFreeText = (lead) => ({
     ...lead,
     can_use_free_text: canUseFreeText(lead?.last_inbound_message_at)
@@ -89,6 +96,7 @@ const createLead = async (req, res) => {
             source,
             value,
             notes,
+            entryCode,
             nextFollowUp,
             assignedToId,
             consentGiven,
@@ -101,6 +109,8 @@ const createLead = async (req, res) => {
             ? consentTimestamp || new Date().toISOString()
             : null;
 
+        const sanitizedEntryCode = normalizeEntryCode(entryCode);
+
         const lead = await Lead.create({
             name,
             phone,
@@ -110,6 +120,7 @@ const createLead = async (req, res) => {
             source,
             value: parseFloat(value) || 0,
             notes,
+            entryCode: sanitizedEntryCode === undefined ? null : sanitizedEntryCode,
             nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId,
             clinicId: req.user.clinic_id,
@@ -149,7 +160,7 @@ const createLead = async (req, res) => {
 // @route   PUT /api/leads/:id
 const updateLead = async (req, res) => {
     try {
-        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId, lastVisitDate, followUpSent, consentGiven, consentTimestamp } = req.body;
+        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId, lastVisitDate, followUpSent, consentGiven, consentTimestamp, entryCode } = req.body;
 
         const existingLead = await Lead.findById(req.params.id, req.user.clinic_id);
 
@@ -177,6 +188,11 @@ const updateLead = async (req, res) => {
             nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId
         };
+
+        const sanitizedEntryCode = normalizeEntryCode(entryCode);
+        if (sanitizedEntryCode !== undefined) {
+            updatePayload.entryCode = sanitizedEntryCode;
+        }
 
         if (visitDateValue) {
             updatePayload.lastVisitDate = visitDateValue;
@@ -295,7 +311,6 @@ const addMessage = async (req, res) => {
         const { content, type, isBusiness } = req.body;
 
         const lead = await Lead.findById(req.params.id, req.user.clinic_id);
-        console.log("_________Lead @nd Clinic: _________", lead, req.user);
 
         if (!lead) {
             return res.status(404).json({ message: 'Lead not found' });
@@ -318,7 +333,6 @@ const addMessage = async (req, res) => {
             }
 
             try {
-                console.log("_____________send______________", lead.phone, content, req.user.clinic_id);
                 await sendWhatsAppMessage({
                     to: lead.phone,
                     body: content,

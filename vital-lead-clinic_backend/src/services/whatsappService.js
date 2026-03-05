@@ -1,4 +1,5 @@
 const twilio = require('twilio');
+const axios = require('axios');
 const { query } = require('../config/database');
 
 
@@ -48,7 +49,6 @@ const resolveTwilioCredentials = async (clinicId) => {
     messagingServiceSid: pickCredential(clinicWhatsapp.messagingServiceSid),
     whatsappFrom: pickCredential(clinicWhatsapp.whatsappFrom)
   };
-  console.log("_______correct clinic credentials___________: ", credentials.authToken, credentials.accountSid);
   ensureCredentials(credentials);
   return credentials;
 };
@@ -334,7 +334,7 @@ async function submitTemplateForApproval({
     return null;
   }
 
-  const { client } = await getTwilioClientForClinic(clinicId);
+  const { credentials } = await getTwilioClientForClinic(clinicId);
   const contentPayload = {
     friendlyName: templateName,
     language: language || 'en',
@@ -354,16 +354,43 @@ async function submitTemplateForApproval({
     };
   }
 
-  const content = await client.content.v1.contents.create(contentPayload);
-  const approval = await client.content.v1.contents(content.sid).approvals.create({
-    channel: 'whatsapp'
+
+  const contentClient = axios.create({
+    baseURL: `https://content.twilio.com/v1/Accounts/${credentials.accountSid}`,
+    auth: {
+      username: credentials.accountSid,
+      password: credentials.authToken
+    },
+    headers: {
+      'Content-Type': 'application/json'
+    }
   });
 
-  return {
-    contentSid: content.sid,
-    approvalSid: approval?.sid || null,
-    status: normalizeApprovalStatus(approval?.status)
-  };
+  try {
+    const createResponse = await contentClient.post('/Contents', {
+      friendly_name: contentPayload.friendlyName,
+      language: contentPayload.language,
+      variables: contentPayload.variables,
+      types: contentPayload.types
+    });
+    const contentSid = createResponse.data?.sid;
+    if (!contentSid) {
+      throw new Error('Content creation did not return a SID');
+    }
+    const approvalResponse = await contentClient.post(`/Contents/${contentSid}/Approvals`, {
+      channel: 'whatsapp'
+    });
+    const approval = approvalResponse.data;
+
+    return {
+      contentSid,
+      approvalSid: approval?.sid || null,
+      status: normalizeApprovalStatus(approval?.status)
+    };
+  } catch (error) {
+    console.error('Content API request failed:', error.response?.data || error.message);
+    throw error;
+  }
 }
 
 async function refreshTemplateApprovalStatus({ clinicId, contentSid }) {

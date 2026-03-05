@@ -22,6 +22,8 @@ export interface Lead {
   next_follow_up?: string;
   nextFollowUp?: string;
   notes?: string;
+  entry_code?: string;
+  entryCode?: string;
   assigned_to?: string;
   assigned_to_name?: string;
   messages?: LeadMessage[];

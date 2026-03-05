@@ -1,5 +1,4 @@
 const { sendTemplateMessage } = require('../services/whatsappService');
-const aiReceptionist = require('../services/aiReceptionistService');
 const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Execution = require('../models/Execution');
@@ -23,99 +22,13 @@ const verifyWebhook = (req, res) => {
 
 const normalizePhone = (value) => (value || '').replace(/[^0-9+]/g, '');
 
-const parseComponentsValue = (value) => {
-  if (!value) {
-    return [];
-  }
-  if (Array.isArray(value)) {
-    return value;
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error('Failed to parse WhatsApp template components:', error);
-    return [];
-  }
-};
-
-const sendImmediateTemplateReply = async (rawTo, clinicId = null, options = {}) => {
-  const templateName = options.templateName || process.env.TWILIO_IMMEDIATE_TEMPLATE_NAME;
-  if (!templateName) {
-    return;
-  }
-
-  const language = options.language || process.env.TWILIO_IMMEDIATE_TEMPLATE_LANGUAGE || 'en';
-  const components = options.components
-    ? parseComponentsValue(options.components)
-    : parseComponentsValue(process.env.TWILIO_IMMEDIATE_TEMPLATE_COMPONENTS);
-
-  try {
-    const response = await sendTemplateMessage({
-      to: rawTo,
-      templateName,
-      language,
-      components,
-      clinicId
-    });
-    if (options.leadId) {
-      try {
-        await Message.create({
-          content: `Template: ${templateName}`,
-          type: 'SENT',
-          isBusiness: true,
-          leadId: options.leadId
-        });
-      } catch (logError) {
-        console.error('Failed to log automation template message:', logError);
-      }
-    }
-    return response;
-  } catch (error) {
-    console.error('Immediate Twilio template send failed:', error.response?.data || error.message);
-    await IntegrationLog.create({
-      type: 'twilio_send',
-      message: error.response?.data?.message || error.message || 'Immediate Twilio template error',
-      metadata: {
-        to: rawTo,
-        templateName,
-        language,
-        leadId: options.leadId,
-        error: error.response?.data || error.message
-      },
-      clinicId
-    });
-  }
-};
-
-const getTemplateOptionsFromAutomation = (automation) => {
-  if (!automation) {
-    return null;
-  }
-  const templateName = automation.template_name || automation.name;
-  if (!templateName) {
-    return null;
-  }
-  return {
-    templateName,
-    language: automation.template_language || 'en',
-    components: parseComponentsValue(automation.components)
-  };
-};
-
 const processInboundMessage = async (rawFrom, rawText) => {
+  console.log("processInboundMessage called");
   const from = normalizePhone(rawFrom);
   const text = rawText?.trim();
   if (!from || !text) {
     return;
   }
-
-  console.log('Personal WhatsApp message received:', {
-    rawFrom,
-    from,
-    text,
-    receivedAt: new Date().toISOString()
-  });
 
   console.info('Inbound WhatsApp message', { from, text, receivedAt: new Date().toISOString() });
 
@@ -133,14 +46,20 @@ const processInboundMessage = async (rawFrom, rawText) => {
   });
 
   const pendingExecution = await Execution.findPendingByLead(lead.id);
-  if (!pendingExecution) {
-    await aiReceptionist.respondToMessage({
-      lead,
-      text,
-      clinicId: lead.clinic_id
+  console.log('pendingExecution: ', pendingExecution, lead.id);
+  if (!pendingExecution?.id) {
+    console.info('Inbound WhatsApp message ignored because no automation is awaiting a reply', {
+      leadId: lead.id,
+      clinicId: lead.clinic_id,
+      text
+    });
+    await Lead.update(lead.id, lead.clinic_id, {
+      lastContacted: new Date(),
+      lastInboundMessageAt: new Date()
     });
     return;
   }
+  console.log("____doing something____");
 
   await Execution.markReplied(pendingExecution.id);
   await Automation.incrementReplyCount(pendingExecution.automation_id);
@@ -173,22 +92,21 @@ const processInboundMessage = async (rawFrom, rawText) => {
     leadId: lead.id
   });
 
-  const automation = await Automation.findById(pendingExecution.automation_id, lead.clinic_id);
-  const automationTemplate = getTemplateOptionsFromAutomation(automation);
-  await sendImmediateTemplateReply(rawFrom, lead.clinic_id, {
-    ...(automationTemplate || {}),
-    leadId: lead.id
-  });
 };
 
 const handleWebhook = async (req, res) => {
   try {
-    console.log("WebHooK: ", req.body);
+    console.log('got webhook', {
+      method: req.method,
+      agent: req.headers['user-agent'],
+      entryCount: Array.isArray(req.body?.entry) ? req.body.entry.length : 0
+    });
     const entries = req.body?.entry || [];
-    const isTwilio = Boolean(req.body?.Body && req.body?.From && !entries.length);
-    console.log("isTwilio: ", isTwilio);
+    const twilioFrom = req.body?.From || req.body?.from;
+    const twilioBody = req.body?.Body || req.body?.body;
+    const isTwilio = Boolean(twilioBody && twilioFrom && !entries.length);
     if (isTwilio) {
-      await processInboundMessage(req.body.From, req.body.Body);
+      await processInboundMessage(twilioFrom, twilioBody);
     } else {
       for (const entry of entries) {
         const changes = entry.changes || [];
@@ -198,6 +116,7 @@ const handleWebhook = async (req, res) => {
           if (Array.isArray(value.messages)) {
             for (const msg of value.messages) {
               const text = msg.text?.body || msg.button?.text || msg.interactive?.button_reply?.title;
+              console.log('text', text);
               await processInboundMessage(msg.from, text);
             }
           }
@@ -205,7 +124,7 @@ const handleWebhook = async (req, res) => {
       }
     }
 
-    res.sendStatus(200);
+    res.status(200).end();
   } catch (error) {
     console.error('WhatsApp webhook error:', error);
     await IntegrationLog.create({
@@ -217,7 +136,7 @@ const handleWebhook = async (req, res) => {
         error: error.stack || error.message
       }
     });
-    res.sendStatus(500);
+    res.status(500).end();
   }
 };
 
