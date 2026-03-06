@@ -458,22 +458,6 @@ export default function Automations() {
         ))}
       </div>
 
-      <Card className="rounded-3xl border border-border bg-card/80 p-5 shadow-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">{t("automation_workflow_card_title")}</CardTitle>
-          <CardDescription className="text-sm text-muted-foreground">{t("automation_workflow_card_description")}</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2">
-          {workflowSteps.map((step, index) => (
-            <div key={step.title} className="rounded-2xl border border-border/70 bg-card/90 p-4">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">{String(index + 1).padStart(2, "0")}</p>
-              <p className="mt-1 text-sm font-semibold text-foreground">{step.title}</p>
-              <p className="mt-2 text-xs text-muted-foreground">{step.desc}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
       <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-card/90 to-card p-6 shadow-xl shadow-primary/20">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
@@ -891,60 +875,45 @@ export default function Automations() {
                     </div>
                   </div>
 
-                  {!isTemplateApproved && (
-                    <div className="rounded-2xl border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-                      {t(statusHelpKey)}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between pt-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-3 pt-2 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
                       <AutomationRuleDialog rule={rule} onSuccess={() => { fetchAutomations(); fetchStats(); }} />
                       {!isTemplateApproved && (
-                        <div className="flex flex-wrap gap-2">
-                          {rule.template_name && (
-                            <>
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                onClick={() => handleResubmitTemplate(rule.id)}
-                                disabled={resubmittingTemplateId === rule.id}
-                                className="uppercase tracking-[0.2em]"
-                              >
-                                {resubmittingTemplateId === rule.id ? t("resubmitting") : t("resubmit_template")}
-                              </Button>
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                onClick={() => handleRefreshTemplateStatus(rule.id)}
-                                disabled={refreshingTemplateId === rule.id}
-                                className="uppercase tracking-[0.2em]"
-                              >
-                                {refreshingTemplateId === rule.id ? t("refreshing") : t("refresh_template_status")}
-                              </Button>
-                            </>
-                          )}
-                          <TooltipProvider delayDuration={100}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
+                        <TooltipProvider delayDuration={100}>
+                          <div className="flex flex-wrap gap-2">
+                            {rule.template_name && (
+                              <>
                                 <Button
                                   size="xs"
                                   variant="outline"
-                                  onClick={() => handleApproveTemplate(rule)}
-                                  disabled={approvingTemplateId === rule.id}
-                                  className="uppercase tracking-[0.2em]"
+                                  onClick={() => handleResubmitTemplate(rule.id)}
+                                  disabled={resubmittingTemplateId === rule.id}
+                                  className="uppercase tracking-[0.3em] text-[10px] px-3 py-1"
                                 >
-                                  {approvingTemplateId === rule.id ? t("approving_template") : t("approve_template")}
+                                  {resubmittingTemplateId === rule.id ? t("resubmitting") : t("resubmit_template")}
                                 </Button>
-                              </TooltipTrigger>
-                              {!rule.template_name && (
-                                <TooltipContent side="top">
-                                  {t("approve_template_no_template")}
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="xs"
+                                      variant="outline"
+                                      onClick={() => handleRefreshTemplateStatus(rule.id)}
+                                      disabled={refreshingTemplateId === rule.id || !rule.template_sid}
+                                      className="uppercase tracking-[0.3em] text-[10px] px-3 py-1"
+                                    >
+                                      {refreshingTemplateId === rule.id ? t("refreshing") : t("refresh_template_status")}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  {!rule.template_sid && (
+                                    <TooltipContent side="top">
+                                      {t("refresh_template_requires_submission")}
+                                    </TooltipContent>
+                                  )}
+                                </Tooltip>
+                              </>
+                            )}
+                          </div>
+                        </TooltipProvider>
                       )}
                     </div>
                     <div className="flex items-center gap-2">

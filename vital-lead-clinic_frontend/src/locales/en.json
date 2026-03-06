@@ -1011,6 +1011,7 @@
     "template_sid_label":  "Template ID",
     "refresh_template_status":  "Refresh status",
     "refreshing":  "Refreshing...",
+    "refresh_template_requires_submission":  "Submit the template for approval before refreshing the status.",
     "template_status_refreshed_message":  "Template status was updated.",
     "followup_automation_card_title":  "3-week follow-up",
     "followup_automation_card_description":  "Every morning we look for patients whose last visit was three weeks ago and deliver the approved template.",

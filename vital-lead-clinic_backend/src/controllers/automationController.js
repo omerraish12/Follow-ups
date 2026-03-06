@@ -3,7 +3,7 @@ const Execution = require('../models/Execution');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
 const { query } = require('../config/database');
-const { submitTemplateForApproval, refreshTemplateApprovalStatus } = require('../services/whatsappService');
+const { submitTemplateForApproval, refreshTemplateApprovalStatus, isWhatsAppConfiguredForClinic } = require('../services/whatsappService');
 
 const submitTemplateApprovalForAutomation = async (automationId, clinicId, templatePayload) => {
     if (!templatePayload || !templatePayload.templateName || !templatePayload.message) {
@@ -445,6 +445,11 @@ const resubmitTemplateApproval = async (req, res) => {
             return res.status(400).json({ message: 'Automation does not have a template configured' });
         }
 
+        const whatsappConfigured = await isWhatsAppConfiguredForClinic(req.user.clinic_id);
+        if (!whatsappConfigured) {
+            return res.status(400).json({ message: 'WhatsApp credentials are not configured. Connect a WhatsApp Business account before resubmitting.' });
+        }
+
         const submittedAutomation = await submitTemplateApprovalForAutomation(automation.id, req.user.clinic_id, templatePayload);
         const automationResponse = submittedAutomation || automation;
         if (submittedAutomation) {
@@ -501,6 +506,8 @@ const approveTemplate = async (req, res) => {
                 source: 'manual_approval'
             });
         }
+
+        console.log("____approved-template____: ");
 
         res.json(updated || automation);
     } catch (error) {

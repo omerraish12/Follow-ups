@@ -3,40 +3,45 @@ const { query } = require('../config/database');
 const DEFAULT_AUTOMATIONS = Object.freeze([
     {
         name: '3-Day Follow-up',
+        templateName: 'follow_up_3_days',
         triggerDays: [3],
-        message: 'Hi {name}, just checking in about {service}. We saved you a slot this week—reply here and we will book it for you.',
+        message: 'Hi {name}, just checking in about {service}. We saved you a slot this week - reply here and we will book it for you.',
         targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
     },
     {
         name: '7-Day Reminder',
+        templateName: 'follow_up_1_week',
         triggerDays: [7],
-        message: 'Hi {name}, following up on your interest in {service}. We have openings next week—want us to reserve one?',
+        message: 'Hi {name}, following up on your interest in {service}. We have openings next week - want us to reserve one?',
         targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
     },
     {
         name: '14-Day Win-back',
+        templateName: 'lost_client_special_offer',
         triggerDays: [14],
-        message: 'Hi {name}, it’s been a while. We’re offering a follow-up on {service} this week. Reply YES and we’ll schedule you.',
+        message: "Hi {name}, it's been a while. We're offering a follow-up on {service} this week. Reply YES and we'll schedule you.",
         targetStatus: 'LOST',
         notifyOnReply: true,
         personalization: ['name', 'service']
     },
     {
         name: 'Post-Treatment Check-in',
+        templateName: 'post_treatment_check_in',
         triggerDays: [2],
-        message: 'Hi {name}, how are you feeling after your {service}? Let us know if you have questions—we’re here to help.',
+        message: "Hi {name}, how are you feeling after your {service}? Let us know if you have questions - we're here to help.",
         targetStatus: 'CLOSED',
         notifyOnReply: true,
         personalization: ['name', 'service']
     },
     {
         name: 'No-Reply Nudge',
+        templateName: 'no_reply_nudge',
         triggerDays: [5],
-        message: 'Hi {name}, we didn’t hear back about {service}. Want to pick a time? Reply with a day that works for you.',
+        message: "Hi {name}, we didn't hear back about {service}. Want to pick a time? Reply with a day that works for you.",
         targetStatus: 'NEW',
         notifyOnReply: true,
         personalization: ['name', 'service']
@@ -44,7 +49,7 @@ const DEFAULT_AUTOMATIONS = Object.freeze([
     {
         name: '3-Week Follow-up',
         triggerDays: [21],
-        message: 'Hi {name}, it has been 3 weeks since your visit at our clinic. We wanted to check in�how are you feeling? Reply to this message if you have any questions!',
+        message: 'Hi {name}, it has been 3 weeks since your visit at our clinic. We wanted to check in - how are you feeling? Reply to this message if you have any questions!',
         templateName: 'three_week_followup',
         templateLanguage: 'en',
         notifyOnReply: true,

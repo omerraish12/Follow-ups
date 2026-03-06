@@ -49,6 +49,7 @@ const resolveTwilioCredentials = async (clinicId) => {
     messagingServiceSid: pickCredential(clinicWhatsapp.messagingServiceSid),
     whatsappFrom: pickCredential(clinicWhatsapp.whatsappFrom)
   };
+  console.log("____whatsapp credentials are configured____: ");
   ensureCredentials(credentials);
   return credentials;
 };
@@ -291,11 +292,6 @@ async function sendTemplateMessage({ to, templateName, language, components = []
 
   try {
     const result = await client.messages.create(messagePayload);
-    console.info("WhatsApp template message created", {
-      sid: result?.sid,
-      to: result?.to,
-      status: result?.status
-    });
     return result;
   } catch (error) {
     console.error("WhatsApp template send failed", {
@@ -345,7 +341,7 @@ async function sendWhatsAppMessage({
     payload.mediaUrl = Array.isArray(mediaUrl) ? mediaUrl : [mediaUrl];
   }
 
-  console.log("___________client____________||", client, client.messages.create, payload);
+  console.log("___checked client and sent message____", payload);
   return client.messages.create(payload);
 }
 

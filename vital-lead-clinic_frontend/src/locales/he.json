@@ -1304,6 +1304,7 @@
     "refresh":  "רענן",
     "refresh_template_status":  "רענן סטטוס",
     "refreshing":  "מרענן...",
+    "refresh_template_requires_submission":  "יש להגיש את התבנית לאישור לפני שניתן לרענן את המצב.",
     "remember_password":  "זכור סיסמה",
     "resetting_password":  "מאפס סיסמה...",
     "resubmit_template":  "שלח שוב תבנית",

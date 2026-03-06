@@ -128,6 +128,8 @@ const createLead = async (req, res) => {
             consentTimestamp: resolvedConsentTimestamp
         });
 
+        console.log("_____Lead Created_____: ", lead);
+
         // Log activity
         await Activity.create({
             type: 'LEAD_CREATED',
