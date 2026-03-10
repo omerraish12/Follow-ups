@@ -319,7 +319,12 @@ export default function SettingsPage() {
           currency: data.clinic.currency || "ILS",
           whatsappNumber: data.clinic.whatsappNumber || "",
         });
-        setLanguage(safeLanguage);
+        // Respect the user's existing preference; only fall back to clinic default
+        // when no language has been chosen yet.
+        const hasUserPreference = Boolean(localStorage.getItem("language"));
+        if (!hasUserPreference) {
+          setLanguage(safeLanguage);
+        }
       }
 
       if (data?.profile) {

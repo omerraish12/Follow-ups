@@ -7,7 +7,8 @@ module.exports = (req, res) => {
     // Allow list - add any frontend origins you need here or use env var
     const allowedOrigins = [
         process.env.FRONTEND_URL,
-        'https://follow-ups-vx12.vercel.app'
+        'https://follow-ups-vx12.vercel.app',
+        'https://www.businessfollowup.com'
     ]
         .filter(Boolean)
         .flatMap((value) => value.split(','))
