@@ -3,7 +3,13 @@ const Execution = require('../models/Execution');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
 const { query } = require('../config/database');
-const { submitTemplateForApproval, refreshTemplateApprovalStatus, isWhatsAppConfiguredForClinic } = require('../services/whatsappService');
+const {
+    submitTemplateForApproval,
+    refreshTemplateApprovalStatus,
+    isWhatsAppConfiguredForClinic,
+    getWhatsAppProviderForClinic
+} = require('../services/whatsappService');
+const { isMetaCloudProvider } = require('../utils/whatsappProvider');
 
 const submitTemplateApprovalForAutomation = async (automationId, clinicId, templatePayload) => {
     if (!templatePayload || !templatePayload.templateName || !templatePayload.message) {
@@ -11,6 +17,15 @@ const submitTemplateApprovalForAutomation = async (automationId, clinicId, templ
     }
 
     try {
+        const provider = await getWhatsAppProviderForClinic(clinicId);
+        if (!isMetaCloudProvider(provider)) {
+            return Automation.updateTemplateMetadata(automationId, clinicId, {
+                templateStatus: 'approved',
+                templateSid: null,
+                templateApprovalSid: null
+            });
+        }
+
         const approval = await submitTemplateForApproval({
             clinicId,
             templateName: templatePayload.templateName,
@@ -203,6 +218,15 @@ const refreshTemplateStatus = async (req, res) => {
         }
 
         if (!automation.template_sid) {
+            const provider = await getWhatsAppProviderForClinic(req.user.clinic_id);
+            if (!isMetaCloudProvider(provider)) {
+                const updated = await Automation.updateTemplateMetadata(automation.id, req.user.clinic_id, {
+                    templateStatus: 'approved',
+                    templateSid: null,
+                    templateApprovalSid: null
+                });
+                return res.json(updated || automation);
+            }
             return res.status(400).json({ message: 'Automation does not have a submitted template' });
         }
 
@@ -212,7 +236,7 @@ const refreshTemplateStatus = async (req, res) => {
         });
 
         if (!statusUpdate) {
-            return res.status(404).json({ message: 'Unable to fetch template approval status' });
+            return res.json(automation);
         }
 
         const updated = await Automation.updateTemplateMetadata(automation.id, req.user.clinic_id, {

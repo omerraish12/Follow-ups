@@ -3,6 +3,9 @@ const Activity = require('../models/Activity');
 const IntegrationLog = require('../models/IntegrationLog');
 const { sendWhatsAppMessage } = require('./whatsappService');
 
+const extractProviderMessageId = (response) =>
+  response?.messages?.[0]?.id || response?.messageId || null;
+
 const FAQ_RESPONSES = [
   {
     id: 'hours',
@@ -64,7 +67,7 @@ async function respondToMessage({ lead, text, clinicId }) {
   }
 
   try {
-    await sendWhatsAppMessage({
+    const providerResponse = await sendWhatsAppMessage({
       to: lead.phone,
       body: response.response,
       clinicId
@@ -74,7 +77,13 @@ async function respondToMessage({ lead, text, clinicId }) {
       content: response.response,
       type: 'SENT',
       isBusiness: true,
-      leadId: lead.id
+      leadId: lead.id,
+      providerMessageId: extractProviderMessageId(providerResponse),
+      deliveryStatus: 'sent',
+      messageOrigin: 'ai_receptionist',
+      metadata: {
+        responseId: response.id
+      }
     });
 
     await Activity.create({
@@ -87,6 +96,19 @@ async function respondToMessage({ lead, text, clinicId }) {
     return response;
   } catch (error) {
     console.error('AI receptionist failed to send message:', error);
+    await Message.create({
+      content: response.response,
+      type: 'SENT',
+      isBusiness: true,
+      leadId: lead.id,
+      deliveryStatus: 'failed',
+      messageOrigin: 'ai_receptionist',
+      deliveryError: error.response?.data?.error?.message || error.response?.data?.message || error.message || 'AI receptionist send failed.',
+      metadata: {
+        responseId: response.id,
+        providerError: error.response?.data || error.message
+      }
+    });
     await IntegrationLog.create({
       type: 'ai_receptionist',
       message: error.response?.data?.message || error.message || 'AI receptionist send failed',

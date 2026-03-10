@@ -5,45 +5,42 @@ const PDFDocument = require('pdfkit');
 const { query } = require('../config/database');
 const { FREE_TEXT_WINDOW_MS } = require('../utils/freeTextWindow');
 const User = require('../models/User');
-
-const TWILIO_SANDBOX_URL = process.env.TWILIO_SANDBOX_URL || 'https://www.twilio.com/console/sms/whatsapp/sandbox';
-const TWILIO_SANDBOX_JOIN_CODE = process.env.TWILIO_SANDBOX_JOIN_CODE || 'join wood-silent';
-const TWILIO_SANDBOX_NUMBER =
-    process.env.TWILIO_SANDBOX_NUMBER || process.env.TWILIO_WHATSAPP_FROM || 'whatsapp:+14155238886';
+const {
+    META_CLOUD_PROVIDER,
+    WA_WEB_PROVIDER,
+    normalizeWhatsAppProvider,
+    isMetaCloudProvider
+} = require('../utils/whatsappProvider');
 
 const defaultWhatsappIntegration = {
+    provider: WA_WEB_PROVIDER,
     status: 'disconnected',
-    sandbox: {
-        joinCode: TWILIO_SANDBOX_JOIN_CODE,
-        number: TWILIO_SANDBOX_NUMBER,
-        link: TWILIO_SANDBOX_URL,
-        lastJoinedAt: null
-    },
     templates: [],
     lastConnectedAt: null,
     updatedAt: null,
-    accountSid: null,
-    authToken: null,
-    messagingServiceSid: null,
-    whatsappFrom: null
+    cellactApiUser: null,
+    cellactApiPassword: null,
+    cellactAppId: null,
+    waPhoneNumberId: null,
+    waBusinessAccountId: null,
+    cloudApiAccessToken: null,
+    displayPhoneNumber: null,
+    verifiedName: null
 };
 
 const mergeWhatsappDefaults = (incoming = {}) => {
+    const provider = normalizeWhatsAppProvider(incoming.provider);
     const base = {
         ...defaultWhatsappIntegration,
-        ...incoming
+        ...incoming,
+        provider
     };
     const hasCredentials = Boolean(
-        base.accountSid &&
-        base.authToken &&
-        (base.whatsappFrom || base.messagingServiceSid)
+        base.waPhoneNumberId &&
+        base.cloudApiAccessToken
     );
-    base.status = incoming.status || (hasCredentials ? 'connected' : base.status);
+    base.status = incoming.status || (isMetaCloudProvider(provider) && hasCredentials ? 'connected' : base.status);
     base.templates = incoming.templates || base.templates;
-    base.sandbox = {
-        ...defaultWhatsappIntegration.sandbox,
-        ...(incoming.sandbox || {})
-    };
     return base;
 };
 
@@ -67,8 +64,11 @@ const sanitizeIntegrationsForResponse = (integrations = {}) => {
         ...integrations,
         whatsapp: {
             ...whatsapp,
-            authTokenSet: Boolean(whatsapp.authToken),
-            authToken: null
+            provider: normalizeWhatsAppProvider(whatsapp.provider),
+            cellactApiPasswordSet: Boolean(whatsapp.cellactApiPassword),
+            cloudApiAccessTokenSet: Boolean(whatsapp.cloudApiAccessToken),
+            cellactApiPassword: null,
+            cloudApiAccessToken: null
         }
     };
 };
@@ -580,12 +580,28 @@ const normalizeWhatsappField = (value) => {
     return trimmed === '' ? null : trimmed;
 };
 
-const normalizeWhatsappPayload = (payload = {}) => ({
-    accountSid: normalizeWhatsappField(payload.accountSid),
-    authToken: normalizeWhatsappField(payload.authToken),
-    messagingServiceSid: normalizeWhatsappField(payload.messagingServiceSid),
-    whatsappFrom: normalizeWhatsappField(payload.whatsappFrom)
-});
+const normalizeWhatsappPayload = (payload = {}) => {
+    const fields = [
+        'provider',
+        'cellactApiUser',
+        'cellactApiPassword',
+        'cellactAppId',
+        'waPhoneNumberId',
+        'waBusinessAccountId',
+        'cloudApiAccessToken',
+        'displayPhoneNumber',
+        'verifiedName'
+    ];
+
+    return fields.reduce((acc, field) => {
+        if (Object.prototype.hasOwnProperty.call(payload, field)) {
+            acc[field] = field === 'provider'
+                ? normalizeWhatsAppProvider(payload[field])
+                : normalizeWhatsappField(payload[field]);
+        }
+        return acc;
+    }, {});
+};
 
 const updateIntegration = async (req, res) => {
     try {
@@ -603,26 +619,35 @@ const updateIntegration = async (req, res) => {
 
         if (type === 'whatsapp') {
             const existingWhatsapp = stored.whatsapp || {};
+            const nextProvider = normalizeWhatsAppProvider(safeData.provider || existingWhatsapp.provider || WA_WEB_PROVIDER);
             const nextWhatsapp = {
                 ...existingWhatsapp,
                 ...normalizeWhatsappPayload(safeData),
+                provider: nextProvider,
                 status,
                 updatedAt: new Date().toISOString()
             };
             if (status === 'connected') {
-                const hasCredentials =
-                    nextWhatsapp.accountSid &&
-                    nextWhatsapp.authToken &&
-                    (nextWhatsapp.whatsappFrom || nextWhatsapp.messagingServiceSid);
-                if (!hasCredentials) {
-                    return res.status(400).json({ message: 'Complete Twilio credentials are required to connect' });
+                if (isMetaCloudProvider(nextProvider)) {
+                    const hasCredentials =
+                        nextWhatsapp.waPhoneNumberId &&
+                        nextWhatsapp.cloudApiAccessToken;
+                    if (!hasCredentials) {
+                        return res.status(400).json({ message: 'Phone Number ID and Cloud API access token are required to connect WhatsApp' });
+                    }
                 }
                 nextWhatsapp.lastConnectedAt = new Date().toISOString();
+            } else if (isMetaCloudProvider(nextProvider)) {
+                nextWhatsapp.cellactApiUser = null;
+                nextWhatsapp.cellactApiPassword = null;
+                nextWhatsapp.cellactAppId = null;
+                nextWhatsapp.waPhoneNumberId = null;
+                nextWhatsapp.waBusinessAccountId = null;
+                nextWhatsapp.cloudApiAccessToken = null;
+                nextWhatsapp.displayPhoneNumber = null;
+                nextWhatsapp.verifiedName = null;
             } else {
-                nextWhatsapp.accountSid = null;
-                nextWhatsapp.authToken = null;
-                nextWhatsapp.messagingServiceSid = null;
-                nextWhatsapp.whatsappFrom = null;
+                nextWhatsapp.status = status || 'disconnected';
             }
             const next = {
                 ...stored,

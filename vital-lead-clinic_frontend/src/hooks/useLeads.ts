@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { leadService } from '@/services/leadService';
 import { toast } from '@/hooks/use-toast';
-import type { Lead, LeadMessage } from '@/types/leads';
+import type { Lead, LeadMessage, LeadMessageFilters, LeadMessagesResponse } from '@/types/leads';
 
 interface Filters {
   [key: string]: any;
@@ -57,6 +57,22 @@ export const useLeads = (initialFilters: Filters = {}) => {
     }
   }, []);
 
+  const getLeadMessages = useCallback(async (
+    id: string,
+    params: LeadMessageFilters = {}
+  ): Promise<LeadMessagesResponse> => {
+    try {
+      return await leadService.getLeadMessages(id, params);
+    } catch (err: ErrorResponse) {
+      toast({
+        title: "Error",
+        description: "Unable to load conversation history.",
+        variant: "destructive",
+      });
+      throw err;
+    }
+  }, []);
+
   const addLead = async (leadData: Omit<Lead, 'id'>): Promise<Lead> => {
     try {
       const newLead = await leadService.createLead(leadData);
@@ -104,7 +120,10 @@ export const useLeads = (initialFilters: Filters = {}) => {
     }
   };
 
-  const addMessage = async (leadId: string, messageData: { content: string }): Promise<LeadMessage> => {
+  const addMessage = async (
+    leadId: string,
+    messageData: { content: string; type?: 'SENT' | 'RECEIVED'; isBusiness?: boolean }
+  ): Promise<LeadMessage> => {
     try {
       const message = await leadService.addMessage(leadId, messageData as any);
       setLeads(prev => prev.map(l => l.id === leadId ? {
@@ -115,6 +134,16 @@ export const useLeads = (initialFilters: Filters = {}) => {
       return message;
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || 'Unable to send message.';
+      toast({ title: "Error", description: msg, variant: "destructive" });
+      throw err;
+    }
+  };
+
+  const retryMessage = async (leadId: string, messageId: string): Promise<LeadMessage> => {
+    try {
+      return await leadService.retryMessage(leadId, messageId);
+    } catch (err: ErrorResponse) {
+      const msg = err.response?.data?.message || 'Unable to retry message.';
       toast({ title: "Error", description: msg, variant: "destructive" });
       throw err;
     }
@@ -154,10 +183,12 @@ export const useLeads = (initialFilters: Filters = {}) => {
     setFilters,
     fetchLeads,
     getLead,
+    getLeadMessages,
     addLead,
     updateLead,
     deleteLead,
     addMessage,
+    retryMessage,
     bulkUpdate,
     getFollowupNeeded
   };

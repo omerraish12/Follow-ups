@@ -23,7 +23,7 @@ const getClinicsOverview = async (req, res) => {
         const clinics = result.rows.map((clinic) => {
             const integrations = clinic.integration_settings || {};
             const whatsapp = integrations.whatsapp || {};
-            const isProvisioned = Boolean(whatsapp.accountSid && whatsapp.authToken);
+            const isProvisioned = Boolean(whatsapp.waPhoneNumberId && whatsapp.cloudApiAccessToken);
 
             return {
                 id: clinic.id,
@@ -32,9 +32,10 @@ const getClinicsOverview = async (req, res) => {
                 phone: clinic.phone,
                 address: clinic.address,
                 status: whatsapp.status || 'disconnected',
-                twilioProvisioned: isProvisioned,
-                whatsappFrom: whatsapp.whatsappFrom || whatsapp.sender || null,
-                messagingServiceSid: whatsapp.messagingServiceSid || null,
+                whatsappProvisioned: isProvisioned,
+                provider: whatsapp.provider || 'cellactpro',
+                displayPhoneNumber: whatsapp.displayPhoneNumber || whatsapp.sender || null,
+                waPhoneNumberId: whatsapp.waPhoneNumberId || null,
                 lastConnectedAt: whatsapp.lastConnectedAt || null,
                 updatedAt: whatsapp.updatedAt || null,
                 leads: parseInt(clinic.lead_count, 10) || 0
@@ -50,7 +51,7 @@ const getClinicsOverview = async (req, res) => {
 
 const getPlatformAnalytics = async (req, res) => {
     try {
-        const COST_PER_MESSAGE_USD = parseFloat(process.env.TWILIO_MESSAGE_COST_USD) || 0.01;
+        const COST_PER_MESSAGE_USD = parseFloat(process.env.WHATSAPP_MESSAGE_COST_USD || process.env.TWILIO_MESSAGE_COST_USD) || 0.01;
 
         const totalsResult = await query(
             `SELECT 

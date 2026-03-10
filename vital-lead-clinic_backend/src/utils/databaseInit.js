@@ -160,9 +160,44 @@ async function initializeDatabase() {
         type message_type DEFAULT 'RECEIVED',
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         is_business BOOLEAN DEFAULT false,
-        lead_id INTEGER REFERENCES leads(id) ON DELETE CASCADE
+        lead_id INTEGER REFERENCES leads(id) ON DELETE CASCADE,
+        provider_message_id VARCHAR(128),
+        delivery_status VARCHAR(20),
+        status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        message_origin VARCHAR(32),
+        delivery_error TEXT,
+        metadata JSONB DEFAULT '{}'::jsonb
       );
     `);
+        await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(128);`);
+        await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20);`);
+        await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;`);
+        await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_origin VARCHAR(32);`);
+        await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivery_error TEXT;`);
+        await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;`);
+
+        await query(`
+      CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+        id SERIAL PRIMARY KEY,
+        clinic_id INTEGER UNIQUE REFERENCES clinics(id) ON DELETE CASCADE,
+        provider VARCHAR(32) NOT NULL DEFAULT 'wa_web',
+        status VARCHAR(32) NOT NULL DEFAULT 'disconnected',
+        auth_state_encrypted TEXT,
+        qr_code TEXT,
+        device_jid VARCHAR(255),
+        last_connected_at TIMESTAMP,
+        last_error TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS provider VARCHAR(32) NOT NULL DEFAULT 'wa_web';`);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'disconnected';`);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS auth_state_encrypted TEXT;`);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS qr_code TEXT;`);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS device_jid VARCHAR(255);`);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS last_connected_at TIMESTAMP;`);
+        await query(`ALTER TABLE whatsapp_sessions ADD COLUMN IF NOT EXISTS last_error TEXT;`);
 
         // Create automations table
         await query(`
@@ -261,12 +296,15 @@ async function initializeDatabase() {
         await query(`CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_leads_assigned ON leads(assigned_to_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_messages_lead ON messages(lead_id);`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_messages_provider_message_id ON messages(provider_message_id);`);
+        await query(`CREATE INDEX IF NOT EXISTS idx_messages_status_updated_at ON messages(status_updated_at);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_activities_user ON activities(user_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_activities_lead ON activities(lead_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_automations_clinic ON automations(clinic_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_notifications_clinic ON notifications(clinic_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);`);
+        await query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_clinic_id ON whatsapp_sessions(clinic_id);`);
 
         console.log('✅ Database tables created successfully');
     } catch (error) {

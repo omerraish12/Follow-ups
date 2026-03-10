@@ -7,9 +7,10 @@ export interface PlatformClinic {
   phone?: string;
   address?: string;
   status: string;
-  twilioProvisioned: boolean;
-  whatsappFrom: string | null;
-  messagingServiceSid: string | null;
+  whatsappProvisioned: boolean;
+  provider: string;
+  displayPhoneNumber: string | null;
+  waPhoneNumberId: string | null;
   lastConnectedAt: string | null;
   updatedAt: string | null;
   leads: number;

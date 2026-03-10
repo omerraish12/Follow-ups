@@ -1,18 +1,14 @@
-const twilio = require('twilio');
 const axios = require('axios');
 const { query } = require('../config/database');
-
-
-const clinicClientCache = new Map();
-
-const ensureCredentials = (creds) => {
-  if (!creds.accountSid || !creds.authToken) {
-    throw new Error('Twilio credentials missing (accountSid / authToken)');
-  }
-  if (!creds.whatsappFrom && !creds.messagingServiceSid) {
-    throw new Error('Twilio WhatsApp sender missing (whatsappFrom or messagingServiceSid)');
-  }
-};
+const WhatsAppSession = require('../models/WhatsAppSession');
+const { sendMessage: sendWaWebBridgeMessage } = require('./waWebBridgeService');
+const {
+  META_CLOUD_PROVIDER,
+  WA_WEB_PROVIDER,
+  normalizeWhatsAppProvider,
+  isMetaCloudProvider,
+  isWaWebProvider
+} = require('../utils/whatsappProvider');
 
 const trimValue = (value) => {
   if (value === null || value === undefined) return null;
@@ -25,61 +21,27 @@ const getClinicIntegrationSettings = async (clinicId) => {
   if (!clinicId) {
     return {};
   }
+
   const result = await query(
     `SELECT integration_settings FROM clinics WHERE id = $1`,
     [clinicId]
   );
-  const settings = result.rows?.[0]?.integration_settings;
-  return settings || {};
+
+  return result.rows?.[0]?.integration_settings || {};
 };
 
 const getClinicWhatsappConfig = async (clinicId) => {
   const integrations = await getClinicIntegrationSettings(clinicId);
   const whatsapp = integrations.whatsapp || {};
-  return whatsapp;
-};
-
-const pickCredential = (clinicValue) => trimValue(clinicValue);
-
-const resolveTwilioCredentials = async (clinicId) => {
-  const clinicWhatsapp = await getClinicWhatsappConfig(clinicId);
-  const credentials = {
-    accountSid: pickCredential(clinicWhatsapp.accountSid),
-    authToken: pickCredential(clinicWhatsapp.authToken),
-    messagingServiceSid: pickCredential(clinicWhatsapp.messagingServiceSid),
-    whatsappFrom: pickCredential(clinicWhatsapp.whatsappFrom)
+  return {
+    ...whatsapp,
+    provider: normalizeWhatsAppProvider(whatsapp.provider)
   };
-  console.log("____whatsapp credentials are configured____: ");
-  ensureCredentials(credentials);
-  return credentials;
 };
 
-const isWhatsAppConfiguredForClinic = async (clinicId) => {
-  try {
-    await resolveTwilioCredentials(clinicId);
-    return true;
-  } catch (error) {
-    return false;
-  }
-};
-
-const getCacheKey = (clinicId) =>
-  clinicId ? `clinic-${clinicId}` : 'system';
-
-const getTwilioClientForClinic = async (clinicId) => {
-  const credentials = await resolveTwilioCredentials(clinicId);
-  const cacheKey = getCacheKey(clinicId);
-  const cached = clinicClientCache.get(cacheKey);
-  if (cached && cached.accountSid === credentials.accountSid && cached.authToken === credentials.authToken) {
-    return { client: cached.client, credentials };
-  }
-  const client = twilio(credentials.accountSid, credentials.authToken);
-  clinicClientCache.set(cacheKey, {
-    client,
-    accountSid: credentials.accountSid,
-    authToken: credentials.authToken
-  });
-  return { client, credentials };
+const getWhatsAppProviderForClinic = async (clinicId) => {
+  const config = await getClinicWhatsappConfig(clinicId);
+  return normalizeWhatsAppProvider(config.provider);
 };
 
 const normalizePhone = (value) => {
@@ -87,220 +49,275 @@ const normalizePhone = (value) => {
     return '';
   }
 
-  return value.replace(/[^0-9+]/g, '');
+  return value.replace(/\D/g, '');
 };
 
-const buildWhatsAppAddress = (value) => {
-  const normalized = normalizePhone(value);
-  if (!normalized) {
-    throw new Error('Phone number is required for WhatsApp messages');
+const normalizeLanguageCode = (value) => {
+  const normalized = trimValue(value);
+  if (!normalized) return 'en_US';
+
+  const lower = normalized.toLowerCase();
+  if (lower === 'en') return 'en_US';
+  if (lower === 'he') return 'he_IL';
+  if (lower === 'ar') return 'ar';
+
+  return normalized;
+};
+
+const ensureMetaCredentials = (creds) => {
+  if (!creds.phoneNumberId) {
+    throw new Error('WhatsApp phone number ID is missing');
   }
-  return normalized.startsWith('whatsapp:') ? normalized : `whatsapp:${normalized}`;
-};
 
-const formatSenderAddress = (value) => {
-  if (!value) {
-    return null;
+  if (!creds.accessToken) {
+    throw new Error('WhatsApp Cloud API access token is missing');
   }
-  return buildWhatsAppAddress(value);
 };
 
-const buildMessagePayload = (toAddress, config = {}, additionalFields = {}) => {
-  const payload = {
-    to: toAddress,
-    ...additionalFields
+const resolveMetaCloudCredentials = async (clinicId) => {
+  const clinicWhatsapp = await getClinicWhatsappConfig(clinicId);
+  const credentials = {
+    provider: META_CLOUD_PROVIDER,
+    cellactApiUser: trimValue(clinicWhatsapp.cellactApiUser) || trimValue(process.env.CELLACT_API_USER),
+    cellactApiPassword: trimValue(clinicWhatsapp.cellactApiPassword) || trimValue(process.env.CELLACT_API_PASSWORD),
+    cellactAppId: trimValue(clinicWhatsapp.cellactAppId) || trimValue(process.env.CELLACT_APP_ID),
+    phoneNumberId:
+      trimValue(clinicWhatsapp.waPhoneNumberId) ||
+      trimValue(process.env.WA_PHONE_NUMBER_ID) ||
+      trimValue(process.env.WHATSAPP_PHONE_NUMBER_ID),
+    businessAccountId:
+      trimValue(clinicWhatsapp.waBusinessAccountId) ||
+      trimValue(process.env.WA_BUSINESS_ACCOUNT_ID) ||
+      trimValue(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID),
+    accessToken:
+      trimValue(clinicWhatsapp.cloudApiAccessToken) ||
+      trimValue(process.env.CLOUD_API_ACCESS_TOKEN) ||
+      trimValue(process.env.WHATSAPP_ACCESS_TOKEN),
+    displayPhoneNumber:
+      trimValue(clinicWhatsapp.displayPhoneNumber) ||
+      trimValue(clinicWhatsapp.sender) ||
+      trimValue(clinicWhatsapp.whatsappFrom),
+    verifiedName: trimValue(clinicWhatsapp.verifiedName),
+    graphBase: trimValue(process.env.WHATSAPP_GRAPH_BASE) || 'https://graph.facebook.com',
+    apiVersion: trimValue(process.env.WHATSAPP_API_VERSION) || 'v22.0'
   };
 
-  if (config.messagingServiceSid) {
-    payload.messagingServiceSid = config.messagingServiceSid;
-  }
-
-  const formattedSender = formatSenderAddress(config.whatsappFrom);
-  if (formattedSender) {
-    payload.from = formattedSender;
-  }
-
-  return payload;
+  ensureMetaCredentials(credentials);
+  return credentials;
 };
 
-const normalizeComponents = (components = []) => {
-  if (!Array.isArray(components)) {
+const createGraphClient = (credentials) =>
+  axios.create({
+    baseURL: `${credentials.graphBase.replace(/\/$/, '')}/${credentials.apiVersion}`,
+    headers: {
+      Authorization: `Bearer ${credentials.accessToken}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+const inferMediaType = (mediaUrl) => {
+  const normalized = (mediaUrl || '').toLowerCase();
+  if (!normalized) return null;
+  if (/\.(jpg|jpeg|png|webp|gif)(\?|$)/.test(normalized)) return 'image';
+  if (/\.(mp4|mov|avi|mkv)(\?|$)/.test(normalized)) return 'video';
+  if (/\.(mp3|ogg|wav|m4a)(\?|$)/.test(normalized)) return 'audio';
+  return 'document';
+};
+
+const buildTextParameters = (templateParameters = []) => {
+  if (!Array.isArray(templateParameters) || !templateParameters.length) {
     return [];
   }
 
-  return components
-    .map((component) => {
-      if (typeof component === 'string') {
-        return {
-          type: 'body',
-          parameters: [{ type: 'text', text: component }]
-        };
-      }
-
-      if (component && typeof component === 'object') {
-        return component;
-      }
-
-      return null;
-    })
-    .filter(Boolean);
+  return templateParameters
+    .map((value) => trimValue(String(value)))
+    .filter(Boolean)
+    .map((text) => ({
+      type: 'text',
+      text
+    }));
 };
 
-const QUICK_REPLY_LIMIT = 3;
-const TEMPLATE_VARIABLE_DEFAULTS = {
-  name: 'Customer',
-  service: 'Your booked service',
-  appointment_date: 'your upcoming appointment'
-};
+const buildTemplateComponents = ({ templateParameters = [], mediaUrl }) => {
+  const payloadComponents = [];
+  const bodyParameters = buildTextParameters(templateParameters);
 
-const sanitizeIdentifier = (value, fallback) => {
-  const cleaned = (value || fallback || '').toString().trim();
-  if (!cleaned) {
-    return fallback || 'option';
-  }
-  return cleaned.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
-};
-
-const sanitizeLabel = (value, fallback) => {
-  const label = (value || fallback || '').toString().trim();
-  return label ? label.slice(0, 40) : String(fallback || 'Option');
-};
-
-const buildQuickReplyActions = (components = []) => {
-  return components
-    .filter((component) => component && component.type === 'quick_reply')
-    .slice(0, QUICK_REPLY_LIMIT)
-    .map((component, index) => {
-      const title = sanitizeLabel(component.title, `Option ${index + 1}`);
-      const id = sanitizeIdentifier(component.payload, title);
-      return {
-        title,
-        id
-      };
+  if (bodyParameters.length) {
+    payloadComponents.push({
+      type: 'body',
+      parameters: bodyParameters
     });
-};
-
-const buildQuickReplyTemplateComponents = (components = []) => {
-  const actions = buildQuickReplyActions(components);
-  return actions.map((action, index) => ({
-    type: 'button',
-    sub_type: 'quick_reply',
-    index,
-    parameters: [
-      {
-        type: 'payload',
-        payload: action.id
-      }
-    ]
-  }));
-};
-
-const buildTemplateVariables = (personalization = []) => {
-  const variables = {};
-  personalization?.forEach((token, idx) => {
-    const key = String(idx + 1);
-    const normalized = (token || '').toString().trim().toLowerCase();
-    const defaultValue = TEMPLATE_VARIABLE_DEFAULTS[normalized] || token || `Value ${key}`;
-    variables[key] = defaultValue;
-  });
-  if (!Object.keys(variables).length) {
-    variables['1'] = TEMPLATE_VARIABLE_DEFAULTS.name;
   }
-  return variables;
-};
-
-const normalizeApprovalStatus = (status) => {
-  const normalized = (status || '').toString().toLowerCase();
-  if (normalized.includes('approve')) {
-    return 'approved';
-  }
-  if (normalized.includes('reject') || normalized.includes('fail')) {
-    return 'rejected';
-  }
-  return 'pending';
-};
-
-const buildTemplatePayload = ({ templateName, language, components, mediaUrl }) => {
-  if (!templateName) {
-    return null;
-  }
-
-  const normalized = normalizeComponents(components);
-  const baseComponents = normalized.filter((component) => component?.type !== 'quick_reply');
-  const quickReplyComponents = buildQuickReplyTemplateComponents(normalized);
-  const payloadComponents = [...baseComponents, ...quickReplyComponents];
-
-  const payload = {
-    type: 'template',
-    template: {
-      name: templateName,
-      language: {
-        code: language || 'en'
-      },
-      components: payloadComponents
-    }
-  };
 
   if (mediaUrl) {
-    payload.template.components.push({
+    const mediaType = inferMediaType(mediaUrl);
+    payloadComponents.push({
       type: 'header',
       parameters: [
         {
-          type: 'media',
-          mediaUrl
+          type: mediaType,
+          [mediaType]: {
+            link: mediaUrl
+          }
         }
       ]
     });
   }
 
-  return payload;
+  return payloadComponents;
 };
 
-async function sendTemplateMessage({ to, templateName, language, components = [], mediaUrl, body, clinicId }) {
-  const { client, credentials } = await getTwilioClientForClinic(clinicId);
-  console.log("credentials, ", credentials);
-  const toAddress = buildWhatsAppAddress(to);
-
-  const templatePayload = buildTemplatePayload({ templateName, language, components, mediaUrl });
-  const messagePayload = buildMessagePayload(
-    toAddress,
-    {
-      messagingServiceSid: credentials.messagingServiceSid,
-      whatsappFrom: credentials.whatsappFrom
-    }
-  );
-
-  messagePayload.body = (body || `WhatsApp test template: ${templateName}` || ' ').trim();
-
-  if (templatePayload) {
-    messagePayload.type = templatePayload.type;
-    messagePayload.template = templatePayload.template;
+const buildWaWebText = ({ body, templateName, templateParameters = [] }) => {
+  const trimmedBody = trimValue(body);
+  if (trimmedBody) {
+    return trimmedBody;
   }
 
-  console.info('Sending WhatsApp template message', {
-    to: toAddress,
-    templateName,
-    language,
-    componentsCount: Array.isArray(templatePayload?.template?.components)
-      ? templatePayload.template.components.length
-      : 0,
-    payload: {
-      messagePayload,
-      templatePayload: templatePayload?.template
+  const parameterText = buildTextParameters(templateParameters)
+    .map((item) => item.text)
+    .join(' ')
+    .trim();
+
+  return trimValue(parameterText) || trimValue(templateName) || '';
+};
+
+async function sendMetaTemplateMessage({
+  to,
+  templateName,
+  language,
+  components = [],
+  mediaUrl,
+  body,
+  clinicId,
+  templateParameters = []
+}) {
+  if (!templateName) {
+    throw new Error('Template name is required');
+  }
+
+  const credentials = await resolveMetaCloudCredentials(clinicId);
+  const client = createGraphClient(credentials);
+  const recipient = normalizePhone(to);
+
+  if (!recipient) {
+    throw new Error('Phone number is required for WhatsApp messages');
+  }
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: recipient,
+    type: 'template',
+    template: {
+      name: templateName,
+      language: {
+        code: normalizeLanguageCode(language)
+      }
     }
-  });
+  };
+
+  const payloadComponents = Array.isArray(components) && components.length
+    ? components
+    : buildTemplateComponents({ templateParameters, mediaUrl });
+  if (payloadComponents.length) {
+    payload.template.components = payloadComponents;
+  }
 
   try {
-    const result = await client.messages.create(messagePayload);
-    return result;
+    const response = await client.post(`/${credentials.phoneNumberId}/messages`, payload);
+    return response.data;
   } catch (error) {
-    console.error("WhatsApp template send failed", {
-      to: toAddress,
+    console.error('WhatsApp template send failed', {
+      to: recipient,
       templateName,
-      error: error?.response?.data || error?.message || error
+      language,
+      body,
+      error: error.response?.data || error.message || error
     });
     throw error;
   }
+}
+
+async function sendMetaFreeTextMessage({
+  to,
+  body,
+  mediaUrl,
+  clinicId
+}) {
+  if (!body && !mediaUrl) {
+    throw new Error('Message body or media URL is required');
+  }
+
+  const credentials = await resolveMetaCloudCredentials(clinicId);
+  const client = createGraphClient(credentials);
+  const recipient = normalizePhone(to);
+
+  if (!recipient) {
+    throw new Error('Phone number is required for WhatsApp messages');
+  }
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: recipient
+  };
+
+  if (mediaUrl) {
+    const mediaType = inferMediaType(mediaUrl);
+    payload.type = mediaType;
+    payload[mediaType] = {
+      link: mediaUrl,
+      ...(body ? { caption: String(body).trim() } : {})
+    };
+  } else {
+    payload.type = 'text';
+    payload.text = {
+      body: String(body).trim(),
+      preview_url: false
+    };
+  }
+
+  const response = await client.post(`/${credentials.phoneNumberId}/messages`, payload);
+  return response.data;
+}
+
+async function sendWaWebMessage({
+  to,
+  body,
+  mediaUrl,
+  clinicId,
+  templateName,
+  templateParameters = []
+}) {
+  const recipient = normalizePhone(to);
+  if (!recipient) {
+    throw new Error('Phone number is required for WhatsApp messages');
+  }
+
+  const session = await WhatsAppSession.findByClinicId(clinicId);
+  if (!session || session.status !== 'connected') {
+    throw new Error('WhatsApp Web session is not connected');
+  }
+
+  const text = buildWaWebText({ body, templateName, templateParameters });
+  if (!text && !mediaUrl) {
+    throw new Error('Message body or media URL is required');
+  }
+
+  return sendWaWebBridgeMessage({
+    clinicId,
+    to: recipient,
+    body: text || null,
+    mediaUrl: mediaUrl || null
+  });
+}
+
+async function sendTemplateMessage(payload) {
+  const provider = await getWhatsAppProviderForClinic(payload.clinicId);
+
+  if (isWaWebProvider(provider)) {
+    return sendWaWebMessage(payload);
+  }
+
+  return sendMetaTemplateMessage(payload);
 }
 
 async function sendWhatsAppMessage({
@@ -311,132 +328,88 @@ async function sendWhatsAppMessage({
   contentSid = null,
   requiresTemplate = false
 }) {
-  if (requiresTemplate && !contentSid) {
-    throw new Error('The 24-hour free-text window has closed; send a template using contentSid.');
-  }
-  if (!body && !mediaUrl && !contentSid) {
-    throw new Error('Message body, contentSid, or media URL is required');
-  }
+  const provider = await getWhatsAppProviderForClinic(clinicId);
 
-  const { client, credentials } = await getTwilioClientForClinic(clinicId);
-  const toAddress = buildWhatsAppAddress(to);
-  const messageFields = contentSid
-    ? { contentSid }
-    : { body: body ? String(body).trim() : ' ' };
-
-  const payload = buildMessagePayload(
-    toAddress,
-    {
-      messagingServiceSid: credentials.messagingServiceSid,
-      whatsappFrom: credentials.whatsappFrom
-    },
-    messageFields
-  );
-
-  if (contentSid) {
-    payload.contentSid = contentSid;
+  if (isMetaCloudProvider(provider) && (requiresTemplate || contentSid)) {
+    throw new Error('Template sends must use sendTemplateMessage with an approved template name');
   }
 
-  if (mediaUrl) {
-    payload.mediaUrl = Array.isArray(mediaUrl) ? mediaUrl : [mediaUrl];
+  if (isWaWebProvider(provider)) {
+    return sendWaWebMessage({ to, body, mediaUrl, clinicId });
   }
 
-  console.log("___checked client and sent message____", payload);
-  return client.messages.create(payload);
+  return sendMetaFreeTextMessage({ to, body, mediaUrl, clinicId });
 }
 
 async function submitTemplateForApproval({
+  clinicId,
   templateName,
-  language,
-  message,
-  components = [],
-  personalization = [],
-  clinicId
+  message
 }) {
   if (!templateName || !message) {
     return null;
   }
 
-  const { credentials } = await getTwilioClientForClinic(clinicId);
-  const contentPayload = {
-    friendlyName: templateName,
-    language: language || 'en',
-    variables: buildTemplateVariables(personalization),
-    types: {
-      'twilio/text': {
-        body: message
-      }
-    }
-  };
-
-  const quickReplyActions = buildQuickReplyActions(components);
-  if (quickReplyActions.length) {
-    contentPayload.types['twilio/quick-reply'] = {
-      body: message,
-      actions: quickReplyActions
-    };
-  }
-
-
-  const contentClient = axios.create({
-    baseURL: `https://content.twilio.com/v1/Accounts/${credentials.accountSid}`,
-    auth: {
-      username: credentials.accountSid,
-      password: credentials.authToken
-    },
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  try {
-    const createResponse = await contentClient.post('/Contents', {
-      friendly_name: contentPayload.friendlyName,
-      language: contentPayload.language,
-      variables: contentPayload.variables,
-      types: contentPayload.types
-    });
-    const contentSid = createResponse.data?.sid;
-    if (!contentSid) {
-      throw new Error('Content creation did not return a SID');
-    }
-    const approvalResponse = await contentClient.post(`/Contents/${contentSid}/Approvals`, {
-      channel: 'whatsapp'
-    });
-    const approval = approvalResponse.data;
-
+  const provider = await getWhatsAppProviderForClinic(clinicId);
+  if (isWaWebProvider(provider)) {
     return {
-      contentSid,
-      approvalSid: approval?.sid || null,
-      status: normalizeApprovalStatus(approval?.status)
+      contentSid: null,
+      approvalSid: null,
+      status: 'approved'
     };
-  } catch (error) {
-    console.error('Content API request failed:', error.response?.data || error.message);
-    throw error;
   }
-}
 
-async function refreshTemplateApprovalStatus({ clinicId, contentSid }) {
-  if (!contentSid) {
-    return null;
-  }
-  const { client } = await getTwilioClientForClinic(clinicId);
-  const approvals = await client.content.v1.contents(contentSid).approvals.list({ limit: 5 });
-  const latest = approvals?.[0];
-  if (!latest) {
-    return null;
-  }
   return {
-    contentSid,
-    approvalSid: latest.sid || null,
-    status: normalizeApprovalStatus(latest.status)
+    contentSid: null,
+    approvalSid: null,
+    status: 'pending'
   };
 }
+
+async function refreshTemplateApprovalStatus({ clinicId }) {
+  const provider = await getWhatsAppProviderForClinic(clinicId);
+  if (isWaWebProvider(provider)) {
+    return {
+      contentSid: null,
+      approvalSid: null,
+      status: 'approved'
+    };
+  }
+
+  return null;
+}
+
+const isMetaCloudConfiguredForClinic = async (clinicId) => {
+  try {
+    await resolveMetaCloudCredentials(clinicId);
+    return true;
+  } catch (_error) {
+    return false;
+  }
+};
+
+const isWaWebConfiguredForClinic = async (clinicId) => {
+  const session = await WhatsAppSession.findByClinicId(clinicId);
+  return Boolean(session && session.status === 'connected');
+};
+
+const isWhatsAppConfiguredForClinic = async (clinicId) => {
+  const provider = await getWhatsAppProviderForClinic(clinicId);
+  if (isWaWebProvider(provider)) {
+    return isWaWebConfiguredForClinic(clinicId);
+  }
+  return isMetaCloudConfiguredForClinic(clinicId);
+};
 
 module.exports = {
   sendTemplateMessage,
   sendWhatsAppMessage,
   submitTemplateForApproval,
   refreshTemplateApprovalStatus,
-  isWhatsAppConfiguredForClinic
+  isWhatsAppConfiguredForClinic,
+  isMetaCloudConfiguredForClinic,
+  isWaWebConfiguredForClinic,
+  getWhatsAppProviderForClinic,
+  getClinicWhatsappConfig,
+  normalizeLanguageCode
 };

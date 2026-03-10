@@ -19,6 +19,11 @@ const platformRoutes = require('./routes/platformRoutes');
 
 const requestLogger = require('./middleware/requestLogger');
 const app = express();
+const customWebhookBasePath = (() => {
+    const raw = (process.env.WEBHOOK_ENDPOINT_PATH || '').trim();
+    if (!raw) return null;
+    return raw.startsWith('/') ? raw : `/${raw}`;
+})();
 
 // Middleware
 const allowedOrigins = [
@@ -67,6 +72,9 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+if (customWebhookBasePath && customWebhookBasePath !== '/api/whatsapp') {
+    app.use(customWebhookBasePath, whatsappRoutes);
+}
 app.use('/api/pricing', pricingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/logs', logRoutes);

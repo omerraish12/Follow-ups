@@ -7,18 +7,17 @@ const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
 const { query } = require('../config/database');
-const { sendTemplateMessage } = require('../services/whatsappService');
+const { sendTemplateMessage, getWhatsAppProviderForClinic } = require('../services/whatsappService');
 const { getClinicAdminId } = require('../utils/clinicHelpers');
 const { canUseFreeText } = require('../utils/freeTextWindow');
+const { isMetaCloudProvider } = require('./whatsappProvider');
+
+const extractProviderMessageId = (response) =>
+    response?.messages?.[0]?.id || response?.messageId || null;
 
 const THREE_WEEK_TEMPLATE_NAME = 'three_week_followup';
-const THREE_WEEK_TEMPLATE_LANGUAGE = 'en';
+const THREE_WEEK_TEMPLATE_LANGUAGE = 'en_US';
 const THREE_WEEK_TEMPLATE_MESSAGE = 'Hi {{1}}, it has been 3 weeks since your visit at our clinic. We wanted to check in—how are you feeling? Reply to this message if you have any questions!';
-const THREE_WEEK_TEMPLATE_COMPONENTS = [
-    { type: 'quick_reply', title: 'I feel great!', payload: 'feeling_great' },
-    { type: 'quick_reply', title: 'Need a call', payload: 'need_call' }
-];
-
 class CronJobs {
     init() {
         // Run every day at 8 AM
@@ -94,20 +93,51 @@ class CronJobs {
             );
 
             for (const lead of leadsResult.rows) {
-                if (canUseFreeText(lead.last_inbound_message_at)) {
+                const provider = await getWhatsAppProviderForClinic(lead.clinic_id);
+                if (isMetaCloudProvider(provider) && canUseFreeText(lead.last_inbound_message_at)) {
                     continue;
                 }
 
                 try {
-                    await sendTemplateMessage({
+                    const providerResponse = await sendTemplateMessage({
                         to: lead.phone,
                         templateName: THREE_WEEK_TEMPLATE_NAME,
                         language: THREE_WEEK_TEMPLATE_LANGUAGE,
-                        components: THREE_WEEK_TEMPLATE_COMPONENTS,
                         body: THREE_WEEK_TEMPLATE_MESSAGE,
+                        templateParameters: [lead.name || 'Customer'],
                         clinicId: lead.clinic_id
                     });
+
+                    await Message.create({
+                        content: THREE_WEEK_TEMPLATE_MESSAGE,
+                        type: 'SENT',
+                        isBusiness: true,
+                        leadId: lead.id,
+                        providerMessageId: extractProviderMessageId(providerResponse),
+                        deliveryStatus: 'sent',
+                        messageOrigin: 'automation',
+                        metadata: {
+                            templateName: THREE_WEEK_TEMPLATE_NAME,
+                            language: THREE_WEEK_TEMPLATE_LANGUAGE,
+                            templateParameters: [lead.name || 'Customer']
+                        }
+                    });
                 } catch (error) {
+                    await Message.create({
+                        content: THREE_WEEK_TEMPLATE_MESSAGE,
+                        type: 'SENT',
+                        isBusiness: true,
+                        leadId: lead.id,
+                        deliveryStatus: 'failed',
+                        messageOrigin: 'automation',
+                        deliveryError: error.response?.data?.error?.message || error.response?.data?.message || error.message || 'Template send failed.',
+                        metadata: {
+                            templateName: THREE_WEEK_TEMPLATE_NAME,
+                            language: THREE_WEEK_TEMPLATE_LANGUAGE,
+                            templateParameters: [lead.name || 'Customer'],
+                            providerError: error.response?.data || error.message
+                        }
+                    });
                     console.error('3-week follow-up send failed for lead:', lead.id, error.response?.data || error.message);
                     await IntegrationLog.create({
                         type: 'follow_up_3week',
@@ -155,7 +185,9 @@ class CronJobs {
 
     async processAutomation(automation) {
         try {
-            if (automation.template_status && automation.template_status !== 'approved') {
+            const provider = await getWhatsAppProviderForClinic(automation.clinic_id);
+            const enforceMetaRules = isMetaCloudProvider(provider);
+            if (enforceMetaRules && automation.template_status && automation.template_status !== 'approved') {
                 return;
             }
             const adminId = await getClinicAdminId(automation.clinic_id);
@@ -183,7 +215,7 @@ class CronJobs {
                 );
 
                 for (const lead of leads.rows) {
-                    if (canUseFreeText(lead.last_inbound_message_at)) {
+                    if (enforceMetaRules && canUseFreeText(lead.last_inbound_message_at)) {
                         continue;
                     }
 
@@ -196,21 +228,57 @@ class CronJobs {
                         continue;
                     }
 
+                    const templateParameters = this.buildTemplateParameters(automation.personalization, lead);
+
                     try {
-                        await sendTemplateMessage({
+                        const providerResponse = await sendTemplateMessage({
                           to: lead.phone,
                           body: messageBody,
                           templateName: automation.template_name || automation.name,
                           language: automation.template_language || 'en',
-                          components: automation.components || [],
                           mediaUrl: automation.media_url || undefined,
+                          templateParameters,
                           clinicId: automation.clinic_id
                         });
+
+                        await Message.create({
+                            content: messageBody,
+                            type: 'SENT',
+                            isBusiness: true,
+                            leadId: lead.id,
+                            providerMessageId: extractProviderMessageId(providerResponse),
+                            deliveryStatus: 'sent',
+                            messageOrigin: 'automation',
+                            metadata: {
+                                automationId: automation.id,
+                                templateName: automation.template_name || automation.name,
+                                language: automation.template_language || 'en',
+                                mediaUrl: automation.media_url || null,
+                                templateParameters
+                            }
+                        });
                     } catch (error) {
-                        console.error('Twilio sendTemplate failed for automation:', automation.id, error.response?.data || error.message || error);
+                        await Message.create({
+                            content: messageBody,
+                            type: 'SENT',
+                            isBusiness: true,
+                            leadId: lead.id,
+                            deliveryStatus: 'failed',
+                            messageOrigin: 'automation',
+                            deliveryError: error.response?.data?.error?.message || error.response?.data?.message || error.message || 'Template send failed.',
+                            metadata: {
+                                automationId: automation.id,
+                                templateName: automation.template_name || automation.name,
+                                language: automation.template_language || 'en',
+                                mediaUrl: automation.media_url || null,
+                                templateParameters,
+                                providerError: error.response?.data || error.message
+                            }
+                        });
+                        console.error('WhatsApp template send failed for automation:', automation.id, error.response?.data || error.message || error);
                         await IntegrationLog.create({
-                            type: 'twilio_send',
-                            message: error.response?.data?.message || error.message || 'Twilio send failed',
+                            type: 'whatsapp_send',
+                            message: error.response?.data?.message || error.message || 'WhatsApp send failed',
                             metadata: {
                                 automationId: automation.id,
                                 leadId: lead.id,
@@ -226,14 +294,6 @@ class CronJobs {
                         leadId: lead.id,
                         message: messageBody
                     });
-
-                    await Message.create({
-                        content: messageBody,
-                        type: 'SENT',
-                        isBusiness: true,
-                        leadId: lead.id
-                    });
-
                     await Automation.incrementExecutions(automation.id);
                     await Lead.updateLastContacted(lead.id);
 
@@ -298,6 +358,18 @@ class CronJobs {
             const key = token.toLowerCase();
             return (map[key] || '').trim();
         }).replace(/\s+/g, ' ').trim();
+    }
+
+    buildTemplateParameters(personalization, lead) {
+        const map = this.getPersonalizationMap(lead);
+        const tokens = Array.isArray(personalization) && personalization.length
+            ? personalization
+            : ['name'];
+
+        return tokens.map((token) => {
+            const key = String(token || '').toLowerCase();
+            return (map[key] || '').trim() || 'Customer';
+        });
     }
 }
 

@@ -68,8 +68,8 @@ export default function PlatformClinics() {
                 <th className="py-2 pr-6">{t("clinic_name")}</th>
                 <th className="py-2 pr-6">{t("email")}</th>
                 <th className="py-2 pr-6">{t("phone_number")}</th>
-                <th className="py-2 pr-6">{t("platform_clinic_twilio_status_label")}</th>
-                <th className="py-2 pr-6">{t("platform_clinic_twilio_sender_label")}</th>
+                <th className="py-2 pr-6">{t("platform_clinic_provider_status_label")}</th>
+                <th className="py-2 pr-6">{t("platform_clinic_provider_sender_label")}</th>
                 <th className="py-2 pr-6">{t("platform_clinic_leads_label")}</th>
                 <th className="py-2 pr-6">{t("platform_clinic_last_connected_label")}</th>
               </tr>
@@ -98,13 +98,13 @@ export default function PlatformClinics() {
                     <td className="py-3 pr-6">{clinic.phone || t("not_available")}</td>
                     <td className="py-3 pr-6">
                       <Badge
-                        variant={clinic.twilioProvisioned ? "subtle" : "outline"}
-                        className={clinic.twilioProvisioned ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
+                        variant={clinic.whatsappProvisioned ? "subtle" : "outline"}
+                        className={clinic.whatsappProvisioned ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
                       >
-                        {clinic.twilioProvisioned ? t("platform_clinic_twilio_provisioned") : t("platform_clinic_twilio_unconfigured")}
+                        {clinic.whatsappProvisioned ? t("platform_clinic_provider_provisioned") : t("platform_clinic_provider_unconfigured")}
                       </Badge>
                     </td>
-                    <td className="py-3 pr-6">{clinic.whatsappFrom || clinic.messagingServiceSid || t("not_available")}</td>
+                    <td className="py-3 pr-6">{clinic.displayPhoneNumber || clinic.waPhoneNumberId || t("not_available")}</td>
                     <td className="py-3 pr-6">{clinic.leads}</td>
                     <td className="py-3 pr-6">{formatDateTime(clinic.lastConnectedAt, locale, fallback)}</td>
                   </tr>

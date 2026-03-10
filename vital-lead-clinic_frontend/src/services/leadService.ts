@@ -1,5 +1,5 @@
 import api from './api';
-import type { Lead, LeadMessage as Message } from "@/types/leads";
+import type { Lead, LeadMessage as Message, LeadMessageFilters, LeadMessagesResponse } from "@/types/leads";
 
 interface Filters {
   status?: string;
@@ -56,6 +56,21 @@ export const leadService = {
     return response.data;
   },
 
+  getLeadMessages: async (
+    id: string,
+    params: LeadMessageFilters = {}
+  ): Promise<LeadMessagesResponse> => {
+    const search = new URLSearchParams();
+    const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '');
+    entries.forEach(([key, value]) => {
+      search.append(key, String(value));
+    });
+
+    const suffix = search.toString() ? `?${search.toString()}` : '';
+    const response = await api.get(`/leads/${id}/messages${suffix}`);
+    return response.data;
+  },
+
   // Create lead
   createLead: async (leadData: LeadUpsertPayload): Promise<Lead> => {
     const response = await api.post('/leads', leadData);
@@ -75,8 +90,16 @@ export const leadService = {
   },
 
   // Add message to lead
-  addMessage: async (leadId: string, messageData: Message): Promise<Message> => {
+  addMessage: async (
+    leadId: string,
+    messageData: Partial<Message> & { content: string; type?: 'SENT' | 'RECEIVED'; isBusiness?: boolean }
+  ): Promise<Message> => {
     const response = await api.post(`/leads/${leadId}/messages`, messageData);
+    return response.data;
+  },
+
+  retryMessage: async (leadId: string, messageId: string): Promise<Message> => {
+    const response = await api.post(`/leads/${leadId}/messages/${messageId}/retry`);
     return response.data;
   },
 

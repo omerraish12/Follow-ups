@@ -3,10 +3,12 @@ const { body } = require('express-validator');
 const {
     getLeads,
     getLead,
+    getLeadMessages,
     createLead,
     updateLead,
     deleteLead,
     addMessage,
+    retryMessage,
     bulkUpdate,
     getFollowupNeeded
 } = require('../controllers/leadController');
@@ -18,6 +20,7 @@ router.use(protect);
 
 router.get('/', getLeads);
 router.get('/followup/needed', getFollowupNeeded);
+router.get('/:id/messages', getLeadMessages);
 router.get('/:id', getLead);
 
 router.post(
@@ -38,6 +41,7 @@ router.post(
 
 router.post('/bulk', bulkUpdate);
 router.post('/:id/messages', addMessage);
+router.post('/:id/messages/:messageId/retry', retryMessage);
 
 router.put('/:id', updateLead);
 router.delete('/:id', authorize('ADMIN', 'MANAGER'), deleteLead);
