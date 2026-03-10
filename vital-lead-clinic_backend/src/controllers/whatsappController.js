@@ -20,18 +20,6 @@ const {
   isWaWebProvider
 } = require('../utils/whatsappProvider');
 
-const verifyWebhook = (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-  const verifyToken = process.env.WEBHOOK_VERIFY_TOKEN || process.env.WHATSAPP_VERIFY_TOKEN;
-
-  if (mode === 'subscribe' && token === verifyToken) {
-    return res.status(200).send(challenge);
-  }
-  return res.sendStatus(403);
-};
-
 const normalizePhone = (value) => (value || '').replace(/[^0-9+]/g, '');
 const extractProviderMessageId = (response) =>
   response?.messages?.[0]?.id || response?.messageId || null;
@@ -190,52 +178,6 @@ const processDeliveryStatus = async (statusPayload) => {
   });
 };
 
-const handleWebhook = async (req, res) => {
-  try {
-    const entries = req.body?.entry || [];
-    const legacyProviderFrom = req.body?.From || req.body?.from;
-    const legacyProviderBody = req.body?.Body || req.body?.body;
-    const isLegacyPayload = Boolean(legacyProviderBody && legacyProviderFrom && !entries.length);
-    if (isLegacyPayload) {
-      await processInboundMessage(legacyProviderFrom, legacyProviderBody);
-    } else {
-      for (const entry of entries) {
-        const changes = entry.changes || [];
-        for (const change of changes) {
-          const value = change.value || {};
-
-          if (Array.isArray(value.messages)) {
-            for (const msg of value.messages) {
-              const inboundPayload = buildInboundMessagePayload(msg);
-              await processInboundMessage(msg.from, inboundPayload.content, inboundPayload.metadata);
-            }
-          }
-
-          if (Array.isArray(value.statuses)) {
-            for (const status of value.statuses) {
-              await processDeliveryStatus(status);
-            }
-          }
-        }
-      }
-    }
-
-    res.status(200).end();
-  } catch (error) {
-    console.error('WhatsApp webhook error:', error);
-    await IntegrationLog.create({
-      type: 'webhook_error',
-      message: error.message || 'WhatsApp webhook processing failed',
-      metadata: {
-        route: 'handleWebhook',
-        payloadSummary: Array.isArray(req.body?.entry) ? req.body.entry.length : 0,
-        error: error.stack || error.message
-      }
-    });
-    res.status(500).end();
-  }
-};
-
 const handleBridgeEvent = async (req, res) => {
   try {
     const expectedSecret = (process.env.WA_WEB_BACKEND_SHARED_SECRET || '').trim();
@@ -295,15 +237,9 @@ const getSenderInfo = async (req, res) => {
     const clinic = clinicResult.rows?.[0] || {};
     const integrations = clinic.integration_settings || {};
     const whatsapp = integrations.whatsapp || {};
-    const provider = normalizeWhatsAppProvider(whatsapp.provider);
+    const provider = normalizeWhatsAppProvider();
     const session = await WhatsAppSession.findByClinicId(req.user.clinic_id);
-    const hasMetaCredentials = Boolean(
-      whatsapp.waPhoneNumberId &&
-      whatsapp.cloudApiAccessToken
-    );
-    const status = isWaWebProvider(provider)
-      ? session?.status || whatsapp.status || 'disconnected'
-      : hasMetaCredentials ? 'connected' : 'disconnected';
+    const status = session?.status || whatsapp.status || 'disconnected';
     const displayNumber = whatsapp.displayPhoneNumber || clinic.whatsapp_number || null;
 
     res.json({
@@ -536,8 +472,6 @@ const getFAQ = (req, res) => {
 };
 
 module.exports = {
-  verifyWebhook,
-  handleWebhook,
   handleBridgeEvent,
   processInboundMessage,
   sendTemplate,

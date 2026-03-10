@@ -1,5 +1,10 @@
 const express = require('express');
+const path = require('path');
 const dotenv = require('dotenv');
+
+// Load env *before* any other modules so DB creds are available.
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
 const {
   connectSession,
   getSessionStatus,
@@ -8,16 +13,18 @@ const {
   restoreExistingSessions
 } = require('./manager');
 
-dotenv.config();
-
 const app = express();
 const port = parseInt(process.env.PORT || '5050', 10);
 const bridgeApiKey = String(process.env.WA_WEB_BRIDGE_API_KEY || '').trim();
+if (!bridgeApiKey) {
+  console.error('WA_WEB_BRIDGE_API_KEY is required for the WhatsApp bridge. Set it in the environment.');
+  process.exit(1);
+}
 
 app.use(express.json({ limit: '5mb' }));
 
 app.use((req, res, next) => {
-  if (!bridgeApiKey) {
+  if (req.path === '/health') {
     next();
     return;
   }

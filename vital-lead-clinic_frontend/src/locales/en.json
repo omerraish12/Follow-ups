@@ -41,7 +41,6 @@
   "wa_phone_number_id_placeholder": "Enter the WhatsApp Phone Number ID",
   "wa_business_account_id_label": "WhatsApp Business Account ID",
   "wa_business_account_id_placeholder": "Enter the WABA ID",
-  "cloud_api_access_token_placeholder": "Paste a new access token (leave blank to keep existing)",
   "display_phone_number_label": "Display phone number",
   "display_phone_number_placeholder": "+1234567890",
   "verified_name_label": "Verified business name",

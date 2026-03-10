@@ -6,6 +6,10 @@ const connectionString =
   process.env.SUPABASE_DB_URL ||
   null;
 
+if (!connectionString && !process.env.POSTGRES_PASSWORD) {
+  throw new Error('Bridge Postgres credentials are missing. Set POSTGRES_URL or POSTGRES_PASSWORD.');
+}
+
 const pool = connectionString
   ? new Pool({
       connectionString,
@@ -16,7 +20,7 @@ const pool = connectionString
       port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
       database: process.env.POSTGRES_DATABASE,
       user: process.env.POSTGRES_USER,
-      password: process.env.POSTGRES_PASSWORD,
+      password: process.env.POSTGRES_PASSWORD ? String(process.env.POSTGRES_PASSWORD) : undefined,
       ssl: process.env.POSTGRES_HOST && process.env.POSTGRES_HOST !== 'localhost'
         ? { rejectUnauthorized: false }
         : false

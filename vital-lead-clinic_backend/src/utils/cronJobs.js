@@ -7,10 +7,9 @@ const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
 const { query } = require('../config/database');
-const { sendTemplateMessage, getWhatsAppProviderForClinic } = require('../services/whatsappService');
+const { sendTemplateMessage } = require('../services/whatsappService');
 const { getClinicAdminId } = require('../utils/clinicHelpers');
 const { canUseFreeText } = require('../utils/freeTextWindow');
-const { isMetaCloudProvider } = require('./whatsappProvider');
 
 const extractProviderMessageId = (response) =>
     response?.messages?.[0]?.id || response?.messageId || null;
@@ -36,6 +35,11 @@ class CronJobs {
         cron.schedule('0 9 * * *', async () => {
             console.log('Running 3-week follow-up automation...');
             await this.runThreeWeekFollowups();
+        });
+
+        // Clear stale QR/error fields for long-disconnected sessions daily
+        cron.schedule('30 2 * * *', async () => {
+            await this.pruneStaleSessions();
         });
 
         console.log('Cron jobs initialized');
@@ -73,6 +77,22 @@ class CronJobs {
             }
         } catch (error) {
             console.error('Error checking follow-ups:', error);
+        }
+    }
+
+    async pruneStaleSessions() {
+        try {
+            await query(`
+              UPDATE whatsapp_sessions
+              SET qr_code = NULL,
+                  last_error = NULL,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE status = 'disconnected'
+                AND updated_at < CURRENT_TIMESTAMP - INTERVAL '1 day'
+            `);
+            console.log('Pruned stale WhatsApp session QR/error metadata');
+        } catch (error) {
+            console.error('Failed to prune stale WhatsApp sessions', error);
         }
     }
 

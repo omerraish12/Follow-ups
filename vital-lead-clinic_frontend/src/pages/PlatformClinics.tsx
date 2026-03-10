@@ -104,7 +104,7 @@ export default function PlatformClinics() {
                         {clinic.whatsappProvisioned ? t("platform_clinic_provider_provisioned") : t("platform_clinic_provider_unconfigured")}
                       </Badge>
                     </td>
-                    <td className="py-3 pr-6">{clinic.displayPhoneNumber || clinic.waPhoneNumberId || t("not_available")}</td>
+                    <td className="py-3 pr-6">{clinic.displayPhoneNumber || t("not_available")}</td>
                     <td className="py-3 pr-6">{clinic.leads}</td>
                     <td className="py-3 pr-6">{formatDateTime(clinic.lastConnectedAt, locale, fallback)}</td>
                   </tr>

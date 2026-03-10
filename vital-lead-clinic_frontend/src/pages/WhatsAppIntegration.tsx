@@ -18,6 +18,7 @@ import {
   type WhatsAppSenderInfo,
   type WhatsAppSessionRecord,
 } from "@/services/whatsappService";
+import { settingsService } from "@/services/settingsService";
 
 const formatDate = (value: string | null | undefined, locale: string, fallback: string) => {
   if (!value) {
@@ -294,7 +295,8 @@ export default function WhatsAppIntegration() {
               ) : null}
             </div>
           </div>
-        </Card>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-[32px] border border-white/15 bg-slate-950/80 text-white shadow-[0_25px_60px_rgba(3,7,18,0.6)]">
         <CardHeader className="space-y-2">

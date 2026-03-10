@@ -1440,7 +1440,7 @@ export default function SettingsPage() {
               {integrations.map((integration) => {
                 const Icon = integration.icon;
                 const isWhatsApp = integration.type === 'whatsapp';
-                const whatsappSender = integration.displayPhoneNumber || integration.waPhoneNumberId;
+                const whatsappSender = integration.displayPhoneNumber || integration.whatsappNumber || null;
                 return (
                   <div
                     key={integration.id}

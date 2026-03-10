@@ -16,9 +16,7 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Meta webhook verification + inbound events (public)
-router.get('/webhook', verifyWebhook);
-router.post('/webhook', handleWebhook);
+// WhatsApp Web bridge inbound events (public)
 router.post('/bridge/events', handleBridgeEvent);
 
 // Outbound send (protected)

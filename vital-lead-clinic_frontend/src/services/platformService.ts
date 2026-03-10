@@ -8,9 +8,9 @@ export interface PlatformClinic {
   address?: string;
   status: string;
   whatsappProvisioned: boolean;
+  sessionStatus: string;
   provider: string;
   displayPhoneNumber: string | null;
-  waPhoneNumberId: string | null;
   lastConnectedAt: string | null;
   updatedAt: string | null;
   leads: number;

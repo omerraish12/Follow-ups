@@ -23,7 +23,8 @@ const getClinicsOverview = async (req, res) => {
         const clinics = result.rows.map((clinic) => {
             const integrations = clinic.integration_settings || {};
             const whatsapp = integrations.whatsapp || {};
-            const isProvisioned = Boolean(whatsapp.waPhoneNumberId && whatsapp.cloudApiAccessToken);
+            const sessionStatus = whatsapp.status || 'disconnected';
+            const displayNumber = whatsapp.displayPhoneNumber || whatsapp.sender || clinic.whatsapp_number || null;
 
             return {
                 id: clinic.id,
@@ -31,11 +32,11 @@ const getClinicsOverview = async (req, res) => {
                 email: clinic.email,
                 phone: clinic.phone,
                 address: clinic.address,
-                status: whatsapp.status || 'disconnected',
-                whatsappProvisioned: isProvisioned,
-                provider: whatsapp.provider || 'cellactpro',
-                displayPhoneNumber: whatsapp.displayPhoneNumber || whatsapp.sender || null,
-                waPhoneNumberId: whatsapp.waPhoneNumberId || null,
+                status: sessionStatus,
+                sessionStatus,
+                whatsappProvisioned: sessionStatus === 'connected',
+                provider: 'wa_web',
+                displayPhoneNumber: displayNumber,
                 lastConnectedAt: whatsapp.lastConnectedAt || null,
                 updatedAt: whatsapp.updatedAt || null,
                 leads: parseInt(clinic.lead_count, 10) || 0
