@@ -32,28 +32,57 @@ const createClient = () => {
   });
 };
 
+const shouldRetry = (error) => {
+  const code = error?.code || '';
+  return ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT'].includes(code);
+};
+
+const withRetry = async (fn, attempts = 2) => {
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetry(error) || i === attempts - 1) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * (i + 1)));
+    }
+  }
+  throw lastError;
+};
+
 const connectSession = async (clinicId) => {
-  const client = createClient();
-  const response = await client.post(`/sessions/${clinicId}/connect`);
-  return response.data;
+  return withRetry(async () => {
+    const client = createClient();
+    const response = await client.post(`/sessions/${clinicId}/connect`);
+    return response.data;
+  });
 };
 
 const getSessionStatus = async (clinicId) => {
-  const client = createClient();
-  const response = await client.get(`/sessions/${clinicId}`);
-  return response.data;
+  return withRetry(async () => {
+    const client = createClient();
+    const response = await client.get(`/sessions/${clinicId}`);
+    return response.data;
+  });
 };
 
 const disconnectSession = async (clinicId) => {
-  const client = createClient();
-  const response = await client.post(`/sessions/${clinicId}/disconnect`);
-  return response.data;
+  return withRetry(async () => {
+    const client = createClient();
+    const response = await client.post(`/sessions/${clinicId}/disconnect`);
+    return response.data;
+  });
 };
 
 const sendMessage = async (payload) => {
-  const client = createClient();
-  const response = await client.post('/messages/send', payload);
-  return response.data;
+  return withRetry(async () => {
+    const client = createClient();
+    const response = await client.post('/messages/send', payload);
+    return response.data;
+  });
 };
 
 module.exports = {
