@@ -7,7 +7,7 @@ React/Vite application for the clinic UI (dashboard, leads, automations, notific
 - npm (or yarn/pnpm if preferred)
 
 ## Setup
-1. Copy `.env.sample` → `.env` and update the values (`VITE_API_URL` should point to your backend, e.g., `http://localhost:5000/api`).
+1. Copy `.env.sample` → `.env` and update the values (`VITE_API_URL` should point to your backend, e.g., `http://localhost:5000/api`. If omitted in production, the app will call `/api` on the same origin).
 2. Install dependencies:
    ```bash
    npm install
@@ -19,7 +19,7 @@ React/Vite application for the clinic UI (dashboard, leads, automations, notific
    Build for production with `npm run build` and serve via `npm run preview` or your preferred static host.
 
 ## Environment reference
-- `VITE_API_URL` – base URL for the backend API (`http://localhost:5000/api` during development).
+- `VITE_API_URL` – base URL for the backend API (`http://localhost:5000/api` during development; optional in production where same-origin `/api` is used by default).
 - `VITE_SENTRY_DSN` – Optional (uncomment if you use Sentry for errors).
 - `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` – Optional PostHog config if you track events.
 - `VITE_FEATURE_FLAGS` – Optional comma-separated list of feature flags for toggling UI sections.

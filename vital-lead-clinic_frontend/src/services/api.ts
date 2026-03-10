@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Prefer explicit env, but fall back to the same origin (works on Vercel and other hosts).
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:4000/api');
 
 const api = axios.create({
     baseURL: API_URL,
