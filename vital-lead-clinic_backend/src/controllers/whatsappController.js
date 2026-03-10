@@ -391,6 +391,14 @@ const getSessionStatus = async (req, res) => {
     }
 
     const session = await WhatsAppSession.findByClinicId(req.user.clinic_id);
+    // Clear stale config errors once the bridge URL exists, so the UI stops showing them.
+    if (
+      session?.last_error === 'WA_WEB_BRIDGE_URL is not configured' &&
+      (process.env.WA_WEB_BRIDGE_URL || '').trim()
+    ) {
+      await WhatsAppSession.upsert(req.user.clinic_id, { lastError: null });
+      session.last_error = null;
+    }
     const config = await getClinicWhatsappConfig(req.user.clinic_id);
 
     return res.json({

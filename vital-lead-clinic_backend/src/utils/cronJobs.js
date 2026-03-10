@@ -7,9 +7,10 @@ const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
 const { query } = require('../config/database');
-const { sendTemplateMessage } = require('../services/whatsappService');
+const { sendTemplateMessage, getWhatsAppProviderForClinic } = require('../services/whatsappService');
 const { getClinicAdminId } = require('../utils/clinicHelpers');
 const { canUseFreeText } = require('../utils/freeTextWindow');
+const { isMetaCloudProvider } = require('../utils/whatsappProvider');
 
 const extractProviderMessageId = (response) =>
     response?.messages?.[0]?.id || response?.messageId || null;

@@ -286,9 +286,11 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         qrCode: null
       });
 
+      // Drop the stale socket so a fresh connection (manual or auto) will create a new QR.
+      activeSessions.delete(String(clinicId));
+
       if (!shouldReconnect) {
         await removeDir(authDir);
-        activeSessions.delete(String(clinicId));
         return;
       }
 
