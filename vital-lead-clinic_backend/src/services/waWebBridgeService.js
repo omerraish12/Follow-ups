@@ -7,9 +7,7 @@ const trimValue = (value) => {
 };
 
 const getBridgeConfig = () => {
-  console.log("BRIDGE_URL: ", process.env.WA_WEB_BRIDGE_URL); 
   const baseURL = trimValue(process.env.WA_WEB_BRIDGE_URL);
-  console.log("baseURL: ", baseURL); 
 
   if (!baseURL) {
     throw new Error('WA_WEB_BRIDGE_URL is not configured');
