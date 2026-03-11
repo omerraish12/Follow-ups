@@ -6,6 +6,9 @@ const {
   normalizeWhatsAppProvider,
   isWaWebProvider
 } = require('../utils/whatsappProvider');
+const { normalizeToE164, getDefaultCountry } = require('../utils/phone');
+const { isWithinQuietHoursForClinic } = require('../utils/quietHours');
+const { buildCaption } = require('./mediaCaption');
 
 const trimValue = (value) => {
   if (value === null || value === undefined) return null;
@@ -38,13 +41,7 @@ const getClinicWhatsappConfig = async (clinicId) => {
 
 const getWhatsAppProviderForClinic = async () => WA_WEB_PROVIDER;
 
-const normalizePhone = (value) => {
-  if (!value || typeof value !== 'string') {
-    return '';
-  }
-
-  return value.replace(/\D/g, '');
-};
+const normalizePhone = (value, country) => normalizeToE164(value, country || getDefaultCountry());
 
 const buildWaWebText = ({ body, templateName, templateParameters = [] }) => {
   const trimmedBody = trimValue(body);
@@ -73,6 +70,14 @@ async function sendWaWebMessage({
     throw new Error('Phone number is required for WhatsApp messages');
   }
 
+  const integrations = await getClinicIntegrationSettings(clinicId);
+  const quietHours = integrations.whatsapp?.quietHours || null;
+  if (await isWithinQuietHoursForClinic(clinicId, quietHours)) {
+    const error = new Error('Message blocked due to quiet hours');
+    error.code = 'QUIET_HOURS_BLOCK';
+    throw error;
+  }
+
   const session = await WhatsAppSession.findByClinicId(clinicId);
   if (!session || session.status !== 'connected') {
     throw new Error('WhatsApp Web session is not connected');
@@ -87,7 +92,8 @@ async function sendWaWebMessage({
     clinicId,
     to: recipient,
     body: text || null,
-    mediaUrl: mediaUrl || null
+    mediaUrl: mediaUrl || null,
+    caption: buildCaption(body, templateParameters) || undefined
   });
 }
 

@@ -11,6 +11,9 @@ const { sendTemplateMessage, getWhatsAppProviderForClinic } = require('../servic
 const { getClinicAdminId } = require('../utils/clinicHelpers');
 const { canUseFreeText } = require('../utils/freeTextWindow');
 const { isMetaCloudProvider } = require('../utils/whatsappProvider');
+const { isWithinQuietHoursForClinic } = require('../utils/quietHours');
+const { DateTime } = require('luxon');
+const { processPendingMessages } = require('./sendQueue');
 
 const extractProviderMessageId = (response) =>
     response?.messages?.[0]?.id || response?.messageId || null;
@@ -18,6 +21,9 @@ const extractProviderMessageId = (response) =>
 const THREE_WEEK_TEMPLATE_NAME = 'three_week_followup';
 const THREE_WEEK_TEMPLATE_LANGUAGE = 'en_US';
 const THREE_WEEK_TEMPLATE_MESSAGE = 'Hi {{1}}, it has been 3 weeks since your visit at our clinic. We wanted to check in—how are you feeling? Reply to this message if you have any questions!';
+const DAILY_AUTOMATION_CAP = parseInt(process.env.AUTOMATION_DAILY_CAP || '500', 10);
+const LEAD_COOLDOWN_HOURS = parseInt(process.env.AUTOMATION_COOLDOWN_HOURS || '24', 10);
+const RETENTION_DAYS = parseInt(process.env.MESSAGE_RETENTION_DAYS || '0', 10);
 class CronJobs {
     init() {
         // Run every day at 8 AM
@@ -37,6 +43,26 @@ class CronJobs {
             console.log('Running 3-week follow-up automation...');
             await this.runThreeWeekFollowups();
         });
+
+        // Process queued/failed WhatsApp sends every 2 minutes
+        cron.schedule('*/2 * * * *', async () => {
+            console.log('Processing queued WhatsApp messages...');
+            await processPendingMessages();
+        });
+
+        // Bridge health ping every 5 minutes
+        cron.schedule('*/5 * * * *', async () => {
+            console.log('Checking WhatsApp bridge health...');
+            await this.checkBridgeHealth();
+        });
+
+        // Nightly message retention purge
+        if (RETENTION_DAYS > 0) {
+            cron.schedule('30 3 * * *', async () => {
+                console.log('Running message retention purge...');
+                await this.purgeOldMessages();
+            });
+        }
 
         // Clear stale QR/error fields for long-disconnected sessions daily
         cron.schedule('30 2 * * *', async () => {
@@ -78,6 +104,44 @@ class CronJobs {
             }
         } catch (error) {
             console.error('Error checking follow-ups:', error);
+        }
+    }
+
+    async checkBridgeHealth() {
+        try {
+            const clinics = await query(`SELECT id FROM clinics`);
+            for (const clinic of clinics.rows) {
+                try {
+                    const session = await WhatsAppSession.findByClinicId(clinic.id);
+                    const status = session?.status || 'disconnected';
+                    if (status !== 'connected') {
+                        await IntegrationLog.create({
+                            type: 'whatsapp_health',
+                            message: `Bridge disconnected (${status})`,
+                            clinicId: clinic.id,
+                            metadata: { status }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Health check error for clinic', clinic.id, error.message);
+                }
+            }
+        } catch (error) {
+            console.error('Bridge health check failed', error.message);
+        }
+    }
+
+    async purgeOldMessages() {
+        try {
+            const result = await query(
+                `DELETE FROM messages
+                 WHERE timestamp < NOW() - ($1 || ' days')::interval
+                 RETURNING id`,
+                [RETENTION_DAYS]
+            );
+            console.log(`Purged ${result.rowCount} old messages`);
+        } catch (error) {
+            console.error('Message retention purge failed', error.message);
         }
     }
 
@@ -207,12 +271,22 @@ class CronJobs {
     async processAutomation(automation) {
         try {
             const provider = await getWhatsAppProviderForClinic(automation.clinic_id);
+            const integrationsResult = await query(
+                `SELECT integration_settings FROM clinics WHERE id = $1`,
+                [automation.clinic_id]
+            );
+            const integrations = integrationsResult.rows?.[0]?.integration_settings || {};
+            const quietHours = automation.quiet_hours || integrations?.whatsapp?.quietHours || null;
             const enforceMetaRules = isMetaCloudProvider(provider);
             if (enforceMetaRules && automation.template_status && automation.template_status !== 'approved') {
                 return;
             }
             const adminId = await getClinicAdminId(automation.clinic_id);
             const triggerDays = Array.isArray(automation.trigger_days) ? automation.trigger_days : [3, 7, 14];
+            const parsedDailyCap = Number(automation.daily_cap);
+            const parsedCooldown = Number(automation.cooldown_hours);
+            const dailyCap = Number.isFinite(parsedDailyCap) ? parsedDailyCap : DAILY_AUTOMATION_CAP;
+            const cooldownHours = Number.isFinite(parsedCooldown) ? parsedCooldown : LEAD_COOLDOWN_HOURS;
 
             for (const days of triggerDays) {
                 const targetDate = new Date();
@@ -235,6 +309,22 @@ class CronJobs {
                     [automation.clinic_id, automation.target_status || null, targetDate, automation.id]
                 );
 
+                // Daily cap per automation
+                const todayCountResult = await query(
+                    `SELECT COUNT(*) FROM executions WHERE automation_id = $1 AND executed_at::date = CURRENT_DATE`,
+                    [automation.id]
+                );
+                const todaysCount = Number(todayCountResult.rows?.[0]?.count || 0);
+                if (dailyCap > 0 && todaysCount >= dailyCap) {
+                    await IntegrationLog.create({
+                        type: 'whatsapp_send',
+                        message: 'Automation daily cap reached; skipping sends',
+                        clinicId: automation.clinic_id,
+                        metadata: { automationId: automation.id, cap: dailyCap }
+                    });
+                    continue;
+                }
+
                 for (const lead of leads.rows) {
                     if (enforceMetaRules && canUseFreeText(lead.last_inbound_message_at)) {
                         continue;
@@ -242,6 +332,21 @@ class CronJobs {
 
                     if (!lead.phone) {
                         continue;
+                    }
+
+                    // Per-lead cooldown
+                    if (cooldownHours > 0) {
+                        const cooldownResult = await query(
+                            `SELECT 1 FROM executions 
+                             WHERE lead_id = $1 
+                               AND automation_id = $2 
+                               AND executed_at >= NOW() - ($3 || ' hours')::interval
+                             LIMIT 1`,
+                            [lead.id, automation.id, cooldownHours]
+                        );
+                        if (cooldownResult.rows.length) {
+                            continue;
+                        }
                     }
 
                     const messageBody = this.renderAutomationMessage(automation, lead);
@@ -252,30 +357,34 @@ class CronJobs {
                     const templateParameters = this.buildTemplateParameters(automation.personalization, lead);
 
                     try {
-                        const providerResponse = await sendTemplateMessage({
-                          to: lead.phone,
-                          body: messageBody,
-                          templateName: automation.template_name || automation.name,
-                          language: automation.template_language || 'en',
-                          mediaUrl: automation.media_url || undefined,
-                          templateParameters,
-                          clinicId: automation.clinic_id
-                        });
+                        if (await isWithinQuietHoursForClinic(lead.clinic_id, quietHours)) {
+                            await IntegrationLog.create({
+                                type: 'whatsapp_send',
+                                message: 'Skipped send due to quiet hours window',
+                                clinicId: lead.clinic_id,
+                                metadata: {
+                                    automationId: automation.id,
+                                    leadId: lead.id
+                                }
+                            });
+                            continue;
+                        }
 
                         await Message.create({
                             content: messageBody,
                             type: 'SENT',
                             isBusiness: true,
                             leadId: lead.id,
-                            providerMessageId: extractProviderMessageId(providerResponse),
-                            deliveryStatus: 'sent',
+                            deliveryStatus: 'queued',
                             messageOrigin: 'automation',
                             metadata: {
                                 automationId: automation.id,
                                 templateName: automation.template_name || automation.name,
                                 language: automation.template_language || 'en',
                                 mediaUrl: automation.media_url || null,
-                                templateParameters
+                                templateParameters,
+                                to: lead.phone,
+                                retryCount: 0
                             }
                         });
                     } catch (error) {
@@ -320,15 +429,15 @@ class CronJobs {
 
                     await Activity.create({
                         type: 'AUTOMATION_RUN',
-                        description: `Automation "${automation.name}" executed for lead ${lead.name}`,
+                        description: `Automation "${automation.name}" queued for ${lead.name}`,
                         userId: adminId,
                         leadId: lead.id
                     });
 
                     await Notification.create({
                         type: 'system',
-                        title: 'Automation executed',
-                        message: `Automation "${automation.name}" ran for lead ${lead.name}.`,
+                        title: 'Automation queued',
+                        message: `Automation "${automation.name}" queued WhatsApp message for ${lead.name}.`,
                         priority: 'low',
                         actionLabel: 'View lead',
                         actionLink: `/leads/${lead.id}`,

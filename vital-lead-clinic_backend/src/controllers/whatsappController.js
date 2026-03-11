@@ -1,4 +1,4 @@
-const { sendTemplateMessage, getClinicWhatsappConfig } = require('../services/whatsappService');
+﻿const { sendTemplateMessage, getClinicWhatsappConfig } = require('../services/whatsappService');
 const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Execution = require('../models/Execution');
@@ -9,6 +9,7 @@ const IntegrationLog = require('../models/IntegrationLog');
 const WhatsAppSession = require('../models/WhatsAppSession');
 const { getClinicAdminId } = require('../utils/clinicHelpers');
 const { query } = require('../config/database');
+const crypto = require('crypto');
 const {
   connectSession: connectWaWebBridgeSession,
   getSessionStatus: getWaWebBridgeSessionStatus,
@@ -20,7 +21,8 @@ const {
   isWaWebProvider
 } = require('../utils/whatsappProvider');
 
-const normalizePhone = (value) => (value || '').replace(/[^0-9+]/g, '');
+const { normalizeToE164, getDefaultCountry } = require('../utils/phone');
+const normalizePhone = (value) => normalizeToE164(value, getDefaultCountry());
 const extractProviderMessageId = (response) =>
   response?.messages?.[0]?.id || response?.messageId || null;
 
@@ -107,6 +109,32 @@ const processInboundMessage = async (rawFrom, rawText, metadata = {}) => {
     return;
   }
 
+  // Opt-out keywords
+  const lower = text.toLowerCase();
+  const optOutKeywords = ['stop', 'unsubscribe', 'בטל', 'הפסק', 'הסר'];
+  if (optOutKeywords.includes(lower)) {
+    await Lead.update(lead.id, lead.clinic_id, { consentGiven: false });
+    const adminId = await getClinicAdminId(lead.clinic_id);
+    await Activity.create({
+      type: 'CONSENT_REVOKED',
+      description: `${lead.name || 'Lead'} opted out via WhatsApp.`,
+      userId: adminId,
+      leadId: lead.id
+    });
+    await Notification.create({
+      type: 'lead',
+      title: 'Lead opted out',
+      message: `${lead.name || 'Lead'} opted out via WhatsApp.`,
+      priority: 'high',
+      actionLabel: 'View lead',
+      actionLink: `/leads/${lead.id}`,
+      metadata: { leadId: lead.id },
+      userId: adminId,
+      clinicId: lead.clinic_id
+    });
+    return;
+  }
+
   await Message.create({
     content: text || messagePreview,
     type: 'RECEIVED',
@@ -169,8 +197,14 @@ const processDeliveryStatus = async (statusPayload) => {
     ? statusPayload.errors.map((item) => item?.title || item?.message || '').filter(Boolean).join('; ')
     : null;
 
+  const mappedStatus = ['sent', 'delivered', 'read', 'failed'].includes(deliveryStatus)
+    ? deliveryStatus
+    : deliveryStatus === 'error'
+      ? 'failed'
+      : 'sent';
+
   await Message.updateDeliveryByProviderMessageId(providerMessageId, {
-    deliveryStatus,
+    deliveryStatus: mappedStatus,
     deliveryError: errorSummary,
     metadata: {
       providerStatus: statusPayload
@@ -182,7 +216,32 @@ const handleBridgeEvent = async (req, res) => {
   try {
     const expectedSecret = (process.env.WA_WEB_BACKEND_SHARED_SECRET || '').trim();
     const incomingSecret = String(req.headers['x-bridge-secret'] || '').trim();
-    if (expectedSecret && expectedSecret !== incomingSecret) {
+    const timestamp = Number(req.headers['x-bridge-timestamp'] || 0);
+    const signature = String(req.headers['x-bridge-signature'] || '').trim();
+    const now = Date.now();
+
+    if (timestamp && Math.abs(now - timestamp) > 5 * 60 * 1000) {
+      return res.status(401).json({ message: 'Stale request' });
+    }
+
+    if (expectedSecret) {
+      if (!incomingSecret || incomingSecret !== expectedSecret) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+      if (signature) {
+        const payload = JSON.stringify(req.body || {});
+        const hmac = crypto.createHmac('sha256', expectedSecret);
+        hmac.update(`${timestamp}.${payload}`);
+        const expectedSig = hmac.digest('hex');
+        if (expectedSig !== signature) {
+          return res.status(401).json({ message: 'Invalid signature' });
+        }
+      }
+    } else if (signature) {
+      return res.status(401).json({ message: 'Signature not allowed without shared secret' });
+    }
+
+    if (expectedSecret && !timestamp) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -265,9 +324,16 @@ const sendTemplate = async (req, res) => {
     if (!to || !templateName) {
       return res.status(400).json({ message: 'to and templateName are required' });
     }
+    const normalizedTo = normalizePhone(to);
+    if (!normalizedTo) {
+      return res.status(400).json({ message: 'Invalid destination phone number' });
+    }
     const lead = await Lead.findByPhone(to);
+    if (lead && lead.consent_given === false) {
+      return res.status(403).json({ message: 'Lead has opted out of WhatsApp messages' });
+    }
     const response = await sendTemplateMessage({
-      to,
+      to: normalizedTo,
       templateName,
       language,
       components,

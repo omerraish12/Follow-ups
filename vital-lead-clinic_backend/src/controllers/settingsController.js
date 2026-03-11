@@ -25,7 +25,8 @@ const defaultWhatsappIntegration = {
     waBusinessAccountId: null,
     cloudApiAccessToken: null,
     displayPhoneNumber: null,
-    verifiedName: null
+    verifiedName: null,
+    quietHours: null
 };
 
 const mergeWhatsappDefaults = (incoming = {}) => {

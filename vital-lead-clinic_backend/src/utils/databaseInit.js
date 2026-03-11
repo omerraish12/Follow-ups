@@ -177,6 +177,13 @@ async function initializeDatabase() {
         await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;`);
 
         await query(`
+          ALTER TABLE automations
+            ADD COLUMN IF NOT EXISTS daily_cap INTEGER,
+            ADD COLUMN IF NOT EXISTS cooldown_hours INTEGER,
+            ADD COLUMN IF NOT EXISTS media_url TEXT;
+        `);
+
+        await query(`
       CREATE TABLE IF NOT EXISTS whatsapp_sessions (
         id SERIAL PRIMARY KEY,
         clinic_id INTEGER UNIQUE REFERENCES clinics(id) ON DELETE CASCADE,

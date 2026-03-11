@@ -126,15 +126,17 @@ class Automation {
             templateStatus,
             templateSid,
             templateApprovalSid,
-            clinicId
+            clinicId,
+            dailyCap,
+            cooldownHours
         } = automationData;
 
         const normalizedComponents = normalizeComponents(components);
         const componentsPayload = normalizedComponents.length ? JSON.stringify(normalizedComponents) : '[]';
         const result = await query(
             `INSERT INTO automations 
-            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid, daily_cap, cooldown_hours) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
        RETURNING *`,
             [
                 name,
@@ -150,7 +152,9 @@ class Automation {
                 clinicId,
                 templateStatus || 'pending',
                 templateSid || null,
-                templateApprovalSid || null
+                templateApprovalSid || null,
+                automationData.dailyCap || null,
+                automationData.cooldownHours || null
             ]
         );
         return formatAutomationRow(result.rows[0]);
@@ -260,7 +264,10 @@ class Automation {
         const mapping = {
             templateStatus: 'template_status',
             templateSid: 'template_sid',
-            templateApprovalSid: 'template_approval_sid'
+            templateApprovalSid: 'template_approval_sid',
+            dailyCap: 'daily_cap',
+            cooldownHours: 'cooldown_hours',
+            mediaUrl: 'media_url'
         };
 
         for (const [key, value] of Object.entries(metadata)) {

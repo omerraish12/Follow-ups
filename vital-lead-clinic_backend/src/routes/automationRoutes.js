@@ -12,7 +12,8 @@ const {
     getPerformanceStats,
     getRecentReplies,
     getAutomationTemplates,
-    refreshTemplateStatus
+    refreshTemplateStatus,
+    getDeliveryStats
 } = require('../controllers/automationController');
 const { protect } = require('../middleware/auth');
 
@@ -25,6 +26,7 @@ router.post('/:id/refresh-template-status', refreshTemplateStatus);
 
 router.get('/', getAutomations);
 router.get('/stats/performance', getPerformanceStats);
+router.get('/stats/delivery', getDeliveryStats);
 router.get('/replies/recent', getRecentReplies);
 router.post('/defaults', seedDefaultAutomations);
 router.get('/:id', getAutomation);

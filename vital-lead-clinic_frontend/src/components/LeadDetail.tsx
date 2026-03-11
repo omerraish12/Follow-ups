@@ -447,6 +447,14 @@ export default function LeadDetail({
 
   const handleSendMessage = async (): Promise<void> => {
     if (!newMessage.trim()) return;
+    if (!lead?.consent_given) {
+      toast({
+        title: t("consent_blocked_title"),
+        description: t("consent_blocked_body"),
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const message = await addMessageService(lead!.id, {
@@ -546,6 +554,14 @@ export default function LeadDetail({
 
   const handleSendTemplate = async (): Promise<void> => {
     if (!lead || !selectedTemplate) return;
+    if (!lead.consent_given) {
+      toast({
+        title: t("consent_blocked_title"),
+        description: t("consent_blocked_body"),
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (!lead.phone) {
       toast({
@@ -753,6 +769,7 @@ export default function LeadDetail({
   const FREE_TEXT_WINDOW_DURATION = 24 * 60 * 60 * 1000;
   const freeTextStatusKnown = hasLoadedFullLead && Boolean(lead);
   const freeTextOpen = freeTextStatusKnown ? Boolean(lead?.can_use_free_text) : false;
+  const hasConsent = Boolean(lead?.consent_given);
   const consentLabel = lead?.consent_given ? t("consent_banner_granted") : t("consent_banner_missing");
   const consentBadgeClasses = lead?.consent_given
     ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
@@ -777,6 +794,12 @@ export default function LeadDetail({
       ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
       : 'bg-warning/10 text-warning border-warning/20')
     : 'bg-muted/10 text-muted-foreground border-border';
+  const composerDisabled = !freeTextOpen || !hasConsent;
+  const composerPlaceholder = !hasConsent
+    ? t("consent_required_to_send")
+    : freeTextOpen
+      ? t("write_new_message")
+      : t("free_text_window_closed_hint");
 
   if (isLoading) {
     return (
@@ -956,7 +979,14 @@ export default function LeadDetail({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-lg">{t("message_history")}</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg">{t("message_history")}</CardTitle>
+              {!hasConsent && (
+                <Badge variant="destructive" className="text-[10px] h-5">
+                  {t("opt_out_badge")}
+                </Badge>
+              )}
+            </div>
             <Button variant="outline" size="sm" onClick={() => refreshThread(true)} disabled={isRefreshingMessages}>
               <RefreshCw className={`h-4 w-4 ${isRefreshingMessages ? 'animate-spin' : ''}`} />
             </Button>
@@ -985,6 +1015,15 @@ export default function LeadDetail({
                   ? (freeTextOpen ? t("free_text_window_open_hint") : t("free_text_window_closed_hint"))
                   : t("loading")}
               </p>
+              {!hasConsent && (
+                <div className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 p-3 text-destructive">
+                  <AlertTriangle className="h-4 w-4 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold">{t("consent_blocked_title")}</p>
+                    <p className="text-xs text-destructive/80">{t("consent_blocked_body")}</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Message List */}
@@ -1070,32 +1109,40 @@ export default function LeadDetail({
                     className={`flex ${message.type === 'SENT' ? 'justify-start' : 'justify-end'}`}
                   >
                     <div
-                      className={`max-w-[70%] rounded-2xl p-3 ${message.type === 'SENT'
+                    className={`max-w-[70%] rounded-2xl p-3 ${message.type === 'SENT'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-muted'
                         }`}
-                    >
-                      {renderMessageContent(message)}
-                      {getMessageOriginLabel(message) && (
-                        <div className="mt-2 flex justify-end">
-                          <Badge variant="outline" className="text-[8px] h-4">
-                            {getMessageOriginLabel(message)}
-                          </Badge>
-                        </div>
-                      )}
-                      <div className="flex justify-end items-center gap-1 mt-1">
-                        {renderMessageStatusIcon(message)}
-                        {getMessageStatusLabel(message) && (
-                          <span className="text-[10px] opacity-70">
-                            {getMessageStatusLabel(message)}
-                          </span>
-                        )}
+                  >
+                    {renderMessageContent(message)}
+                    {getMessageOriginLabel(message) && (
+                      <div className="mt-2 flex justify-end">
+                        <Badge variant="outline" className="text-[8px] h-4">
+                          {getMessageOriginLabel(message)}
+                        </Badge>
+                      </div>
+                    )}
+                    <div className="flex justify-end items-center gap-1 mt-1">
+                      {renderMessageStatusIcon(message)}
+                      {getMessageStatusLabel(message) && (
                         <span className="text-[10px] opacity-70">
-                          {formatDate(message.timestamp)}
+                          {getMessageStatusLabel(message)}
                         </span>
-                        {message.is_business && (
-                          <Badge variant="outline" className="text-[8px] h-4 bg-white/20">
-                            {t("business")}
+                      )}
+                      {message.delivery_status && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] h-4 border-0"
+                        >
+                          {t((message.delivery_status || '').toLowerCase())}
+                        </Badge>
+                      )}
+                      <span className="text-[10px] opacity-70">
+                        {formatDate(message.timestamp)}
+                      </span>
+                      {message.is_business && (
+                        <Badge variant="outline" className="text-[8px] h-4 bg-white/20">
+                          {t("business")}
                           </Badge>
                         )}
                       </div>
@@ -1127,16 +1174,16 @@ export default function LeadDetail({
             {/* New Message Input */}
             <div className="flex gap-2 pt-4 border-t">
               <Textarea
-                placeholder={freeTextOpen ? t("write_new_message") : t("free_text_window_closed_hint")}
+                placeholder={composerPlaceholder}
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 className="flex-1"
                 rows={2}
-                disabled={!freeTextOpen}
+                disabled={composerDisabled}
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim() || !freeTextOpen}
+                disabled={!newMessage.trim() || composerDisabled}
                 className="self-end"
               >
                 <MessageSquare className="h-4 w-4 ml-2" />
@@ -1185,12 +1232,15 @@ export default function LeadDetail({
                 )}
                 <Button
                   onClick={handleSendTemplate}
-                  disabled={!selectedTemplate || isSendingTemplate || templatesLoading}
+                  disabled={!selectedTemplate || isSendingTemplate || templatesLoading || !hasConsent}
                   className="self-end"
                 >
                   <Send className="h-4 w-4 ml-2" />
                   {t("send_template_message")}
                 </Button>
+                {!hasConsent && (
+                  <p className="text-xs text-destructive mt-1">{t("consent_blocked_body")}</p>
+                )}
               </div>
             )}
           </div>

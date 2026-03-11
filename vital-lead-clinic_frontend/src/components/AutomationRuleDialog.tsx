@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Pencil, X } from "lucide-react";
+import { Eye, Plus, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -10,6 +10,8 @@ import type { LeadStatus } from "@/types/leads";
 import type { Automation } from "@/types/automation";
 import { useAutomations } from "@/hooks/useAutomations";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { whatsappService } from "@/services/whatsappService";
+import { toast } from "@/hooks/use-toast";
 
 interface AutomationRuleDialogProps {
   rule?: Automation;
@@ -46,10 +48,40 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
     templateLanguage: rule?.template_language || "en",
     targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
     active: rule?.active ?? true,
-    quickReplies: Array.isArray(rule?.components) ? rule.components.filter((component) => component?.type === "quick_reply") : []
+    quickReplies: Array.isArray(rule?.components) ? rule.components.filter((component) => component?.type === "quick_reply") : [],
+    dailyCap: (rule as any)?.daily_cap ?? 100,
+    cooldownHours: (rule as any)?.cooldown_hours ?? 24,
+    mediaUrl: (rule as any)?.media_url ?? ""
   });
 
   const [form, setForm] = useState(buildFormState);
+  const [testNumber, setTestNumber] = useState("");
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const placeholderTokens = useMemo(() => ([
+    { token: "{name}", label: t("placeholder_name") },
+    { token: "{service}", label: t("placeholder_service") },
+    { token: "{appointment_date}", label: t("placeholder_appointment") },
+    { token: "{phone}", label: t("placeholder_phone") },
+  ]), [t]);
+
+  const samplePreviewValues = useMemo(() => ({
+    name: t("preview_sample_name"),
+    service: t("preview_sample_service"),
+    appointment_date: t("preview_sample_date"),
+    phone: "+1 555-201-4433"
+  }), [t]);
+
+  const previewMessage = useMemo(() => {
+    if (!form.message.trim()) return "";
+    return form.message.replace(/\{(\w+)\}/g, (_match, key) => {
+      const lowered = String(key || "").toLowerCase();
+      return (samplePreviewValues as any)[lowered] || `{${lowered}}`;
+    });
+  }, [form.message, samplePreviewValues]);
+
+  const messageCharCount = form.message?.length || 0;
+  const mediaUrl = form.mediaUrl?.trim() || "";
+  const mediaLooksImage = /\.(png|jpe?g|gif|webp)$/i.test(mediaUrl);
 
   const handleSubmit = async () => {
     if (!form.name.trim() || !form.message.trim()) {
@@ -79,6 +111,9 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
         templateName: form.templateName.trim() || undefined,
         templateLanguage: form.templateLanguage || "en",
         components: quickReplies,
+        dailyCap: Number(form.dailyCap) || null,
+        cooldownHours: Number(form.cooldownHours) || null,
+        mediaUrl: form.mediaUrl?.trim() || null,
       };
 
       if (isEdit && rule?.id) {
@@ -93,6 +128,25 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
       // handled in hook toast
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSendTest = async () => {
+    if (!testNumber.trim() || !form.message.trim()) return;
+    setIsSendingTest(true);
+    try {
+      await whatsappService.sendTemplate({
+        to: testNumber.trim(),
+        templateName: form.templateName || form.name || "test_template",
+        language: form.templateLanguage || "en",
+        mediaUrl: form.mediaUrl || undefined,
+        templateParameters: [],
+      });
+      toast.success(t("test_sent"));
+    } catch (_err) {
+      toast.error(t("test_send_failed"));
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -123,17 +177,8 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
   };
 
   const resetForm = () => {
-    setForm({
-      name: rule?.name || "",
-      trigger: (rule as any)?.trigger || "",
-      delayDays: String((rule as any)?.delayDays ?? (rule?.trigger_days?.[0] ?? 0)),
-      message: rule?.message || "",
-      templateName: rule?.template_name || "",
-      templateLanguage: rule?.template_language || "en",
-      targetStatus: ((rule?.target_status as LeadStatus) || ALL_STATUSES) as AutomationTargetStatus,
-      active: rule?.active ?? true,
-      quickReplies: Array.isArray(rule?.components) ? rule.components.filter((component) => component?.type === "quick_reply") : []
-    });
+    setForm(buildFormState());
+    setTestNumber("");
   };
 
   const defaultTrigger = isEdit ? (
@@ -225,12 +270,27 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
                 {t("automation_add_quick_reply")}
               </Button>
             )}
-            <p className="text-[10px] text-muted-foreground">{t("quick_reply_help")}</p>
-          </div>
-        </div>
-        <p className="text-[10px] text-muted-foreground">{t("automation_rule_template_note")}</p>
-        <div className="space-y-1.5">
-          <Label className="text-xs font-semibold">{t("trigger")} *</Label>
+        <p className="text-[10px] text-muted-foreground">{t("quick_reply_help")}</p>
+      </div>
+    </div>
+    <div className="grid grid-cols-1 gap-2 rounded-xl border border-muted p-3 bg-muted/40">
+      <Label className="text-xs font-semibold">{t("send_test_to_me")}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder={t("test_number_placeholder")}
+          value={testNumber}
+          onChange={(e) => setTestNumber(e.target.value)}
+          className="flex-1 rounded-xl"
+          disabled={isSendingTest}
+        />
+        <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={handleSendTest} disabled={isSendingTest}>
+          {isSendingTest ? t("loading") : t("test_send")}
+        </Button>
+      </div>
+    </div>
+    <p className="text-[10px] text-muted-foreground">{t("automation_rule_template_note")}</p>
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold">{t("trigger")} *</Label>
           <Select value={form.trigger} onValueChange={(v) => setForm({ ...form, trigger: v })} disabled={isSubmitting}>
               <SelectTrigger className="rounded-xl">
                 <SelectValue placeholder={t("select_trigger")} />
@@ -278,6 +338,22 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">{t("automation_message")} *</Label>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              <span>{t("insert_variable")}:</span>
+              {placeholderTokens.map((placeholder) => (
+                <Button
+                  key={placeholder.token}
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="rounded-full text-[11px] h-7"
+                  disabled={isSubmitting}
+                  onClick={() => setForm((prev) => ({ ...prev, message: `${prev.message} ${placeholder.token}`.trim() }))}
+                >
+                  {placeholder.label}
+                </Button>
+              ))}
+            </div>
             <Textarea
               value={form.message}
               onChange={(e) => setForm({ ...form, message: e.target.value })}
@@ -287,7 +363,64 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
               maxLength={500}
               disabled={isSubmitting}
             />
-            <p className="text-[10px] text-muted-foreground">{t("message_variables")}</p>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <p>{t("message_variables")}</p>
+              <span>{messageCharCount}/500</span>
+            </div>
+            <div className="rounded-2xl border border-muted bg-muted/40 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold">
+                <Eye className="h-4 w-4" />
+                <span>{t("live_preview")}</span>
+              </div>
+              <p className="text-sm whitespace-pre-wrap break-words">
+                {previewMessage || t("preview_placeholder_empty")}
+              </p>
+              {mediaUrl && (
+                <div className="rounded-xl border border-dashed border-muted bg-background/60 p-2">
+                  {mediaLooksImage ? (
+                    <img src={mediaUrl} alt={t("media_preview_alt")} className="w-full rounded-lg object-cover max-h-48" />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">{t("media_preview_generic").replace("{url}", mediaUrl)}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{t("daily_cap")}</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.dailyCap}
+                onChange={(e) => setForm({ ...form, dailyCap: e.target.value })}
+                className="rounded-xl"
+                dir="ltr"
+                disabled={isSubmitting}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">{t("cooldown_hours")}</Label>
+              <Input
+                type="number"
+                min={0}
+                value={form.cooldownHours}
+                onChange={(e) => setForm({ ...form, cooldownHours: e.target.value })}
+                className="rounded-xl"
+                dir="ltr"
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">{t("media_url")}</Label>
+            <Input
+              placeholder="https://..."
+              value={form.mediaUrl}
+              onChange={(e) => setForm({ ...form, mediaUrl: e.target.value })}
+              className="rounded-xl"
+              disabled={isSubmitting}
+            />
           </div>
         </div>
         <div className="flex gap-3 mt-5 justify-end">

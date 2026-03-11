@@ -29,9 +29,11 @@ import { useIntegrationLogs } from "@/hooks/useIntegrationLogs";
 import { useAutomationReplies } from "@/hooks/useAutomationReplies";
 import { whatsappService, type WhatsAppProvider } from "@/services/whatsappService";
 import type { Automation, AutomationComponent } from "@/types/automation";
+import { integrationLogService } from "@/services/integrationLogService";
 
 const MAX_QUICK_REPLIES = 3;
 import type { LeadStatus } from "@/types/leads";
+import { automationService } from "@/services/automationService";
 
 interface ExtendedAutomationRule extends Automation {
   triggerDays: number[];
@@ -64,6 +66,10 @@ export default function Automations() {
   } = useAutomations({ seedDefaultsOnEmpty: true });
   const { logs, isLoading: logsLoading, error: logsError, refreshLogs } = useIntegrationLogs(5);
   const { replies, isLoading: repliesLoading, error: repliesError, refresh: refreshReplies } = useAutomationReplies(5);
+  const [deliveryStats, setDeliveryStats] = useState<{ queued: number; sent: number; delivered: number; read: number; failed: number }>({
+    queued: 0, sent: 0, delivered: 0, read: 0, failed: 0
+  });
+  const [waIssues, setWaIssues] = useState<string | null>(null);
 
   const [rules, setRules] = useState<ExtendedAutomationRule[]>([]);
   const [followupNeeded, setFollowupNeeded] = useState<{ leadId: string; leadName: string; days: number }[]>([]);
@@ -95,6 +101,15 @@ export default function Automations() {
       }
     };
     loadProvider();
+    automationService.getDeliveryStats().then(setDeliveryStats).catch(() => {});
+    integrationLogService.getSystemLogs(5).then((logs) => {
+      const issue = logs.find(
+        (log) =>
+          (log.type === "whatsapp_send" || log.type === "whatsapp_health") &&
+          (log.level === "error" || log.level === "warning")
+      );
+      if (issue) setWaIssues(issue.message);
+    }).catch(() => {});
   }, []);
 
   const addQuickReply = () => {
@@ -353,6 +368,13 @@ export default function Automations() {
       detail: `${t("response_rate")} ${avgSuccessRate}%`
     },
     {
+      title: t("delivery_status"),
+      value: `${deliveryStats.delivered + deliveryStats.read}/${deliveryStats.sent + deliveryStats.delivered + deliveryStats.read}`,
+      icon: <CheckCircle className="h-3 w-3" />,
+      accent: "success",
+      detail: `${t("queued")}: ${deliveryStats.queued} · ${t("failed")}: ${deliveryStats.failed}`
+    },
+    {
       title: t("returned_leads"),
       value: stats?.totals?.active_count ?? activeCount,
       icon: <CheckCircle className="h-3 w-3" />,
@@ -437,21 +459,48 @@ export default function Automations() {
 
   return (
     <div className="space-y-5 lg:space-y-6" dir={language === 'he' ? 'rtl' : 'ltr'}>
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground font-display">{t("automations_title")}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {t("automations_subtitle")}
-          </p>
-          <p className="mt-2 text-xs uppercase tracking-[0.4em] text-muted-foreground">
-            {t("automation_workflow_description")}
-          </p>
-          <p className="text-[11px] mt-1 text-muted-foreground">
-            {t("automation_followup_story")}
-          </p>
+      {waIssues && (
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 text-destructive px-4 py-3 text-sm shadow-sm">
+          <div className="font-semibold">{t("whatsapp_issue_title")}</div>
+          <div className="text-destructive/80">{waIssues}</div>
+          <button
+            onClick={() => refreshLogs()}
+            className="mt-2 inline-flex items-center rounded-full border border-destructive/40 px-3 py-1 text-xs font-semibold hover:bg-destructive/20"
+          >
+            {t("view_logs")}
+          </button>
         </div>
-        <AutomationRuleDialog onSuccess={() => { fetchAutomations(); fetchStats(); }} />
+      )}
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-r from-primary/10 via-secondary/10 to-card p-6 md:p-8 shadow-none">
+        <div className="pointer-events-none absolute inset-0 opacity-50">
+          <div className="absolute -left-10 -top-10 h-44 w-44 rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute right-0 bottom-0 h-48 w-48 rounded-full bg-secondary/25 blur-3xl" />
+        </div>
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3 max-w-4xl">
+            <Badge variant="outline" className="w-fit rounded-full border-white/30 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-white backdrop-blur">
+              WhatsApp automation
+            </Badge>
+            <div className="space-y-2">
+              <h1 className="text-3xl md:text-4xl font-display font-semibold text-foreground">
+                {t("automations_title")}
+              </h1>
+              <p className="text-base md:text-lg text-muted-foreground">
+                {t("automations_subtitle")}
+              </p>
+              <p className="text-sm text-muted-foreground/90">
+                {t("automation_workflow_description")}
+              </p>
+              <p className="text-sm text-muted-foreground/80">
+                {t("automation_followup_story")}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <AutomationRuleDialog onSuccess={() => { fetchAutomations(); fetchStats(); }} />
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}

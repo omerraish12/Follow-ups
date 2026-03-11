@@ -20,6 +20,7 @@ export interface WhatsAppIntegrationConfig {
   updatedAt: string | null;
   displayPhoneNumber?: string | null;
   verifiedName?: string | null;
+  quietHours?: { start: string; end: string } | null;
 }
 
 export interface WhatsAppSenderInfo {
@@ -90,6 +91,14 @@ export const whatsappService = {
       ...config,
       provider: "wa_web",
     };
+  },
+
+  updateQuietHours: async (payload: { start: string; end: string }) => {
+    return api.post("/settings/integrations", {
+      type: "whatsapp",
+      status: "connected",
+      data: { quietHours: payload },
+    });
   },
 
   sendTemplate: async (payload: {

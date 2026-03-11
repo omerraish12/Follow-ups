@@ -1,0 +1,21 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgLight" x1="14" y1="10" x2="86" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCE8E4"/>
+      <stop offset="1" stop-color="#E9F7F2"/>
+    </linearGradient>
+    <linearGradient id="markLight" x1="28" y1="20" x2="74" y2="72" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F26A8A"/>
+      <stop offset="1" stop-color="#F6A94A"/>
+    </linearGradient>
+    <linearGradient id="leafLight" x1="38" y1="34" x2="66" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5DD0AE"/>
+      <stop offset="1" stop-color="#3FB78C"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="84" height="84" rx="22" fill="url(#bgLight)" stroke="#F2D8D5" stroke-width="4"/>
+  <path d="M30 42.5C30 32.3 38.3 24 48.6 24H62c7.2 0 13 5.8 13 13v6.8C75 52.4 68.1 59.5 59.4 59.5H48.4l-6.6 5c-1.8 1.4-4.4.1-4.4-2.2v-3.9C32.6 53.1 30 48.1 30 42.5Z" fill="url(#markLight)" opacity="0.92"/>
+  <path d="M52 32.4c-2.7 2.6-4.6 5.8-5.4 9.7-1 5.1-4.5 10.7-9.2 14.2 6.8.6 13.5-2.6 17.6-8.2 2.8-3.8 4.7-8.7 5-12.6.4-4.6-4.2-5.2-8-3.1Z" fill="url(#leafLight)" opacity="0.95"/>
+  <path d="M39.5 46.2 46.8 53l12.7-14.3" stroke="#FBF7F4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="66" cy="26" r="6.5" fill="#FCE8E4" stroke="#F26A8A" stroke-width="2"/>
+</svg>

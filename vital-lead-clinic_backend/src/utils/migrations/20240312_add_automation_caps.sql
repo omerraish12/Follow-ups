@@ -1,0 +1,4 @@
+ALTER TABLE automations
+  ADD COLUMN IF NOT EXISTS daily_cap INTEGER,
+  ADD COLUMN IF NOT EXISTS cooldown_hours INTEGER,
+  ADD COLUMN IF NOT EXISTS media_url TEXT;

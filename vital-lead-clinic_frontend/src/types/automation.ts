@@ -27,6 +27,9 @@ export interface Automation {
   template_language?: string;
   template_status?: AutomationStatus;
   components?: AutomationComponent[];
+  daily_cap?: number | null;
+  cooldown_hours?: number | null;
+  media_url?: string | null;
 }
 
 export interface AutomationTemplateOption {

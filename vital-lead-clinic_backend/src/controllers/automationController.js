@@ -289,6 +289,8 @@ const createAutomation = async (req, res) => {
             mediaUrl,
             components,
             targetStatus,
+            dailyCap: req.body.dailyCap,
+            cooldownHours: req.body.cooldownHours,
             notifyOnReply: notifyOnReply !== undefined ? notifyOnReply : true,
             personalization: personalization || ['name'],
             clinicId: req.user.clinic_id
@@ -369,7 +371,9 @@ const updateAutomation = async (req, res) => {
             templateName,
             templateLanguage,
             mediaUrl,
-            components
+            components,
+            dailyCap: req.body.dailyCap,
+            cooldownHours: req.body.cooldownHours
         });
         const templatePayload = {
             templateName: templateName || updated?.template_name,
@@ -553,6 +557,30 @@ const getPerformanceStats = async (req, res) => {
     }
 };
 
+// @desc    Get delivery status stats for automation messages
+// @route   GET /api/automations/stats/delivery
+const getDeliveryStats = async (req, res) => {
+    try {
+        const result = await query(
+            `SELECT 
+                COUNT(*) FILTER (WHERE delivery_status = 'queued')    AS queued,
+                COUNT(*) FILTER (WHERE delivery_status = 'sent')      AS sent,
+                COUNT(*) FILTER (WHERE delivery_status = 'delivered') AS delivered,
+                COUNT(*) FILTER (WHERE delivery_status = 'read')      AS read,
+                COUNT(*) FILTER (WHERE delivery_status = 'failed')    AS failed
+             FROM messages m
+             JOIN leads l ON l.id = m.lead_id
+             WHERE l.clinic_id = $1
+               AND m.message_origin IN ('automation','template')`,
+            [req.user.clinic_id]
+        );
+        res.json(result.rows[0] || {});
+    } catch (error) {
+        console.error('Delivery stats error:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 // @desc    Get recent automation replies
 // @route   GET /api/automations/replies/recent
 const getRecentReplies = async (req, res) => {
@@ -576,6 +604,7 @@ module.exports = {
     deleteAutomation,
     toggleAutomation,
     getPerformanceStats,
+    getDeliveryStats,
     resubmitTemplateApproval,
     approveTemplate,
     getRecentReplies

@@ -350,28 +350,22 @@ export default function LandingPage() {
   const navScrolledVisualClass =
     "bg-gradient-to-b from-[#1b0f16]/95 via-[#161a16]/92 to-[#0f1215]/95 border-b border-white/10 text-white shadow-[0_10px_35px_rgba(17,9,12,0.55)] supports-[backdrop-filter]:backdrop-blur-lg backdrop-blur-lg";
   const navActionPanelClass = cn(
-    "flex items-center gap-3 rounded-full border px-3 py-1.5 transition-all duration-300",
-    isNavScrolled
-      ? "border-white/20 bg-white/10 text-white shadow-sm"
-      : "border-white/35 bg-white/10 text-white/90 shadow-none"
+    "flex items-center gap-3 transition-all duration-300"
   );
   const navLogoClass = cn(
     "text-3xl sm:text-4xl font-display font-extrabold tracking-[0.08em] uppercase leading-tight transition-colors duration-200 text-white"
   );
   const navLanguageClass = cn(
-    "flex h-12 w-12 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.35em] uppercase transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+    "flex h-11 w-11 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.35em] uppercase transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 shadow-[0_10px_30px_-18px_rgba(17,10,14,0.4)]",
     isNavScrolled
-      ? "border-border/70 bg-white text-slate-900 shadow-none"
-      : "border-white/70 bg-white/15 text-white shadow-none"
+      ? "border-white/25 bg-white/12 text-white hover:bg-white/20"
+      : "border-white/30 bg-white/15 text-white hover:bg-white/22"
   );
   const navLoginLinkClass = cn(
-    "hidden sm:inline-flex text-sm font-semibold transition-colors duration-200 text-white/90 hover:text-white"
+    "hidden sm:inline-flex items-center justify-center h-12 px-6 rounded-full text-sm font-semibold transition-all duration-300 border border-white/45 text-white bg-white/10 hover:bg-white/18 hover:border-white/60 hover:scale-[1.01] shadow-none"
   );
   const startNowButtonClass = cn(
-    "inline-flex h-12 items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300 shadow-[0_20px_60px_rgba(0,0,0,0.25)]",
-    isNavScrolled
-      ? "bg-primary text-white hover:bg-primary/90 shadow-[0_15px_40px_rgba(242,106,138,0.35)]"
-      : "border border-white/40 bg-transparent text-white shadow-none hover:bg-white/10"
+    "inline-flex h-12 items-center justify-center rounded-full px-7 py-2.5 text-sm font-semibold transition-all duration-300 shadow-[0_22px_55px_-18px_rgba(17,10,14,0.55)] bg-gradient-to-r from-primary via-[#f38fb0] to-[#70d7b4] text-white hover:scale-[1.02]"
   );
 
   const heroSectionClass = "relative overflow-hidden flex items-center py-16 sm:py-20 md:py-24";

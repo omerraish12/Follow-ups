@@ -71,6 +71,17 @@ export const automationService = {
         return response.data;
     },
 
+    getDeliveryStats: async (): Promise<{
+        queued: number;
+        sent: number;
+        delivered: number;
+        read: number;
+        failed: number;
+    }> => {
+        const response = await api.get('/automations/stats/delivery');
+        return response.data;
+    },
+
     // Seed default automation rules
     seedDefaultAutomations: async (): Promise<SeedDefaultAutomationsResponse> => {
         const response = await api.post('/automations/defaults');
