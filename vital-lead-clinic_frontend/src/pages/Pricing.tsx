@@ -144,8 +144,8 @@ export default function Pricing() {
             <Card
               key={idx}
               className={cn(
-                "rounded-2xl border-border shadow-card h-full flex flex-col",
-                !loading && plan.highlight && "border-primary/50 shadow-[0_20px_80px_-50px_rgba(0,0,0,0.45)]"
+                "rounded-2xl border-border shadow-none !shadow-none h-full flex flex-col",
+                !loading && plan.highlight && "border-primary/40"
               )}
             >
               {loading ? (

@@ -16,7 +16,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
-import LogoMark from "@/assets/logo.png";
+import LogoMark from "@/assets/followup-logo-light.svg";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "next-themes";
 import { Card, CardContent } from "@/components/ui/card";
@@ -93,14 +93,16 @@ export default function LandingPage() {
   const [headerHeight, setHeaderHeight] = useState(76);
   const sectionRefs = useRef({});
   const navRef = useRef<HTMLElement | null>(null);
+  const timersRef = useRef<number[]>([]);
+  const stepIntervalRef = useRef<number | null>(null);
   const chatPreviewMessages = useMemo(
     () => [
-      { time: "2m", name: "Yossi Cohen", text: t("landing_hero_chat_msg1"), avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#111827", color: "#ffffff" },
-      { time: "5m", name: "Michal Levi", text: t("landing_hero_chat_msg2"), avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80", icon: MessageCircle, bg: "#25D366", color: "#ffffff" },
-      { time: "8m", name: "Danny Abraham", text: t("landing_hero_chat_msg3"), avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80&sat=-30", icon: Mail, bg: "#EA4335", color: "#ffffff" },
-      { time: "12m", name: "Noa Shimon", text: t("landing_hero_chat_msg4"), avatar: "https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=80&q=80&sat=-20", icon: Instagram, bg: "#F56040", color: "#ffffff" },
-      { time: "15m", name: "Alon Peretz", text: t("landing_hero_chat_msg5"), avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=80&q=80", icon: Linkedin, bg: "#0A66C2", color: "#ffffff" },
-      { time: "18m", name: "Eden Tal", text: t("landing_hero_chat_msg6"), avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=80&q=80", icon: Slack, bg: "#4A154B", color: "#ffffff" },
+      { time: "2m", name: "Lior Day Spa", text: t("landing_hero_chat_msg1"), avatar: "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#f26a8a", color: "#ffffff" },
+      { time: "5m", name: "Maya Brows", text: t("landing_hero_chat_msg2"), avatar: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=80&q=80", icon: MessageCircle, bg: "#70d7b4", color: "#0f1417" },
+      { time: "8m", name: "Dr. Eden", text: t("landing_hero_chat_msg3"), avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&q=80", icon: Mail, bg: "#0f1518", color: "#fefefe" },
+      { time: "12m", name: "Glow Hair Studio", text: t("landing_hero_chat_msg4"), avatar: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=80&q=80", icon: Instagram, bg: "#f6b76c", color: "#1c0f15" },
+      { time: "15m", name: "Orly Aesthetics", text: t("landing_hero_chat_msg5"), avatar: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=80&q=80", icon: Linkedin, bg: "#1b1f1d", color: "#ffffff" },
+      { time: "18m", name: "Shira Studio", text: t("landing_hero_chat_msg6"), avatar: "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=80&q=80", icon: Slack, bg: "#f2d6ca", color: "#1b0f16" },
     ],
     [t, language]
   );
@@ -231,44 +233,76 @@ export default function LandingPage() {
     };
   }, [isNavScrolled, language]);
 
+  // When language changes and chats were already played, rehydrate messages with current locale
+  useEffect(() => {
+    if (chatMessages.old.length || chatMessages.new.length) {
+      clearChatTimers();
+      setChatMessages({
+        old: oldClientMessages,
+        new: newClientMessages
+      });
+      setActiveChat('both');
+      setIsPlaying(false);
+      setCurrentStep(0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  const clearChatTimers = () => {
+    timersRef.current.forEach((id) => window.clearTimeout(id));
+    timersRef.current = [];
+    if (stepIntervalRef.current) {
+      window.clearInterval(stepIntervalRef.current);
+      stepIntervalRef.current = null;
+    }
+  };
+
   const startChatAnimation = () => {
+    clearChatTimers();
     setChatMessages({ old: [], new: [] });
     setActiveChat('both');
     setIsPlaying(true);
 
     // Reset messages
     oldClientMessages.forEach((msg) => {
-      setTimeout(() => {
+      const id = window.setTimeout(() => {
         setChatMessages(prev => ({
           ...prev,
           old: [...prev.old, msg]
         }));
       }, msg.delay);
+      timersRef.current.push(id);
     });
 
     newClientMessages.forEach((msg) => {
-      setTimeout(() => {
+      const id = window.setTimeout(() => {
         setChatMessages(prev => ({
           ...prev,
           new: [...prev.new, msg]
         }));
       }, msg.delay);
+      timersRef.current.push(id);
     });
 
     // Start step animation
     let step = 0;
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       if (step < demoScenarios[0].steps.length - 1) {
         step++;
         setCurrentStep(step);
       } else {
-        clearInterval(interval);
+        if (stepIntervalRef.current) {
+          window.clearInterval(stepIntervalRef.current);
+          stepIntervalRef.current = null;
+        }
         setIsPlaying(false);
       }
     }, 2000);
+    stepIntervalRef.current = interval;
   };
 
   const resetAnimation = () => {
+    clearChatTimers();
     setChatMessages({ old: [], new: [] });
     setActiveChat(null);
     setCurrentStep(0);
@@ -284,11 +318,11 @@ export default function LandingPage() {
   const MessageStatus = ({ status }) => {
     switch (status) {
       case 'sent':
-        return <span className="text-[10px] text-gray-400 mr-1">✓</span>;
+        return <span className="text-[10px] text-muted-foreground mr-1">✓</span>;
       case 'delivered':
-        return <span className="text-[10px] text-gray-400 mr-1">✓✓</span>;
+        return <span className="text-[10px] text-muted-foreground mr-1">✓✓</span>;
       case 'read':
-        return <span className="text-[10px] text-blue-400 mr-1">✓✓</span>;
+        return <span className="text-[10px] text-primary mr-1">✓✓</span>;
       default:
         return null;
     }
@@ -307,22 +341,22 @@ export default function LandingPage() {
   const navLinkClass = cn(
     "text-sm font-semibold tracking-tight transition-all duration-300 hover:-translate-y-[1px] relative group",
     isNavScrolled
-      ? "text-white shadow-[0_1px_2px_rgba(0,0,0,0.4)] hover:text-blue-300"
-      : "text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.28)]"
+      ? "text-white shadow-[0_1px_2px_rgba(0,0,0,0.4)] hover:text-[#ffd7c2]"
+      : "text-white drop-shadow-[0_2px_8px_rgba(14,10,14,0.35)]"
   );
 
   const navBaseClass = "sticky top-0 z-50 transition-all duration-300";
   const navDefaultClass = "bg-transparent text-white border-none shadow-none";
   const navScrolledVisualClass =
-    "bg-gradient-to-b from-[#02061b]/95 via-[#030822]/90 to-[#050b2a]/95 border-b border-white/10 text-white shadow-[0_10px_35px_rgba(2,6,15,0.55)] supports-[backdrop-filter]:backdrop-blur-md backdrop-blur-md";
+    "bg-gradient-to-b from-[#1b0f16]/95 via-[#161a16]/92 to-[#0f1215]/95 border-b border-white/10 text-white shadow-[0_10px_35px_rgba(17,9,12,0.55)] supports-[backdrop-filter]:backdrop-blur-lg backdrop-blur-lg";
   const navActionPanelClass = cn(
     "flex items-center gap-3 rounded-full border px-3 py-1.5 transition-all duration-300",
     isNavScrolled
-      ? "border-border/60 bg-white/80 text-white shadow-sm"
-      : "border-white/40 bg-transparent text-white/90 shadow-none"
+      ? "border-white/20 bg-white/10 text-white shadow-sm"
+      : "border-white/35 bg-white/10 text-white/90 shadow-none"
   );
   const navLogoClass = cn(
-    "text-3xl sm:text-4xl font-display font-extrabold tracking-[0.05em] uppercase leading-tight transition-colors duration-200 text-white"
+    "text-3xl sm:text-4xl font-display font-extrabold tracking-[0.08em] uppercase leading-tight transition-colors duration-200 text-white"
   );
   const navLanguageClass = cn(
     "flex h-12 w-12 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.35em] uppercase transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
@@ -336,7 +370,7 @@ export default function LandingPage() {
   const startNowButtonClass = cn(
     "inline-flex h-12 items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300 shadow-[0_20px_60px_rgba(0,0,0,0.25)]",
     isNavScrolled
-      ? "bg-primary text-white hover:bg-primary/90 shadow-[0_15px_40px_rgba(34,113,255,0.4)]"
+      ? "bg-primary text-white hover:bg-primary/90 shadow-[0_15px_40px_rgba(242,106,138,0.35)]"
       : "border border-white/40 bg-transparent text-white shadow-none hover:bg-white/10"
   );
 
@@ -379,9 +413,12 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav ref={navRef} className={cn(navBaseClass, isNavScrolled ? navScrolledVisualClass : navDefaultClass)}>
         <div className="mx-auto flex max-w-[96rem] items-center justify-between px-4 py-2 sm:py-3">
-          <div className="relative flex flex-col">
+          <div className="relative flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl border border-white/20 bg-white/10 p-1.5 shadow-[0_12px_30px_-18px_rgba(0,0,0,0.45)] backdrop-blur">
+              <img src={LogoMark} alt="Clinic Growth Hub symbol" className="h-full w-full" />
+            </div>
             <span className={navLogoClass}>
-              Follow-ups
+              {t("app_title")}
             </span>
           </div>
 
@@ -497,21 +534,21 @@ export default function LandingPage() {
       <section
         className={heroSectionClass}
         style={{
-          background: "linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(215 92% 62%) 55%, hsl(207 95% 60%) 100%)",
+          background: "radial-gradient(circle at 12% 20%, rgba(244,147,183,0.32), transparent 40%), radial-gradient(circle at 82% 16%, rgba(122,214,183,0.26), transparent 38%), linear-gradient(160deg, #150d13 0%, #0f1215 55%, #0f1417 100%)",
           minHeight: "100svh",
           marginTop: `-${headerHeight}px`,
           paddingTop: `${headerHeight}px`
         }}
         ref={el => sectionRefs.current['hero'] = el}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,hsl(var(--primary)_/_0.18),hsl(var(--primary)_/_0.1),transparent)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,hsl(var(--primary)_/_0.18),transparent_38%),radial-gradient(circle_at_80%_15%,hsl(var(--primary)_/_0.12),transparent_32%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(21,10,20,0.35),rgba(19,15,19,0.2),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_24%,rgba(242,106,138,0.24),transparent_42%),radial-gradient(circle_at_84%_18%,rgba(111,207,178,0.2),transparent_36%)]" />
 
         <div className={`relative mx-auto max-w-[96rem] px-4 sm:px-6 lg:px-14 ${fadeInUpClass('hero')}`}>
           <div className="grid lg:grid-cols-[0.95fr_1.05fr] items-center gap-12 lg:gap-20">
             {/* Chat preview mock (desktop only) */}
             <div className="hidden lg:flex">
-              <div className="relative mx-auto w-full max-w-[38rem] rounded-[32px] bg-white/95 shadow-[0_40px_120px_-40px_rgba(6,11,45,0.55)] border border-white/70 backdrop-blur">
+              <div className="relative mx-auto w-full max-w-[38rem] rounded-[32px] bg-white/95 shadow-[0_40px_120px_-40px_rgba(20,12,18,0.55)] border border-white/70 backdrop-blur">
                 <div className="flex items-center gap-2 px-6 py-4">
                   {["#ff5f57", "#febc2e", "#28c840"].map((c, i) => (
                     <span
@@ -522,8 +559,8 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <div className="px-6 pb-8">
-                  <div className="flex items-center gap-3 rounded-full border border-gray-200/80 bg-white/70 px-5 py-3 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.35)]">
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#8b8bff] via-[#7be1ff] to-[#5dc3ff] shadow-inner" />
+                  <div className="flex items-center gap-3 rounded-full border border-gray-200/80 bg-white/70 px-5 py-3 shadow-[0_18px_50px_-24px_rgba(21,12,16,0.28)]">
+                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#f26a8a] via-[#f6b76c] to-[#70d7b4] shadow-inner" />
                     <p className="text-sm text-gray-500">Start typing to ask or search</p>
                   </div>
 
@@ -585,7 +622,7 @@ export default function LandingPage() {
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 w-full">
                 <Link
                   to="/signup"
-                  className="group relative w-full sm:w-auto rounded-full bg-white text-primary px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-bold shadow-[0_20px_60px_-12px_rgba(0,0,0,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_22px_70px_-10px_rgba(0,0,0,0.4)] overflow-hidden"
+                  className="group relative w-full sm:w-auto rounded-full bg-gradient-to-r from-[#f26a8a] via-[#f6b76c] to-[#70d7b4] text-white px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-bold shadow-[0_20px_60px_-12px_rgba(21,12,16,0.4)] transition-all duration-300 hover:scale-105 hover:shadow-[0_22px_70px_-10px_rgba(21,12,16,0.45)] overflow-hidden"
                 >
                   <span className="relative z-10 flex items-center justify-center gap-2">
                     {t("landing_hero_cta_primary")}
@@ -595,7 +632,7 @@ export default function LandingPage() {
 
                 <a
                   href="#demo"
-                  className="group flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-white/30 bg-white/20 backdrop-blur px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white shadow-[0_12px_40px_-12px_rgba(0,0,0,0.4)] transition-all duration-300 hover:scale-105 hover:bg-white/30 hover:shadow-[0_16px_50px_-10px_rgba(0,0,0,0.45)]"
+                  className="group flex w-full sm:w-auto items-center justify-center gap-2 rounded-full border border-white/30 bg-white/12 backdrop-blur px-6 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg font-semibold text-white shadow-[0_12px_40px_-12px_rgba(17,10,14,0.4)] transition-all duration-300 hover:scale-105 hover:bg-white/18 hover:shadow-[0_16px_50px_-10px_rgba(17,10,14,0.45)]"
                 >
                   <Play className="h-5 w-5 text-white group-hover:scale-110 transition-transform" />
                   <span>{t("landing_hero_cta_secondary")}</span>
@@ -759,7 +796,7 @@ export default function LandingPage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 {/* Old Client Chat */}
                 <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-1">
-                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
+                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]" dir={language === 'he' ? 'rtl' : 'ltr'}>
                     {/* Top bar */}
                     <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
@@ -796,6 +833,7 @@ export default function LandingPage() {
                                   ? 'bg-yellow-100 text-yellow-800 text-xs text-center w-full'
                                   : 'bg-white text-[#111827]'
                             )}
+                            dir={language === 'he' ? 'rtl' : 'ltr'}
                           >
                             {msg.text}
                             {msg.type !== 'system' && (
@@ -831,7 +869,7 @@ export default function LandingPage() {
 
                 {/* New Client Chat */}
                 <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-1">
-                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]">
+                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]" dir={language === 'he' ? 'rtl' : 'ltr'}>
                     <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
                         <Rocket className="h-4 w-4" />
@@ -863,9 +901,10 @@ export default function LandingPage() {
                               msg.type === 'sent'
                                 ? 'bg-[#d9fdd3] text-[#111827]'
                                 : msg.type === 'system'
-                                  ? 'bg-blue-100 text-blue-800 text-xs text-center w-full'
+                                  ? 'bg-amber-50 text-amber-900 text-xs text-center w-full'
                                   : 'bg-white text-[#111827]'
                             )}
+                            dir={language === 'he' ? 'rtl' : 'ltr'}
                           >
                             {msg.text}
                             {msg.type !== 'system' && (
@@ -1020,7 +1059,7 @@ export default function LandingPage() {
                 button: t("landing_pricing_starter_cta"),
                 variant: "outline",
                 highlight: false,
-                style: "border-2 shadow-card-hover",
+                style: "border-2",
               },
               {
                 id: "growth",
@@ -1038,7 +1077,7 @@ export default function LandingPage() {
                 button: t("landing_pricing_growth_cta"),
                 variant: "primary",
                 highlight: true,
-                style: "border-2 border-primary shadow-card-hover",
+                style: "border-2 border-primary",
               },
               {
                 id: "scale",
@@ -1055,10 +1094,10 @@ export default function LandingPage() {
                 button: t("landing_pricing_scale_cta"),
                 variant: "outline",
                 highlight: false,
-                style: "border-2 shadow-card-hover",
+                style: "border-2",
               },
             ].map((plan) => (
-              <Card key={plan.id} className={cn("h-full relative rounded-3xl transition-all duration-300", plan.style)}>
+              <Card key={plan.id} className={cn("h-full relative rounded-3xl transition-all duration-300 shadow-none !shadow-none", plan.style)}>
                 <CardContent className="p-7 h-full flex flex-col gap-6">
                   {plan.highlight && (
                     <div className="absolute right-6 top-6 rounded-full bg-primary text-primary-foreground px-4 py-1 text-xs font-semibold shadow-sm">
@@ -1093,13 +1132,13 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div className="mt-12 space-y-4 rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card/60 to-primary/10 p-8 text-center shadow-xl shadow-primary/20">
+          <div className="mt-12 space-y-4 rounded-3xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card/60 to-primary/10 p-8 text-center shadow-none !shadow-none">
             <p className="mx-auto max-w-2xl text-sm text-muted-foreground sm:text-base">
               {t("landing_pricing_contact_cta")}
             </p>
             <Link
               to="/contact"
-              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-primary to-primary/90 px-10 py-3 text-base font-semibold text-primary-foreground shadow-lg shadow-primary/40 transition hover:shadow-primary/60"
+              className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-primary to-primary/90 px-10 py-3 text-base font-semibold text-primary-foreground shadow-none hover:shadow-none transition"
             >
               {t("contact_us")}
             </Link>
@@ -1178,24 +1217,24 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative overflow-hidden bg-gradient-to-br from-[#03092d] via-[#05143c] to-[#050b24] text-white">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(140%_140%_at_top_left,_rgba(99,102,241,0.25),_transparent_50%),radial-gradient(160%_160%_at_bottom_right,_rgba(59,130,246,0.2),_transparent_60%)]" />
+      <footer className="relative overflow-hidden bg-gradient-to-br from-[#150d13] via-[#0f1215] to-[#0f1417] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(140%_140%_at_top_left,rgba(242,106,138,0.26),transparent_52%),radial-gradient(160%_160%_at_bottom_right,rgba(112,215,180,0.22),transparent_62%)]" />
         <div className="relative mx-auto max-w-[96rem] px-4 py-12">
           <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr_0.7fr]">
-            <div className="space-y-4 rounded-[32px] border border-white/10 bg-white/5 p-6 sm:p-8 shadow-[0_25px_60px_rgba(1,5,25,0.7)] backdrop-blur">
+            <div className="space-y-4 rounded-[32px] border border-white/12 bg-white/8 p-6 sm:p-8 shadow-[0_25px_60px_rgba(17,10,14,0.6)] backdrop-blur">
               <p className="text-[11px] uppercase tracking-[0.35em] text-white/60">{t("landing_footer_ready_tag")}</p>
               <h3 className="text-3xl font-display font-extrabold leading-tight text-white">{t("landing_footer_title")}</h3>
               <p className="text-sm text-white/80">{t("landing_footer_subtitle")}</p>
               <div className="flex flex-wrap gap-3">
                 <Link
                   to="/contact"
-                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 transition hover:opacity-90"
+                  className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#f26a8a] via-[#f6b76c] to-[#70d7b4] px-5 py-2 text-sm font-semibold text-white shadow-[0_16px_40px_-14px_rgba(17,10,14,0.55)] transition hover:scale-[1.02]"
                 >
                   {t("landing_footer_cta_contact")}
                 </Link>
                 <Link
                   to="/demo"
-                  className="inline-flex items-center justify-center rounded-full border border-white/40 bg-transparent px-5 py-2 text-sm font-semibold text-white/90 transition hover:border-white"
+                  className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-5 py-2 text-sm font-semibold text-white/90 transition hover:border-white hover:bg-white/14"
                 >
                   {t("landing_footer_cta_demo")}
                 </Link>
@@ -1221,7 +1260,7 @@ export default function LandingPage() {
             </div>
 
             <div className="grid gap-4">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="rounded-2xl border border-white/12 bg-white/8 p-4 sm:p-5">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">{t("landing_footer_product_title")}</p>
                 <ul className="mt-3 space-y-2 text-sm text-white/80">
                   <li><a href="#features" className="transition hover:text-white">{t("landing_footer_product_features")}</a></li>
@@ -1229,7 +1268,7 @@ export default function LandingPage() {
                   <li><a href="#demo" className="transition hover:text-white">{t("landing_footer_product_demo")}</a></li>
                 </ul>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="rounded-2xl border border-white/12 bg-white/8 p-4 sm:p-5">
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">{t("landing_footer_company_title")}</p>
                 <ul className="mt-3 space-y-2 text-sm text-white/80">
                   <li><a href="#about" className="transition hover:text-white">{t("landing_footer_company_about")}</a></li>
@@ -1239,7 +1278,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5 text-sm text-white/80 space-y-4">
+            <div className="rounded-2xl border border-white/12 bg-white/8 p-4 sm:p-5 text-sm text-white/80 space-y-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-white/60">{t("landing_footer_contact_title")}</p>
                 <p className="text-sm text-white/70">{t("landing_footer_contact_description")}</p>

@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Manrope", "ui-sans-serif", "system-ui", "sans-serif"],
-        display: ["Sora", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["Plus Jakarta Sans", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Bricolage Grotesque", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",

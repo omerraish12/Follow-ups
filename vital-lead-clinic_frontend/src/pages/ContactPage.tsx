@@ -98,8 +98,8 @@ export default function ContactPage() {
       dir={isRtl ? "rtl" : "ltr"}
       className="min-h-screen bg-gradient-to-b from-[#0a174e] via-[#0f2f9c] to-[#0f5bd5] text-white"
     >
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:py-20">
-        <div className="text-center pb-12 space-y-4">
+      <div className="mx-auto max-w-6xl px-4 py-10 sm:py-18">
+        <div className="text-center pb-10 space-y-4">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.35em] text-white/80 shadow-[0_10px_30px_rgba(0,0,0,0.15)]">
             <span>{t("contact_banner_tag")}</span>
             <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_0_6px_rgba(16,185,129,0.25)]" />
@@ -109,11 +109,11 @@ export default function ContactPage() {
           <p className="max-w-3xl mx-auto text-base text-white/80">{t("contact_subtitle")}</p>
         </div>
 
-        <div className="bg-gradient-to-b from-[#fbfdff] to-[#f3f6ff] text-foreground rounded-[32px] shadow-[0_25px_70px_-30px_rgba(6,20,61,0.45)] p-6 md:p-10 grid gap-10 md:grid-cols-[1.5fr,0.9fr] relative overflow-hidden">
+        <div className="bg-gradient-to-br from-[#f7f9ff] via-[#f1f5ff] to-[#eef2ff] text-foreground rounded-[32px] shadow-[0_25px_70px_-30px_rgba(6,20,61,0.45)] p-5 sm:p-8 md:p-10 grid gap-6 sm:gap-8 md:gap-10 md:grid-cols-[1.5fr,0.9fr] relative overflow-hidden">
           <div className="hidden md:block absolute inset-y-10 left-[62%] w-px bg-[#dfe7ff]" aria-hidden />
 
           <form className="space-y-6 relative z-10" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
               {[
                 { label: t("contact_form_phone_placeholder"), Icon: Phone, value: form.phone, field: "phone" },
                 { label: t("contact_form_email_placeholder"), Icon: Mail, value: form.email, field: "email" },
@@ -145,7 +145,7 @@ export default function ContactPage() {
                 onChange={handleChange("message")}
                 className="border border-transparent bg-transparent px-4 pb-4 pt-2 h-40 focus-visible:ring-0 focus-visible:border-transparent text-sm text-slate-900 placeholder:text-slate-500 rounded-2xl"
               />
-              <p className="px-4 pb-3 text-xs text-slate-600">Typical reply in 2–4 hours on weekdays.</p>
+              <p className="px-4 pb-3 text-xs text-slate-600">{t("contact_reply_hint")}</p>
             </label>
 
             <div className={cn("flex flex-col gap-3", isRtl && "text-right")}>
@@ -159,9 +159,9 @@ export default function ContactPage() {
                     className="h-5 w-5 rounded-md border border-slate-300 text-primary focus-visible:ring-2 focus-visible:ring-primary/40"
                   />
                   <span>
-                    {t("contact_form_agreement")} <a href="#" className="font-semibold text-primary">{t("privacy_policy")}</a>
+                    {t("contact_form_agreement")} <a href="/privacy" className="font-semibold text-primary">{t("privacy_policy")}</a>
                     <span className="px-1">{t("contact_form_and")}</span>
-                    <a href="#" className="font-semibold text-primary">{t("terms_of_use")}</a>
+                    <a href="/terms" className="font-semibold text-primary">{t("terms_of_use")}</a>
                     .
                   </span>
                 </label>
@@ -175,7 +175,7 @@ export default function ContactPage() {
                 className="text-sm font-semibold text-primary underline-offset-4 hover:underline inline-flex items-center gap-2 justify-center"
               >
                 <Calendar className="h-4 w-4" />
-                Schedule a call instead
+                {t("contact_schedule_call")}
               </button>
             </div>
           </form>

@@ -43,7 +43,7 @@ Express/Node API for the clinic platform (auth, leads, automations, notification
 - `/api/whatsapp` – WhatsApp connection, message dispatch, webhooks
 
 ## WhatsApp checklist
-Each clinic connects its WhatsApp Web bridge session from the **WhatsApp integration** page. Per-clinic settings live in `integration_settings.whatsapp`; no Twilio credentials are required.
+Each clinic connects its WhatsApp Web bridge session from the **WhatsApp integration** page. Per-clinic settings live in `integration_settings.whatsapp`; no external messaging provider credentials are required.
 
 ### Connect the bridge number
 1. Set the clinic’s display number in `PUT /api/settings/clinic` (`whatsappNumber` field).

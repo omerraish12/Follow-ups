@@ -78,6 +78,14 @@ export default function LeadDetail({
   const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
   const [hasLoadedFullLead, setHasLoadedFullLead] = useState<boolean>(Boolean(propLead?.messages && propLead.messages.length > 0));
 
+  const formatTemplateLabel = (name?: string | null, fallbackLabel?: string | null) => {
+    if (!name) return fallbackLabel || "";
+    const translated = t(name as any);
+    if (translated && translated !== name) return translated;
+    const pretty = name.replace(/_/g, " ");
+    return pretty.charAt(0).toUpperCase() + pretty.slice(1);
+  };
+
   const mergeMessages = useCallback((current: LeadMessage[], incoming: LeadMessage[]) => {
     const messageMap = new Map<string, LeadMessage>();
 
@@ -178,7 +186,9 @@ export default function LeadDetail({
       return fileName;
     }
     const templateName = message.metadata?.templateName;
-    return typeof templateName === 'string' && templateName.trim() ? templateName : null;
+    return typeof templateName === 'string' && templateName.trim()
+      ? formatTemplateLabel(templateName)
+      : null;
   };
 
   const loadLead = useCallback(async (
@@ -207,8 +217,8 @@ export default function LeadDetail({
     } catch (error) {
       console.error('Error loading lead:', error);
       toast({
-        title: "Error",
-        description: "Unable to load lead details.",
+        title: t("error"),
+        description: t("lead_load_error"),
         variant: "destructive",
       });
       navigate('/leads');
@@ -489,7 +499,7 @@ export default function LeadDetail({
       }
       toast({
         title: t("error"),
-        description: error?.response?.data?.message || t("free_text_window_closed_hint"),
+        description: error?.response?.data?.message || t("send_message_error"),
         variant: "destructive"
       });
     }
@@ -1161,9 +1171,9 @@ export default function LeadDetail({
                     <SelectContent>
                       {approvedTemplates.map((template) => (
                         <SelectItem key={template.automationId} value={template.automationId}>
-                          {template.templateName}
+                          {formatTemplateLabel(template.templateName, template.automationName)}
                           {template.templateLanguage ? ` (${template.templateLanguage.toUpperCase()})` : ''}
-                          {template.automationName ? ` — ${template.automationName}` : ''}
+                          {template.automationName ? ` — ${formatTemplateLabel(template.automationName)}` : ''}
                         </SelectItem>
                       ))}
                     </SelectContent>

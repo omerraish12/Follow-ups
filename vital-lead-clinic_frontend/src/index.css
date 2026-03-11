@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Sora:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Bricolage+Grotesque:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,94 +6,94 @@
 
 @layer base {
   :root {
-    --background: 30 36% 96%;
-    --foreground: 218 24% 14%;
+    --background: 24 46% 97%;
+    --foreground: 332 22% 16%;
 
     --card: 0 0% 100%;
-    --card-foreground: 218 24% 14%;
+    --card-foreground: 332 22% 16%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 218 24% 14%;
+    --popover-foreground: 332 22% 16%;
 
-    --primary: 238 90% 59%;
+    --primary: 343 72% 56%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 32 20% 92%;
-    --secondary-foreground: 218 24% 14%;
+    --secondary: 157 32% 88%;
+    --secondary-foreground: 157 24% 18%;
 
-    --muted: 30 15% 90%;
-    --muted-foreground: 220 9% 45%;
+    --muted: 24 28% 92%;
+    --muted-foreground: 330 16% 38%;
 
-    --accent: 28 90% 54%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 36 92% 62%;
+    --accent-foreground: 24 20% 14%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 68% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 10% 86%;
-    --input: 30 10% 86%;
-    --ring: 238 90% 59%;
+    --border: 24 20% 87%;
+    --input: 24 20% 87%;
+    --ring: 343 72% 56%;
 
-    --radius: 0.75rem;
+    --radius: 0.85rem;
 
     /* Custom tokens */
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(232 95% 68%));
-    --gradient-hero: linear-gradient(135deg, hsl(30 60% 97%), hsl(233 70% 95%), hsl(210 40% 96%));
-    --gradient-success: linear-gradient(135deg, hsl(152 50% 40%), hsl(165 45% 38%));
-    --gradient-warning: linear-gradient(135deg, hsl(28 90% 54%), hsl(18 85% 52%));
+    --gradient-primary: linear-gradient(120deg, hsl(343 72% 58%), hsl(26 90% 64%), hsl(157 40% 44%));
+    --gradient-hero: linear-gradient(160deg, hsl(333 26% 12%), hsl(157 22% 12%));
+    --gradient-success: linear-gradient(135deg, hsl(156 40% 42%), hsl(156 38% 36%));
+    --gradient-warning: linear-gradient(135deg, hsl(36 92% 60%), hsl(24 88% 56%));
 
-    --success: 152 50% 38%;
+    --success: 156 38% 40%;
     --success-foreground: 0 0% 100%;
-    --warning: 28 90% 54%;
-    --warning-foreground: 0 0% 100%;
-    --info: 200 75% 44%;
+    --warning: 36 92% 60%;
+    --warning-foreground: 24 24% 16%;
+    --info: 200 75% 46%;
     --info-foreground: 0 0% 100%;
 
-    --whatsapp: 142 60% 40%;
+    --whatsapp: 142 52% 38%;
     --whatsapp-foreground: 0 0% 100%;
 
-    --sidebar-background: 30 40% 98%;
-    --sidebar-foreground: 220 12% 32%;
-    --sidebar-primary: 238 90% 59%;
+    --sidebar-background: 24 40% 98%;
+    --sidebar-foreground: 332 18% 24%;
+    --sidebar-primary: 343 72% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 30 50% 94%;
-    --sidebar-accent-foreground: 236 68% 44%;
-    --sidebar-border: 30 15% 90%;
-    --sidebar-ring: 238 90% 59%;
+    --sidebar-accent: 24 28% 94%;
+    --sidebar-accent-foreground: 343 58% 38%;
+    --sidebar-border: 24 20% 88%;
+    --sidebar-ring: 343 72% 56%;
 
-    --shadow-sm: 0 1px 2px 0 hsl(218 24% 14% / 0.04);
-    --shadow-md: 0 12px 24px -18px hsl(218 24% 14% / 0.25);
-    --shadow-lg: 0 20px 60px -32px hsl(238 90% 59% / 0.35);
+    --shadow-sm: 0 1px 3px 0 hsl(332 22% 16% / 0.05);
+    --shadow-md: 0 12px 28px -14px hsl(332 22% 16% / 0.28);
+    --shadow-lg: 0 26px 70px -34px hsl(343 72% 50% / 0.36);
   }
 
   .dark {
-    --background: 210 24% 10%;
-    --foreground: 30 20% 94%;
-    --card: 210 20% 14%;
-    --card-foreground: 30 20% 94%;
-    --popover: 210 20% 14%;
-    --popover-foreground: 30 20% 94%;
-    --primary: 238 90% 59%;
+    --background: 330 22% 8%;
+    --foreground: 24 36% 94%;
+    --card: 330 22% 12%;
+    --card-foreground: 24 36% 94%;
+    --popover: 330 22% 12%;
+    --popover-foreground: 24 36% 94%;
+    --primary: 343 72% 64%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 16% 20%;
-    --secondary-foreground: 30 20% 94%;
-    --muted: 210 16% 18%;
-    --muted-foreground: 220 10% 65%;
-    --accent: 28 85% 55%;
-    --accent-foreground: 0 0% 100%;
+    --secondary: 156 22% 20%;
+    --secondary-foreground: 24 36% 92%;
+    --muted: 330 20% 14%;
+    --muted-foreground: 24 18% 70%;
+    --accent: 36 92% 60%;
+    --accent-foreground: 24 24% 12%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 30 20% 94%;
-    --border: 210 16% 22%;
-    --input: 210 16% 22%;
-    --ring: 238 90% 59%;
-    --sidebar-background: 210 20% 12%;
-    --sidebar-foreground: 210 12% 75%;
-    --sidebar-primary: 238 90% 59%;
+    --destructive-foreground: 24 36% 94%;
+    --border: 330 18% 20%;
+    --input: 330 18% 20%;
+    --ring: 343 72% 64%;
+    --sidebar-background: 330 22% 10%;
+    --sidebar-foreground: 24 36% 88%;
+    --sidebar-primary: 343 72% 64%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 18% 18%;
-    --sidebar-accent-foreground: 30 20% 90%;
-    --sidebar-border: 210 16% 18%;
-    --sidebar-ring: 238 90% 59%;
+    --sidebar-accent: 330 18% 14%;
+    --sidebar-accent-foreground: 36 92% 72%;
+    --sidebar-border: 330 18% 18%;
+    --sidebar-ring: 343 72% 64%;
   }
 }
 
@@ -104,22 +104,24 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     background-image:
-      radial-gradient(1200px 420px at 8% -10%, hsl(236 92% 89% / 0.35), transparent 60%),
-      radial-gradient(1000px 360px at 92% -15%, hsl(28 90% 88% / 0.35), transparent 55%);
+      radial-gradient(1200px 420px at 8% -10%, hsl(343 78% 90% / 0.36), transparent 60%),
+      radial-gradient(1000px 360px at 88% -12%, hsl(157 42% 88% / 0.32), transparent 52%),
+      radial-gradient(1400px 620px at 40% 120%, hsl(36 90% 90% / 0.24), transparent 55%);
     background-attachment: fixed;
   }
 
   .dark body {
     background-image:
-      radial-gradient(1200px 420px at 10% -10%, hsl(236 55% 24% / 0.35), transparent 60%),
-      radial-gradient(1000px 360px at 90% -15%, hsl(210 35% 20% / 0.35), transparent 55%);
+      radial-gradient(1200px 420px at 10% -10%, hsl(332 46% 20% / 0.32), transparent 60%),
+      radial-gradient(1000px 360px at 90% -15%, hsl(26 44% 24% / 0.28), transparent 55%),
+      radial-gradient(900px 520px at 42% 120%, hsl(156 28% 20% / 0.3), transparent 58%);
   }
 
   h1, h2, h3, h4 {
-    font-family: 'Sora', sans-serif;
-    letter-spacing: -0.02em;
+    font-family: 'Bricolage Grotesque', 'Plus Jakarta Sans', system-ui, sans-serif;
+    letter-spacing: -0.015em;
   }
 }
 
@@ -156,9 +158,9 @@
     z-index: 0;
     pointer-events: none;
     background:
-      radial-gradient(900px 280px at 8% -18%, hsl(236 86% 83% / 0.22), transparent 60%),
-      radial-gradient(760px 240px at 92% 115%, hsl(28 90% 78% / 0.17), transparent 62%),
-      linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.26));
+      radial-gradient(900px 280px at 8% -18%, hsl(343 78% 89% / 0.22), transparent 60%),
+      radial-gradient(760px 240px at 92% 115%, hsl(156 42% 86% / 0.2), transparent 62%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.3));
   }
 
   .section-pro-bg::after {
@@ -204,7 +206,7 @@
     border-radius: 999px;
     background: hsl(var(--card) / 0.94);
     backdrop-filter: blur(14px);
-    box-shadow: 0 16px 40px -26px hsl(228 42% 24% / 0.45);
+    box-shadow: 0 16px 40px -26px hsl(332 32% 22% / 0.42);
     transition: transform 220ms ease, box-shadow 260ms ease, border-color 260ms ease, background-color 260ms ease;
     animation: floating-enter 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
     cursor: pointer;
@@ -235,7 +237,7 @@
   .floating-control:hover {
     transform: translateY(-4px) scale(1.03);
     border-color: hsl(var(--primary) / 0.5);
-    box-shadow: 0 24px 52px -28px hsl(var(--primary) / 0.58);
+    box-shadow: 0 24px 52px -28px hsl(var(--primary) / 0.52);
   }
 
   .floating-control:focus-visible {
@@ -364,12 +366,12 @@
   }
 
   .hero-ambient-one {
-    background: radial-gradient(circle, rgba(30,144,255,0.35), transparent 55%);
+    background: radial-gradient(circle, rgba(244, 147, 183, 0.35), transparent 55%);
     transform: translate(-10%, -20%) scale(0.95);
   }
 
   .hero-ambient-two {
-    background: radial-gradient(circle, rgba(14,165,233,0.35), transparent 65%);
+    background: radial-gradient(circle, rgba(120, 213, 182, 0.32), transparent 65%);
     transform: translate(18%, 12%) scale(0.85);
     animation-delay: 3s;
   }
@@ -416,9 +418,9 @@
 
   .dark .section-pro-bg::before {
     background:
-      radial-gradient(920px 300px at 8% -18%, hsl(236 55% 24% / 0.35), transparent 60%),
-      radial-gradient(760px 260px at 92% 115%, hsl(210 35% 22% / 0.28), transparent 62%),
-      linear-gradient(180deg, hsl(var(--background)), hsl(210 16% 14% / 0.45));
+      radial-gradient(920px 300px at 8% -18%, hsl(332 42% 18% / 0.4), transparent 60%),
+      radial-gradient(760px 260px at 92% 115%, hsl(26 38% 20% / 0.32), transparent 62%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(330 22% 12% / 0.55));
   }
 
   .dark .section-pro-bg::after {
@@ -429,9 +431,9 @@
   }
 
   .dark .floating-control {
-    border-color: hsl(226 30% 42% / 0.65);
-    background: hsl(224 26% 18% / 0.94);
-    box-shadow: 0 18px 44px -30px hsl(236 68% 10% / 0.75);
+    border-color: hsl(332 30% 42% / 0.52);
+    background: hsl(332 26% 16% / 0.9);
+    box-shadow: 0 18px 44px -30px hsl(333 48% 8% / 0.78);
   }
 
   .dark .language-orb-code {
@@ -562,9 +564,9 @@
 .mesh-layer {
   position: absolute;
   inset: -20%;
-  background: radial-gradient(circle at 22% 28%, rgba(99, 102, 241, 0.38), transparent 36%),
-              radial-gradient(circle at 78% 22%, rgba(14, 165, 233, 0.32), transparent 32%),
-              radial-gradient(circle at 62% 68%, rgba(99, 230, 203, 0.26), transparent 36%);
+  background: radial-gradient(circle at 22% 28%, rgba(244, 147, 183, 0.45), transparent 36%),
+              radial-gradient(circle at 78% 22%, rgba(255, 196, 141, 0.32), transparent 32%),
+              radial-gradient(circle at 62% 68%, rgba(122, 214, 183, 0.28), transparent 36%);
   filter: blur(52px);
   opacity: 0.9;
 }

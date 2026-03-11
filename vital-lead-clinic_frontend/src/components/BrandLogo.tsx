@@ -18,5 +18,5 @@ export default function BrandLogo({ className }: Props) {
   const mode = mounted ? (theme === "system" ? resolvedTheme : theme) : "light";
   const src = mode === "dark" ? DarkLogo : LightLogo;
 
-  return <img src={src} alt="FollowUp" className={cn("h-10 w-10", className)} />;
+  return <img src={src} alt="Clinic Growth Hub logo" className={cn("h-10 w-10", className)} />;
 }

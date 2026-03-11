@@ -533,7 +533,7 @@ export default function Automations() {
                   <SelectContent>
                     <SelectItem value="en">{t("english")}</SelectItem>
                     <SelectItem value="he">{t("hebrew")}</SelectItem>
-                    <SelectItem value="es">Español</SelectItem>
+                    <SelectItem value="es">{t("spanish")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

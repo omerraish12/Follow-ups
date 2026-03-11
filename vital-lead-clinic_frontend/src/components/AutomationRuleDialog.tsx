@@ -192,7 +192,7 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
             <SelectContent>
               <SelectItem value="en">{t("english")}</SelectItem>
               <SelectItem value="he">{t("hebrew")}</SelectItem>
-              <SelectItem value="es">EspaÃ±ol</SelectItem>
+              <SelectItem value="es">{t("spanish")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
