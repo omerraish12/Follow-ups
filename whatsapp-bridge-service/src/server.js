@@ -43,6 +43,7 @@ app.get('/health', (_req, res) => {
 
 app.post('/sessions/:clinicId/connect', async (req, res) => {
   try {
+    console.log("trying to connect to: ", req.params.clinicId);
     const response = await connectSession(req.params.clinicId);
     console.log("One session is connecting: ", req.params.clinicId, response);
     res.json(response);
@@ -54,7 +55,6 @@ app.post('/sessions/:clinicId/connect', async (req, res) => {
 app.get('/sessions/:clinicId', async (req, res) => {
   try {
     const response = await getSessionStatus(req.params.clinicId);
-    console.log("One session is checking: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to fetch WhatsApp session' });

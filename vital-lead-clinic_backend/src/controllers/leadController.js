@@ -3,6 +3,7 @@ const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
+const IntegrationLog = require('../models/IntegrationLog');
 const {
     sendWhatsAppMessage,
     sendTemplateMessage,
@@ -12,7 +13,19 @@ const {
 const { canUseFreeText } = require('../utils/freeTextWindow');
 const { isMetaCloudProvider } = require('../utils/whatsappProvider');
 
+const DEFAULT_WELCOME_TEMPLATE = {
+    name: 'lead_welcome',
+    language: 'en',
+    body: 'Hi {name}, thanks for contacting our clinic! A team member will reach out shortly.'
+};
+
 const ALLOWED_LEAD_STATUSES = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
+
+const firstNameOrDefault = (name) => {
+    if (!name) return 'there';
+    const first = String(name).trim().split(/\s+/)[0];
+    return first || 'there';
+};
 
 const normalizeLeadStatus = (status) => {
     if (!status || typeof status !== 'string') return undefined;
@@ -253,6 +266,83 @@ const createLead = async (req, res) => {
             userId: lead.assigned_to_id || null,
             clinicId: req.user.clinic_id
         });
+
+        // Auto-send a friendly welcome message when WhatsApp is connected and consent is granted.
+        if (lead.phone && lead.consent_given) {
+            const whatsappConfigured = await isWhatsAppConfiguredForClinic(req.user.clinic_id);
+            if (whatsappConfigured) {
+                const greetingName = firstNameOrDefault(lead.name);
+                const welcomeBody = DEFAULT_WELCOME_TEMPLATE.body.replace('{name}', greetingName);
+                const templateParameters = [greetingName];
+                try {
+                    const providerResponse = await sendTemplateMessage({
+                        to: lead.phone,
+                        body: welcomeBody,
+                        templateName: DEFAULT_WELCOME_TEMPLATE.name,
+                        language: DEFAULT_WELCOME_TEMPLATE.language,
+                        templateParameters,
+                        clinicId: req.user.clinic_id
+                    });
+                    const providerMessageId = extractProviderMessageId(providerResponse);
+                    await Message.create({
+                        content: welcomeBody,
+                        type: 'SENT',
+                        isBusiness: true,
+                        leadId: lead.id,
+                        providerMessageId,
+                        deliveryStatus: 'sent',
+                        messageOrigin: 'automation',
+                        metadata: {
+                            templateName: DEFAULT_WELCOME_TEMPLATE.name,
+                            language: DEFAULT_WELCOME_TEMPLATE.language,
+                            templateParameters,
+                            automation: 'default_welcome'
+                        }
+                    });
+                    await Lead.updateLastContacted(lead.id);
+                    await Activity.create({
+                        type: 'MESSAGE_SENT',
+                        description: 'Sent automatic WhatsApp welcome message.',
+                        userId: req.user.id,
+                        leadId: lead.id
+                    });
+                } catch (error) {
+                    await Message.create({
+                        content: DEFAULT_WELCOME_TEMPLATE.body.replace('{name}', firstNameOrDefault(lead.name)),
+                        type: 'SENT',
+                        isBusiness: true,
+                        leadId: lead.id,
+                        deliveryStatus: 'failed',
+                        messageOrigin: 'automation',
+                        deliveryError: error.response?.data?.message || error.message || 'Failed to send welcome message.',
+                        metadata: {
+                            templateName: DEFAULT_WELCOME_TEMPLATE.name,
+                            language: DEFAULT_WELCOME_TEMPLATE.language,
+                            templateParameters,
+                            automation: 'default_welcome',
+                            providerError: error.response?.data || error.message
+                        }
+                    });
+                    await IntegrationLog.create({
+                        type: 'whatsapp_send',
+                        message: 'Automatic welcome message failed',
+                        metadata: {
+                            leadId: lead.id,
+                            templateName: DEFAULT_WELCOME_TEMPLATE.name,
+                            error: error.response?.data || error.message
+                        },
+                        clinicId: req.user.clinic_id
+                    });
+                }
+            } else {
+                await IntegrationLog.create({
+                    type: 'whatsapp_send',
+                    message: 'Skipped welcome message because WhatsApp is not connected',
+                    metadata: { leadId: lead.id },
+                    clinicId: req.user.clinic_id
+                });
+            }
+        }
 
         res.status(201).json(lead);
     } catch (error) {

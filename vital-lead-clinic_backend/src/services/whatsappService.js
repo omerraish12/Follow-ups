@@ -17,6 +17,18 @@ const trimValue = (value) => {
   return trimmed === '' ? null : trimmed;
 };
 
+function buildTextParameters(templateParameters = []) {
+  if (!Array.isArray(templateParameters)) {
+    return [];
+  }
+
+  return templateParameters
+    .map((param) => ({
+      text: trimValue(typeof param === 'string' ? param : String(param || ''))
+    }))
+    .filter((item) => Boolean(item.text));
+}
+
 const getClinicIntegrationSettings = async (clinicId) => {
   if (!clinicId) {
     return {};

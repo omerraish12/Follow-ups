@@ -425,6 +425,7 @@ const connectSession = async (req, res) => {
       session
     });
   } catch (error) {
+    // console.log("waba connect error: ", error);
     await WhatsAppSession.upsert(req.user.clinic_id, {
       provider: WA_WEB_PROVIDER,
       status: 'disconnected',

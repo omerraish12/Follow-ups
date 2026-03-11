@@ -6,6 +6,7 @@ const Message = require('../models/Message');
 const Activity = require('../models/Activity');
 const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
+const WhatsAppSession = require('../models/WhatsAppSession');
 const { query } = require('../config/database');
 const { sendTemplateMessage, getWhatsAppProviderForClinic } = require('../services/whatsappService');
 const { getClinicAdminId } = require('../utils/clinicHelpers');

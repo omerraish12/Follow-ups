@@ -286,9 +286,14 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
       const statusCode =
         lastDisconnect?.error?.output?.statusCode ||
         lastDisconnect?.error?.statusCode ||
+        lastDisconnect?.error?.data?.statusCode ||
         null;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
       const message = lastDisconnect?.error?.message || 'WhatsApp Web session disconnected';
+      const isDeviceRemoved =
+        statusCode === 401 ||
+        statusCode === DisconnectReason.loggedOut ||
+        /device_removed|logged\s*out|conflict/i.test(message || '');
+      const shouldReconnect = !isDeviceRemoved && statusCode !== DisconnectReason.loggedOut;
 
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
