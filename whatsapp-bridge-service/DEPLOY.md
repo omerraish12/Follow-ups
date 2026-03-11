@@ -13,10 +13,11 @@ Required (must match backend):
 
 Optional:
 - `LOG_LEVEL=info`
+- `WA_WEB_SESSIONS_DIR=./data/sessions` (path for Baileys auth files; absolute or relative to repo)
 - `WA_WEB_BRIDGE_TIMEOUT_MS=15000`
 
 ## 2) Persistence
-- Mount `./data/sessions/` to a durable volume (e.g., `/var/lib/whatsapp-bridge/sessions`).
+- Mount the sessions directory (`WA_WEB_SESSIONS_DIR`, default `./data/sessions/`) to a durable volume (e.g., `/var/lib/whatsapp-bridge/sessions`).
 - Use the same Postgres as the backend so `whatsapp_sessions` stays in sync.
 
 ## 3) Systemd example
@@ -33,6 +34,7 @@ Environment=WA_WEB_BACKEND_SHARED_SECRET=change-me
 Environment=WA_WEB_AUTH_SECRET=super-secret-32chars
 Environment=WA_BACKEND_URL=https://api.yourdomain.com
 Environment=POSTGRES_URL=postgres://user:pass@db:5432/clinic
+Environment=WA_WEB_SESSIONS_DIR=/var/lib/whatsapp-bridge/sessions
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5
@@ -50,7 +52,8 @@ pm2 start src/server.js --name whatsapp-bridge \
   --env WA_WEB_BACKEND_SHARED_SECRET=change-me \
   --env WA_WEB_AUTH_SECRET=super-secret-32chars \
   --env WA_BACKEND_URL=https://api.yourdomain.com \
-  --env POSTGRES_URL=postgres://user:pass@db:5432/clinic
+  --env POSTGRES_URL=postgres://user:pass@db:5432/clinic \
+  --env WA_WEB_SESSIONS_DIR=/var/lib/whatsapp-bridge/sessions
 pm2 save
 pm2 startup
 ```

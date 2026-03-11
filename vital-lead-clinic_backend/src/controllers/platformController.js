@@ -52,7 +52,7 @@ const getClinicsOverview = async (req, res) => {
 
 const getPlatformAnalytics = async (req, res) => {
     try {
-        const COST_PER_MESSAGE_USD = parseFloat(process.env.WHATSAPP_MESSAGE_COST_USD || process.env.TWILIO_MESSAGE_COST_USD) || 0.01;
+        const COST_PER_MESSAGE_USD = parseFloat(process.env.WHATSAPP_MESSAGE_COST_USD) || 0.01;
 
         const totalsResult = await query(
             `SELECT 

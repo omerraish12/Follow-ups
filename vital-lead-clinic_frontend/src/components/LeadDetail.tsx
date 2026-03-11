@@ -283,10 +283,10 @@ export default function LeadDetail({
       setTemplatesLoading(true);
       setTemplatesError(null);
       try {
-        const templates = await automationService.getTemplates('approved');
+        const templates = await automationService.getTemplates();
         setApprovedTemplates(templates);
       } catch (error) {
-        console.error('Failed to load approved templates:', error);
+        console.error('Failed to load templates:', error);
         setTemplatesError(t("template_fetch_error"));
       } finally {
         setTemplatesLoading(false);

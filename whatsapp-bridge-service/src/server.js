@@ -44,6 +44,7 @@ app.get('/health', (_req, res) => {
 app.post('/sessions/:clinicId/connect', async (req, res) => {
   try {
     const response = await connectSession(req.params.clinicId);
+    console.log("One session is connecting: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to connect WhatsApp session' });
@@ -53,6 +54,7 @@ app.post('/sessions/:clinicId/connect', async (req, res) => {
 app.get('/sessions/:clinicId', async (req, res) => {
   try {
     const response = await getSessionStatus(req.params.clinicId);
+    console.log("One session is checking: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to fetch WhatsApp session' });
@@ -62,6 +64,7 @@ app.get('/sessions/:clinicId', async (req, res) => {
 app.post('/sessions/:clinicId/disconnect', async (req, res) => {
   try {
     const response = await disconnectSession(req.params.clinicId);
+    console.log("One session is disconnected: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to disconnect WhatsApp session' });
@@ -71,6 +74,7 @@ app.post('/sessions/:clinicId/disconnect', async (req, res) => {
 app.post('/messages/send', async (req, res) => {
   try {
     const response = await sendMessage(req.body || {});
+    console.log("One session sent message: ", req.body, response);
     res.json(response);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Unable to send WhatsApp message' });

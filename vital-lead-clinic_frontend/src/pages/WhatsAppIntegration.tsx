@@ -228,7 +228,7 @@ export default function WhatsAppIntegration() {
               className="rounded-full bg-white/10 px-6 py-2 text-sm font-semibold text-white hover:bg-white/20"
             >
               {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {sessionStatus === "connected" ? "Reconnect WhatsApp" : t("connect")}
+               {sessionStatus === "connected" ? "Reconnect WhatsApp" : t("connect")}
             </Button>
             <Button
               variant="outline"

@@ -17,6 +17,7 @@ Set these in the bridge container/VM:
 - `WA_WEB_BRIDGE_API_KEY` — optional header required by the bridge; must match backend env below.
 - `WA_BACKEND_URL` — base URL of the backend (e.g., `https://api.yourdomain.com`).
 - `WA_WEB_BACKEND_SHARED_SECRET` — sent as `x-bridge-secret` to `/api/whatsapp/bridge/events` and must match the backend.
+- `WA_WEB_SESSIONS_DIR` — where Baileys auth files live; absolute path or relative to repo. Defaults to `./data/sessions`.
 - `POSTGRES_URL` (or `POSTGRES_*`) — same database the backend uses so `whatsapp_sessions` stays in sync.
 - Optional: `LOG_LEVEL` (default `info`), `WA_WEB_BRIDGE_TIMEOUT_MS` if your network is slow.
 
@@ -43,6 +44,7 @@ npm start      # plain node
 ```
 
 Persist `data/sessions/` on a volume if you containerize. Auto-reconnect is enabled; on start the service restores all rows that have `auth_state_encrypted`.
+You can change the path with `WA_WEB_SESSIONS_DIR`; useful if the volume is mounted elsewhere.
 
 ## Deployment checklist
 

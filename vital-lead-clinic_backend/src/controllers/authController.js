@@ -95,7 +95,6 @@ const login = async (req, res) => {
 
         // Find user
         const user = await User.findByEmail(normalizedEmail);
-        console.log('User lookup result:', user);
         const allUsers = await User.findAll();
         console.log(`All users (${allUsers.length} records)`, allUsers);
 
@@ -153,7 +152,6 @@ const login = async (req, res) => {
             user: buildUserPayload(user)
         };
 
-        console.log(`Login successful for ${email} (userId ${user.id}, entryType ${requestedEntryType})`);
         res.json(payload);
     } catch (error) {
         console.error(error);

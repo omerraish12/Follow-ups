@@ -11,7 +11,18 @@ const {
 const { query } = require('./db');
 const { encrypt, decrypt } = require('./crypto');
 
-const DATA_DIR = path.join(__dirname, '..', 'data', 'sessions');
+// Allow overriding the on-disk auth directory; default stays under repo for local dev.
+const resolveSessionsDir = () => {
+  const custom = String(process.env.WA_WEB_SESSIONS_DIR || '').trim();
+  if (!custom) {
+    return path.join(__dirname, '..', 'data', 'sessions');
+  }
+  return path.isAbsolute(custom)
+    ? custom
+    : path.join(__dirname, '..', custom);
+};
+
+const DATA_DIR = resolveSessionsDir();
 const logger = P({ level: process.env.LOG_LEVEL || 'info' });
 const activeSessions = new Map();
 

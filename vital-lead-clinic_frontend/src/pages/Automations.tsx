@@ -27,6 +27,7 @@ import { useAutomations } from "@/hooks/useAutomations";
 import { leadService } from "@/services/leadService";
 import { useIntegrationLogs } from "@/hooks/useIntegrationLogs";
 import { useAutomationReplies } from "@/hooks/useAutomationReplies";
+import { whatsappService, type WhatsAppProvider } from "@/services/whatsappService";
 import type { Automation, AutomationComponent } from "@/types/automation";
 
 const MAX_QUICK_REPLIES = 3;
@@ -74,6 +75,7 @@ export default function Automations() {
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>(["new_lead"]);
   const [templateLanguage, setTemplateLanguage] = useState("en");
   const [inactiveDays, setInactiveDays] = useState(60);
+  const [whProvider, setWhProvider] = useState<WhatsAppProvider>("wa_web");
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [quickReplies, setQuickReplies] = useState<AutomationComponent[]>([]);
   const [resubmittingTemplateId, setResubmittingTemplateId] = useState<string | null>(null);
@@ -81,6 +83,19 @@ export default function Automations() {
 
   const INACTIVE_TRIGGER_KEY = "inactive_no_visit";
   const DEFAULT_INACTIVE_DAYS = 60;
+  const isBridgeProvider = whProvider === "wa_web";
+
+  useEffect(() => {
+    const loadProvider = async () => {
+      try {
+        const config = await whatsappService.getConfig();
+        setWhProvider(config.provider);
+      } catch (error) {
+        console.error("Failed to load WhatsApp provider", error);
+      }
+    };
+    loadProvider();
+  }, []);
 
   const addQuickReply = () => {
     setQuickReplies((prev) =>
@@ -304,18 +319,20 @@ export default function Automations() {
       rule.template_name === 'three_week_followup' ||
       rule.name === '3-Week Follow-up'
   );
-  const followupStatus = (followupAutomation?.template_status || 'pending').toLowerCase();
-  const followupStatusLabelKey =
-    followupStatus === 'approved'
+  const followupStatusRaw = (followupAutomation?.template_status || 'pending').toLowerCase();
+  const isFollowupApproved = isBridgeProvider || followupStatusRaw === 'approved';
+  const followupStatusLabelKey = isBridgeProvider
+    ? 'template_status_ready_tag'
+    : followupStatusRaw === 'approved'
       ? 'template_status_approved_tag'
-      : followupStatus === 'rejected'
+      : followupStatusRaw === 'rejected'
         ? 'template_status_rejected_tag'
         : 'template_status_pending_tag';
-  const followupStatusHelpKey =
-    followupStatus === 'rejected'
+  const followupStatusHelpKey = isBridgeProvider
+    ? 'template_status_ready_help'
+    : followupStatusRaw === 'rejected'
       ? 'template_status_rejected_help'
       : 'template_status_pending_help';
-  const isFollowupApproved = followupStatus === 'approved';
   const followupQuickReplies = (followupAutomation?.components || []).filter(
     (component) => component?.type === 'quick_reply'
   );
@@ -776,16 +793,18 @@ export default function Automations() {
               </Card>
             )}
           {localizedRules.map((rule) => {
-              const templateStatus = (rule.template_status || "pending").toLowerCase();
-              const isTemplateApproved = templateStatus === "approved";
-              const statusLabelKey =
-                templateStatus === "approved"
+              const templateStatusRaw = (rule.template_status || "pending").toLowerCase();
+              const isTemplateApproved = isBridgeProvider || templateStatusRaw === "approved";
+              const statusLabelKey = isBridgeProvider
+                ? "template_status_ready_tag"
+                : templateStatusRaw === "approved"
                   ? "template_status_approved_tag"
-                  : templateStatus === "rejected"
+                  : templateStatusRaw === "rejected"
                     ? "template_status_rejected_tag"
                     : "template_status_pending_tag";
-              const statusHelpKey =
-                templateStatus === "rejected"
+              const statusHelpKey = isBridgeProvider
+                ? "template_status_ready_help"
+                : templateStatusRaw === "rejected"
                   ? "template_status_rejected_help"
                   : "template_status_pending_help";
               const quickReplyCount = Array.isArray(rule.components)
@@ -835,7 +854,7 @@ export default function Automations() {
                       <span className="uppercase font-mono tracking-[0.3em]">{rule.template_language}</span>
                     )}
                   </div>
-                  {rule.template_sid && (
+                  {rule.template_sid && !isBridgeProvider && (
                     <p className="text-[10px] text-muted-foreground mt-1">
                       {t("template_sid_label")}: <span className="font-mono">{rule.template_sid}</span>
                     </p>
@@ -878,7 +897,7 @@ export default function Automations() {
                   <div className="flex flex-col gap-3 pt-2 lg:flex-row lg:items-center lg:justify-between">
                     <div className="flex flex-wrap items-center gap-2">
                       <AutomationRuleDialog rule={rule} onSuccess={() => { fetchAutomations(); fetchStats(); }} />
-                      {!isTemplateApproved && (
+                      {!isTemplateApproved && !isBridgeProvider && (
                         <TooltipProvider delayDuration={100}>
                           <div className="flex flex-wrap gap-2">
                             {rule.template_name && (

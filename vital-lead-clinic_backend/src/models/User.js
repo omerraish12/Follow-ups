@@ -18,7 +18,6 @@ class User {
             [normalizedEmail]
         );
         const user = result.rows[0];
-        console.log(`User.findByEmail (${normalizedEmail}) returned`, user);
         return user;
     }
 
