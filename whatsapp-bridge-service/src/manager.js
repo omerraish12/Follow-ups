@@ -1,12 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const crypto = require('crypto');
 const P = require('pino');
 const {
   default: makeWASocket,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  useMultiFileAuthState
+  useMultiFileAuthState,
+  jidNormalizedUser
 } = require('@whiskeysockets/baileys');
 const { query } = require('./db');
 const { encrypt, decrypt } = require('./crypto');
@@ -23,8 +25,11 @@ const resolveSessionsDir = () => {
 };
 
 const DATA_DIR = resolveSessionsDir();
-const logger = P({ level: process.env.LOG_LEVEL || 'info' });
+const SESSION_MAP_FILE = path.join(DATA_DIR, 'session_map.json');
+// Default to warn to reduce Baileys verbose session logs (can override via LOG_LEVEL).
+const logger = P({ level: process.env.LOG_LEVEL || 'warn' });
 const activeSessions = new Map();
+let sessionDirMapCache = null;
 
 const ensureDir = async (dir) => {
   await fs.promises.mkdir(dir, { recursive: true });
@@ -34,7 +39,72 @@ const removeDir = async (dir) => {
   await fs.promises.rm(dir, { recursive: true, force: true });
 };
 
-const getSessionDir = (clinicId) => path.join(DATA_DIR, String(clinicId));
+const loadSessionDirMap = async () => {
+  if (sessionDirMapCache) {
+    return sessionDirMapCache;
+  }
+
+  try {
+    const raw = await fs.promises.readFile(SESSION_MAP_FILE, 'utf8');
+    sessionDirMapCache = JSON.parse(raw);
+  } catch (_err) {
+    sessionDirMapCache = {};
+  }
+  return sessionDirMapCache;
+};
+
+const saveSessionDirMap = async () => {
+  if (!sessionDirMapCache) {
+    return;
+  }
+  await ensureDir(DATA_DIR);
+  await fs.promises.writeFile(
+    SESSION_MAP_FILE,
+    JSON.stringify(sessionDirMapCache, null, 2)
+  );
+};
+
+const migrateOldClinicDir = async (clinicId, targetDir) => {
+  const legacyDir = path.join(DATA_DIR, String(clinicId));
+  if (!fs.existsSync(legacyDir) || legacyDir === targetDir) {
+    return;
+  }
+
+  await ensureDir(path.dirname(targetDir));
+  try {
+    await fs.promises.rename(legacyDir, targetDir);
+  } catch (_err) {
+    // Cross-device rename fallback: copy then delete.
+    await fs.promises.cp(legacyDir, targetDir, { recursive: true });
+    await removeDir(legacyDir);
+  }
+};
+
+const getOrCreateSessionDir = async (clinicId) => {
+  await ensureDir(DATA_DIR);
+  const map = await loadSessionDirMap();
+  const key = String(clinicId);
+
+  if (!map[key]) {
+    map[key] = crypto.randomUUID();
+    await saveSessionDirMap();
+  }
+
+  const target = path.join(DATA_DIR, map[key]);
+  await migrateOldClinicDir(key, target);
+  await ensureDir(target);
+  return target;
+};
+
+const getKnownSessionDir = async (clinicId) => {
+  const map = await loadSessionDirMap();
+  const key = String(clinicId);
+  if (map[key]) {
+    return path.join(DATA_DIR, map[key]);
+  }
+  // Fallback to legacy naming if map entry is missing.
+  return path.join(DATA_DIR, key);
+};
 
 const serializeDirectory = async (dir) => {
   const output = {};
@@ -157,16 +227,27 @@ const notifyBackend = async (payload) => {
     return;
   }
 
+  const body = payload || {};
+  const timestamp = Date.now();
+  const headers = {
+    'x-bridge-timestamp': timestamp
+  };
+
+  if (process.env.WA_WEB_BACKEND_SHARED_SECRET) {
+    const secret = process.env.WA_WEB_BACKEND_SHARED_SECRET;
+    const serialized = JSON.stringify(body);
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(`${timestamp}.${serialized}`);
+    headers['x-bridge-secret'] = secret;
+    headers['x-bridge-signature'] = hmac.digest('hex');
+  }
+
   await axios.post(
     `${backendUrl.replace(/\/$/, '')}/api/whatsapp/bridge/events`,
-    payload,
+    body,
     {
       timeout: 10000,
-      headers: {
-        ...(process.env.WA_WEB_BACKEND_SHARED_SECRET
-          ? { 'x-bridge-secret': process.env.WA_WEB_BACKEND_SHARED_SECRET }
-          : {})
-      }
+      headers
     }
   );
 };
@@ -194,16 +275,16 @@ const extractMessageText = (message) => {
     text: conversation,
     metadata: media
       ? {
-          mediaType: imageMessage
-            ? 'image'
-            : videoMessage
-              ? 'video'
-              : audioMessage
-                ? 'audio'
-                : 'document',
-          mimeType: media.mimetype || null,
-          fileName: documentMessage?.fileName || null
-        }
+        mediaType: imageMessage
+          ? 'image'
+          : videoMessage
+            ? 'video'
+            : audioMessage
+              ? 'audio'
+              : 'document',
+        mimeType: media.mimetype || null,
+        fileName: documentMessage?.fileName || null
+      }
       : {}
   };
 };
@@ -324,9 +405,65 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         continue;
       }
 
-      const remoteJid = message.key?.remoteJid || '';
-      const from = remoteJid.split('@')[0];
+      const preview =
+        message.message?.conversation ||
+        message.message?.extendedTextMessage?.text ||
+        message.message?.imageMessage?.caption ||
+        message.message?.videoMessage?.caption ||
+        message.message?.documentMessage?.caption ||
+        '';
+      // console.log('Incoming personal message', {
+      //   clinicId,
+      //   from: message.key?.remoteJid,
+      //   text: preview
+      // });
+
+      // Prefer explicit phone-normalized fields (senderPn / participantPn). Fallback to sender/remote only if absent.
+      let pickJid = null;
+      if (message.key?.senderPn) {
+        pickJid = message.key.senderPn;
+      } else if (message.senderPn) {
+        pickJid = message.senderPn;
+      } else if (message.key?.participantPn) {
+        pickJid = message.key.participantPn;
+      } else if (message.participantPn) {
+        pickJid = message.participantPn;
+      } else {
+        const candidates = [
+          message.sender,
+          message.participant,
+          message.key?.sender,
+          message.key?.participant,
+          message.key?.remoteJid
+        ].filter(Boolean);
+
+        pickJid =
+          candidates.find((jid) => typeof jid === 'string' && jid.includes('@s.whatsapp.net')) ||
+          candidates.find((jid) => typeof jid === 'string' && jid.includes('@lid')) ||
+          candidates[0] ||
+          '';
+      }
+
+      const normalizedJid = pickJid ? jidNormalizedUser(pickJid) : '';
+      const fromId = normalizedJid ? normalizedJid.split('@')[0] : '';
+      const from = fromId ? (fromId.startsWith('+') ? fromId : `+${fromId}`) : '';
+
+      // Immediate auto-ack from the bridge socket (mirrors frontend/manual sends)
+      if (normalizedJid && !message.key.fromMe) {
+        const autoAckText = process.env.WA_WEB_AUTO_ACK_TEXT || 'I got your message. I will respond asap!!!';
+        try {
+          await socket.sendMessage(normalizedJid, { text: autoAckText });
+          logger.info({ clinicId, to: normalizedJid, autoAck: true }, 'Bridge auto-ack sent');
+        } catch (err) {
+          logger.warn({ clinicId, to: normalizedJid, err }, 'Bridge auto-ack failed');
+        }
+      }
+      // return;
       const payload = extractMessageText(message);
+      const contactName =
+        message.pushName ||
+        message.message?.contactMessage?.displayName ||
+        null;
       if (!from || (!payload.text && !payload.metadata.mediaType)) {
         continue;
       }
@@ -336,6 +473,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
           clinicId,
           type: 'message.received',
           from,
+          contactName,
           text: payload.text,
           metadata: payload.metadata,
           messageId: message.key?.id || null
@@ -361,8 +499,7 @@ const connectSession = async (clinicId) => {
     };
   }
 
-  const authDir = getSessionDir(clinicId);
-  await ensureDir(DATA_DIR);
+  const authDir = await getOrCreateSessionDir(clinicId);
   await restoreAuthState(clinicId, authDir);
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion();
@@ -417,7 +554,10 @@ const disconnectSession = async (clinicId) => {
   }
 
   activeSessions.delete(String(clinicId));
-  await removeDir(getSessionDir(clinicId));
+  const authDir =
+    active?.authDir ||
+    await getKnownSessionDir(clinicId);
+  await removeDir(authDir);
   await upsertSessionRecord(clinicId, {
     provider: 'wa_web',
     status: 'disconnected',

@@ -36,7 +36,7 @@ const enqueueWhatsAppMessage = async ({
 
 const processPendingMessages = async (limit = 50) => {
   const pending = await query(
-    `SELECT m.*, l.consent_given
+    `SELECT m.*, l.phone
        FROM messages m
        JOIN leads l ON l.id = m.lead_id
       WHERE m.delivery_status IN ('queued','failed')
@@ -51,26 +51,18 @@ const processPendingMessages = async (limit = 50) => {
     const meta = row.metadata || {};
     const retryCount = Number(meta.retryCount || 0);
     const nextRetryCount = retryCount + 1;
-    if (row.consent_given === false) {
-      await Message.updateDeliveryById(row.id, {
-        deliveryStatus: 'failed',
-        deliveryError: 'Consent revoked',
-        metadata: { ...meta, consentBlocked: true }
-      });
-      await IntegrationLog.create({
-        type: 'whatsapp_send',
-        message: 'Skipped send because lead revoked consent',
-        metadata: { messageId: row.id, leadId: row.lead_id },
-        clinicId: row.clinic_id
-      });
-      continue;
-    }
-
     try {
+      const body =
+        meta.body ||
+        row.content ||
+        meta.templateName ||
+        meta.template_name ||
+        meta.language ||
+        '';
       const providerResponse = await sendTemplateMessage({
         to: meta.to || row.metadata?.to || null,
-        body: row.content,
-        templateName: meta.templateName || row.content,
+        body,
+        templateName: meta.templateName || meta.template_name || row.content,
         language: meta.language || 'en',
         mediaUrl: meta.mediaUrl || null,
         templateParameters: meta.templateParameters || [],

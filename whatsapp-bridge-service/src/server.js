@@ -6,6 +6,11 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const {
+  ensureBridge,
+  getBridgeState,
+  sendWelcomeMessage
+} = require('./singleBridge');
+const {
   connectSession,
   getSessionStatus,
   disconnectSession,
@@ -39,6 +44,34 @@ app.use((req, res, next) => {
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/bridge/state', (_req, res) => {
+  res.json(getBridgeState());
+});
+
+app.post('/bridge/start', async (_req, res) => {
+  try {
+    await ensureBridge();
+    res.json(getBridgeState());
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Unable to start bridge' });
+  }
+});
+
+app.post('/bridge/welcome', async (req, res) => {
+  const { phone, name } = req.body || {};
+  if (!phone) {
+    res.status(400).json({ message: 'phone is required' });
+    return;
+  }
+
+  try {
+    await sendWelcomeMessage(phone, name);
+    res.json({ status: 'sent' });
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Unable to send welcome message' });
+  }
 });
 
 app.post('/sessions/:clinicId/connect', async (req, res) => {

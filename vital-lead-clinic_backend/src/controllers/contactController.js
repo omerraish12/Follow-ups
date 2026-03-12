@@ -34,7 +34,7 @@ const handleContactForm = async (req, res) => {
     }
 
     const adminId = await getClinicAdminId(clinicId);
-    let lead = await Lead.findByPhone(normalizedPhone);
+    let lead = await Lead.findByPhone(normalizedPhone, clinicId);
 
     if (lead && lead.clinic_id === clinicId) {
         lead = await Lead.update(lead.id, clinicId, {

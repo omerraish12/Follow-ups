@@ -87,7 +87,9 @@ const formatAutomationRow = (row) => {
     return {
         ...row,
         components: normalizeComponents(row.components),
-        template_status: row.template_status || 'pending'
+        template_status: row.template_status || 'pending',
+        pre_appointment: Boolean(row.pre_appointment),
+        pre_appointment_minutes: row.pre_appointment_minutes || null
     };
 };
 
@@ -108,7 +110,7 @@ class Automation {
        WHERE a.id = $1 AND a.clinic_id = $2`,
             [id, clinicId]
         );
-        return result.rows[0];
+        return formatAutomationRow(result.rows[0]);
     }
 
     static async create(automationData) {
@@ -126,6 +128,8 @@ class Automation {
             templateStatus,
             templateSid,
             templateApprovalSid,
+            preAppointment,
+            preAppointmentMinutes,
             clinicId,
             dailyCap,
             cooldownHours
@@ -135,8 +139,8 @@ class Automation {
         const componentsPayload = normalizedComponents.length ? JSON.stringify(normalizedComponents) : '[]';
         const result = await query(
             `INSERT INTO automations 
-            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid, daily_cap, cooldown_hours) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) 
+            (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid, daily_cap, cooldown_hours, pre_appointment, pre_appointment_minutes) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
        RETURNING *`,
             [
                 name,
@@ -154,7 +158,9 @@ class Automation {
                 templateSid || null,
                 templateApprovalSid || null,
                 automationData.dailyCap || null,
-                automationData.cooldownHours || null
+                automationData.cooldownHours || null,
+                preAppointment || false,
+                preAppointmentMinutes || null
             ]
         );
         return formatAutomationRow(result.rows[0]);
@@ -213,6 +219,8 @@ class Automation {
                 if (key === 'templateStatus') dbKey = 'template_status';
                 if (key === 'templateSid') dbKey = 'template_sid';
                 if (key === 'templateApprovalSid') dbKey = 'template_approval_sid';
+                if (key === 'preAppointment') dbKey = 'pre_appointment';
+                if (key === 'preAppointmentMinutes') dbKey = 'pre_appointment_minutes';
 
                 let normalizedValue = value;
                 if (key === 'components') {
@@ -267,7 +275,9 @@ class Automation {
             templateApprovalSid: 'template_approval_sid',
             dailyCap: 'daily_cap',
             cooldownHours: 'cooldown_hours',
-            mediaUrl: 'media_url'
+            mediaUrl: 'media_url',
+            preAppointment: 'pre_appointment',
+            preAppointmentMinutes: 'pre_appointment_minutes'
         };
 
         for (const [key, value] of Object.entries(metadata)) {

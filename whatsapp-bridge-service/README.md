@@ -33,6 +33,9 @@ Backend-side env (already wired):
 - `GET /sessions/:clinicId` — current status/QR/device.
 - `POST /sessions/:clinicId/disconnect` — logs out and clears auth.
 - `POST /messages/send` — payload `{ clinicId, to, body?, mediaUrl? }`.
+- `GET /bridge/state` — in-memory status for the single default bridge (QR as data URL when pending).
+- `POST /bridge/start` — boot the single default bridge.
+- `POST /bridge/welcome` — send a templated welcome SMS via the single bridge (`{ phone, name? }`).
 
 ## Running locally
 
@@ -45,6 +48,7 @@ npm start      # plain node
 
 Persist `data/sessions/` on a volume if you containerize. Auto-reconnect is enabled; on start the service restores all rows that have `auth_state_encrypted`.
 You can change the path with `WA_WEB_SESSIONS_DIR`; useful if the volume is mounted elsewhere.
+Each clinic’s auth files now live under a stable UUID folder (tracked in `data/sessions/session_map.json`) so the on-disk path stays consistent across restarts while keeping clinic IDs off the filesystem.
 
 ## Deployment checklist
 
@@ -53,6 +57,10 @@ You can change the path with `WA_WEB_SESSIONS_DIR`; useful if the volume is moun
 - Restrict ingress: allow only the backend IPs or require `WA_WEB_BRIDGE_API_KEY`.
 - Back up the Postgres DB; auth blobs are AES-256-GCM encrypted with `WA_WEB_AUTH_SECRET`.
 - Monitor `/health` and log stream; restart on failures (systemd, PM2, or container restart policy).
+
+## Why session data lives on disk
+
+Baileys writes WhatsApp Web credentials as multiple small files (`useMultiFileAuthState`). Keeping `data/sessions/` (multi-clinic) and `data/single_session/` (the default bridge) on persistent storage means devices stay paired across restarts and deploys. If those folders are wiped, WhatsApp treats the connection as a fresh device and will prompt for a new QR scan.
 
 ## Compliance note
 

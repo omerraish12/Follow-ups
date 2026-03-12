@@ -173,7 +173,6 @@ class CronJobs {
                  FROM leads
                  WHERE last_visit_date::date = $1
                    AND COALESCE(follow_up_sent, false) = false
-                   AND COALESCE(consent_given, false) = true
                    AND phone IS NOT NULL`,
                 [targetDay]
             );
@@ -289,26 +288,55 @@ class CronJobs {
             const dailyCap = Number.isFinite(parsedDailyCap) ? parsedDailyCap : DAILY_AUTOMATION_CAP;
             const cooldownHours = Number.isFinite(parsedCooldown) ? parsedCooldown : LEAD_COOLDOWN_HOURS;
 
-            for (const days of triggerDays) {
-                const targetDate = new Date();
-                targetDate.setDate(targetDate.getDate() - days);
-                targetDate.setHours(0, 0, 0, 0);
+            // Pre-appointment window logic
+            const preAppointment = Boolean(automation.pre_appointment);
+            const preMinutes = Number(automation.pre_appointment_minutes) || 1440; // default 24h
 
-                const leads = await query(
-                    `SELECT l.* 
+            const triggerBatches = preAppointment ? ['pre_appointment'] : triggerDays;
+
+            for (const batch of triggerBatches) {
+                let leads;
+                let targetDate = null;
+
+                if (batch === 'pre_appointment') {
+                    const now = new Date();
+                    const upper = new Date(now.getTime() + preMinutes * 60 * 1000);
+
+                    leads = await query(
+                        `SELECT l.*
+             FROM leads l
+             WHERE l.clinic_id = $1
+               AND l.next_follow_up IS NOT NULL
+               AND l.next_follow_up >= $2
+               AND l.next_follow_up <= $3
+               AND NOT EXISTS (
+                 SELECT 1 FROM executions e
+                 WHERE e.lead_id = l.id
+                   AND e.automation_id = $4
+                   AND e.executed_at >= NOW() - INTERVAL '7 days'
+               )`,
+                        [automation.clinic_id, now, upper, automation.id]
+                    );
+                } else {
+                    targetDate = new Date();
+                    targetDate.setDate(targetDate.getDate() - batch);
+                    targetDate.setHours(0, 0, 0, 0);
+
+                    leads = await query(
+                        `SELECT l.* 
            FROM leads l
            WHERE l.clinic_id = $1 
              AND ($2::lead_status IS NULL OR l.status = $2::lead_status)
              AND COALESCE(l.last_contacted, l.created_at) <= $3
-             AND COALESCE(l.consent_given, false) = true
              AND NOT EXISTS (
                SELECT 1 FROM executions e 
                WHERE e.lead_id = l.id 
                  AND e.automation_id = $4
                  AND e.executed_at >= $3
              )`,
-                    [automation.clinic_id, automation.target_status || null, targetDate, automation.id]
-                );
+                        [automation.clinic_id, automation.target_status || null, targetDate, automation.id]
+                    );
+                }
 
                 // Daily cap per automation
                 const todayCountResult = await query(
@@ -336,7 +364,7 @@ class CronJobs {
                     }
 
                     // Per-lead cooldown
-                    if (cooldownHours > 0) {
+                    if (!preAppointment && cooldownHours > 0) {
                         const cooldownResult = await query(
                             `SELECT 1 FROM executions 
                              WHERE lead_id = $1 
@@ -384,6 +412,7 @@ class CronJobs {
                                 language: automation.template_language || 'en',
                                 mediaUrl: automation.media_url || null,
                                 templateParameters,
+                                body: messageBody,
                                 to: lead.phone,
                                 retryCount: 0
                             }
@@ -403,6 +432,7 @@ class CronJobs {
                                 language: automation.template_language || 'en',
                                 mediaUrl: automation.media_url || null,
                                 templateParameters,
+                                body: messageBody,
                                 providerError: error.response?.data || error.message
                             }
                         });

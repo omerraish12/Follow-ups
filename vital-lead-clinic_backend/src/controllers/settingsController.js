@@ -87,6 +87,7 @@ const defaultNotificationSettings = {
     pushNotifications: true,
     leadAlerts: true,
     automationAlerts: true,
+    soundAlerts: true,
     dailyDigest: false,
     weeklyReport: true,
     marketingEmails: false
@@ -373,6 +374,8 @@ const getSettings = async (req, res) => {
         const integrations = sanitizeIntegrationsForResponse(mergedIntegrations);
         const backupSettings = clinic.backup_settings || defaultBackupSettings;
         const notificationSettings = profile.notification_settings || defaultNotificationSettings;
+        // ensure new keys are present
+        const mergedNotificationSettings = { ...defaultNotificationSettings, ...notificationSettings };
 
         res.json({
             clinic: {
@@ -398,7 +401,7 @@ const getSettings = async (req, res) => {
             },
             integrations,
             backupSettings,
-            notificationSettings
+            notificationSettings: mergedNotificationSettings
         });
     } catch (error) {
         console.error(error);
@@ -501,7 +504,14 @@ const changePassword = async (req, res) => {
 
 const updateNotifications = async (req, res) => {
     try {
-        const settings = req.body || {};
+        const incoming = req.body || {};
+        const settings = { ...defaultNotificationSettings };
+        for (const key of Object.keys(defaultNotificationSettings)) {
+            if (Object.prototype.hasOwnProperty.call(incoming, key)) {
+                settings[key] = Boolean(incoming[key]);
+            }
+        }
+
         const result = await query(
             `UPDATE users
              SET notification_settings = $1, updated_at = CURRENT_TIMESTAMP

@@ -61,7 +61,16 @@ export const leadService = {
     params: LeadMessageFilters = {}
   ): Promise<LeadMessagesResponse> => {
     const search = new URLSearchParams();
-    const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '');
+    const normalizeValue = (key: string, value: unknown) => {
+      if (value === undefined || value === null || value === '') return null;
+      if (key === 'direction') return String(value).toUpperCase(); // API expects SENT/RECEIVED
+      if (key === 'status') return String(value).toLowerCase();
+      if (key === 'origin') return String(value).toLowerCase();
+      return String(value);
+    };
+    const entries = Object.entries(params)
+      .map(([key, value]) => [key, normalizeValue(key, value)] as const)
+      .filter(([, value]) => value !== null);
     entries.forEach(([key, value]) => {
       search.append(key, String(value));
     });

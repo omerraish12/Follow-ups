@@ -42,7 +42,6 @@ const signup = async (req, res) => {
 
         // Check if user exists
         const existingUser = await User.findByEmail(normalizedEmail);
-        console.log("existingUser", existingUser);
         if (existingUser) {
             return res.status(400).json({ message: 'User already exists' });
         }
@@ -95,8 +94,6 @@ const login = async (req, res) => {
 
         // Find user
         const user = await User.findByEmail(normalizedEmail);
-        const allUsers = await User.findAll();
-        console.log(`All users (${allUsers.length} records)`, allUsers);
 
         if (!user) {
             console.log(`Login attempt failed for ${normalizedEmail}: user not found`);

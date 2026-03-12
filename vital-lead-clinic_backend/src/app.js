@@ -15,6 +15,7 @@ const whatsappRoutes = require('./routes/whatsappRoutes');
 const pricingRoutes = require('./routes/pricingRoutes');
 const logRoutes = require('./routes/logRoutes');
 const contactRoutes = require('./routes/contactRoutes');
+const calendarRoutes = require('./routes/calendarRoutes');
 const platformRoutes = require('./routes/platformRoutes');
 
 const requestLogger = require('./middleware/requestLogger');
@@ -78,6 +79,7 @@ if (customWebhookBasePath && customWebhookBasePath !== '/api/whatsapp') {
 app.use('/api/pricing', pricingRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/logs', logRoutes);
+app.use('/api/calendar', calendarRoutes);
 app.use('/api/platform', platformRoutes);
 
 // Health check

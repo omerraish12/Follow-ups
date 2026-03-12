@@ -164,7 +164,7 @@ export default function NotificationsCenter() {
                         leadAlerts: data.notificationSettings.leadAlerts,
                         systemAlerts: data.notificationSettings.automationAlerts ?? data.notificationSettings.systemAlerts ?? true,
                         emailNotifications: data.notificationSettings.emailNotifications,
-                        soundAlerts: data.notificationSettings.pushNotifications,
+                        soundAlerts: data.notificationSettings.soundAlerts ?? true,
                         desktopNotifications: data.notificationSettings.pushNotifications,
                         dailyDigest: data.notificationSettings.dailyDigest,
                         marketingAlerts: data.notificationSettings.marketingEmails,
@@ -180,7 +180,8 @@ export default function NotificationsCenter() {
         try {
             const payload = {
                 emailNotifications: settings.emailNotifications,
-                pushNotifications: settings.desktopNotifications || settings.soundAlerts,
+                pushNotifications: settings.desktopNotifications,
+                soundAlerts: settings.soundAlerts,
                 leadAlerts: settings.leadAlerts,
                 automationAlerts: settings.systemAlerts,
                 dailyDigest: settings.dailyDigest,
@@ -464,11 +465,23 @@ export default function NotificationsCenter() {
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align={language === 'he' ? 'start' : 'end'} className="rounded-xl">
-                                                    <DropdownMenuItem onClick={async () => await markAsRead(notification.id)} className="cursor-pointer">
+                                                    <DropdownMenuItem
+                                                      onClick={async (event) => {
+                                                        event.stopPropagation();
+                                                        await markAsRead(notification.id);
+                                                      }}
+                                                      className="cursor-pointer"
+                                                    >
                                                         <CheckCheck className="h-4 w-4 ml-2" />
                                                         {t("mark_as_read")}
                                                     </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={async () => await deleteNotification(notification.id)} className="cursor-pointer text-destructive">
+                                                    <DropdownMenuItem
+                                                      onClick={async (event) => {
+                                                        event.stopPropagation();
+                                                        await deleteNotification(notification.id);
+                                                      }}
+                                                      className="cursor-pointer text-destructive"
+                                                    >
                                                         <Trash2 className="h-4 w-4 ml-2" />
                                                         {t("delete")}
                                                     </DropdownMenuItem>

@@ -34,6 +34,7 @@ export interface SettingsResponse {
     pushNotifications: boolean;
     leadAlerts: boolean;
     automationAlerts: boolean;
+    soundAlerts: boolean;
     dailyDigest: boolean;
     weeklyReport: boolean;
     marketingEmails: boolean;

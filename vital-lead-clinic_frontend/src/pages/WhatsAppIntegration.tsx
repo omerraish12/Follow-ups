@@ -106,7 +106,6 @@ export default function WhatsAppIntegration() {
     try {
       await settingsService.updateIntegration("whatsapp", "disconnected", { provider: "wa_web" });
       const response = await whatsappService.connectSession();
-      console.log("response: ", response);
       setSession(response.session);
       await loadSenderInfo();
       toast({

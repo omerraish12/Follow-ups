@@ -6,18 +6,11 @@ const Notification = require('../models/Notification');
 const IntegrationLog = require('../models/IntegrationLog');
 const {
     sendWhatsAppMessage,
-    sendTemplateMessage,
     isWhatsAppConfiguredForClinic,
     getWhatsAppProviderForClinic
 } = require('../services/whatsappService');
 const { canUseFreeText } = require('../utils/freeTextWindow');
 const { isMetaCloudProvider } = require('../utils/whatsappProvider');
-
-const DEFAULT_WELCOME_TEMPLATE = {
-    name: 'lead_welcome',
-    language: 'en',
-    body: 'Hi {name}, thanks for contacting our clinic! A team member will reach out shortly.'
-};
 
 const ALLOWED_LEAD_STATUSES = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
 
@@ -25,6 +18,19 @@ const firstNameOrDefault = (name) => {
     if (!name) return 'there';
     const first = String(name).trim().split(/\s+/)[0];
     return first || 'there';
+};
+
+const applyLeadPlaceholders = (text = '', lead = {}) => {
+    const name = (lead.name || '').trim();
+    const first = name.split(/\s+/)[0] || '';
+    let result = String(text);
+    if (name) {
+        result = result.replace(/\{name\}/gi, name);
+    }
+    if (first) {
+        result = result.replace(/\{first[-_ ]?name\}/gi, first);
+    }
+    return result;
 };
 
 const normalizeLeadStatus = (status) => {
@@ -82,7 +88,7 @@ const retryOutboundMessage = async ({ lead, clinicId, message }) => {
             language,
             components,
             mediaUrl,
-            body: message.content,
+            body: applyLeadPlaceholders(message.content, lead),
             templateParameters,
             clinicId
         });
@@ -90,7 +96,7 @@ const retryOutboundMessage = async ({ lead, clinicId, message }) => {
 
     return sendWhatsAppMessage({
         to: lead.phone,
-        body: message.content,
+        body: applyLeadPlaceholders(message.content, lead),
         mediaUrl,
         clinicId
     });
@@ -214,16 +220,10 @@ const createLead = async (req, res) => {
             notes,
             entryCode,
             nextFollowUp,
-            assignedToId,
-            consentGiven,
-            consentTimestamp
+            assignedToId
         } = req.body;
 
         const normalizedStatus = normalizeLeadStatus(status) || 'NEW';
-
-        const resolvedConsentTimestamp = consentGiven
-            ? consentTimestamp || new Date().toISOString()
-            : null;
 
         const sanitizedEntryCode = normalizeEntryCode(entryCode);
 
@@ -239,12 +239,8 @@ const createLead = async (req, res) => {
             entryCode: sanitizedEntryCode === undefined ? null : sanitizedEntryCode,
             nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
             assignedToId,
-            clinicId: req.user.clinic_id,
-            consentGiven: Boolean(consentGiven),
-            consentTimestamp: resolvedConsentTimestamp
+            clinicId: req.user.clinic_id
         });
-
-        console.log("_____Lead Created_____: ", lead);
 
         // Log activity
         await Activity.create({
@@ -267,20 +263,16 @@ const createLead = async (req, res) => {
             clinicId: req.user.clinic_id
         });
 
-        // Auto-send a friendly welcome message when WhatsApp is connected and consent is granted.
-        if (lead.phone && lead.consent_given) {
+        // Auto-send a friendly welcome message when WhatsApp is connected.
+        if (lead.phone) {
             const whatsappConfigured = await isWhatsAppConfiguredForClinic(req.user.clinic_id);
             if (whatsappConfigured) {
                 const greetingName = firstNameOrDefault(lead.name);
-                const welcomeBody = DEFAULT_WELCOME_TEMPLATE.body.replace('{name}', greetingName);
-                const templateParameters = [greetingName];
+                const welcomeBody = `HI, ${greetingName}, This is Clinic CRM. How can I help you?`;
                 try {
-                    const providerResponse = await sendTemplateMessage({
+                    const providerResponse = await sendWhatsAppMessage({
                         to: lead.phone,
                         body: welcomeBody,
-                        templateName: DEFAULT_WELCOME_TEMPLATE.name,
-                        language: DEFAULT_WELCOME_TEMPLATE.language,
-                        templateParameters,
                         clinicId: req.user.clinic_id
                     });
                     const providerMessageId = extractProviderMessageId(providerResponse);
@@ -291,12 +283,9 @@ const createLead = async (req, res) => {
                         leadId: lead.id,
                         providerMessageId,
                         deliveryStatus: 'sent',
-                        messageOrigin: 'automation',
+                        messageOrigin: 'welcome_on_create',
                         metadata: {
-                            templateName: DEFAULT_WELCOME_TEMPLATE.name,
-                            language: DEFAULT_WELCOME_TEMPLATE.language,
-                            templateParameters,
-                            automation: 'default_welcome'
+                            automation: 'lead_create_welcome'
                         }
                     });
                     await Lead.updateLastContacted(lead.id);
@@ -308,18 +297,15 @@ const createLead = async (req, res) => {
                     });
                 } catch (error) {
                     await Message.create({
-                        content: DEFAULT_WELCOME_TEMPLATE.body.replace('{name}', firstNameOrDefault(lead.name)),
+                        content: welcomeBody,
                         type: 'SENT',
                         isBusiness: true,
                         leadId: lead.id,
                         deliveryStatus: 'failed',
-                        messageOrigin: 'automation',
+                        messageOrigin: 'welcome_on_create',
                         deliveryError: error.response?.data?.message || error.message || 'Failed to send welcome message.',
                         metadata: {
-                            templateName: DEFAULT_WELCOME_TEMPLATE.name,
-                            language: DEFAULT_WELCOME_TEMPLATE.language,
-                            templateParameters,
-                            automation: 'default_welcome',
+                            automation: 'lead_create_welcome',
                             providerError: error.response?.data || error.message
                         }
                     });
@@ -328,7 +314,7 @@ const createLead = async (req, res) => {
                         message: 'Automatic welcome message failed',
                         metadata: {
                             leadId: lead.id,
-                            templateName: DEFAULT_WELCOME_TEMPLATE.name,
+                            automation: 'lead_create_welcome',
                             error: error.response?.data || error.message
                         },
                         clinicId: req.user.clinic_id
@@ -355,7 +341,7 @@ const createLead = async (req, res) => {
 // @route   PUT /api/leads/:id
 const updateLead = async (req, res) => {
     try {
-        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId, lastVisitDate, followUpSent, consentGiven, consentTimestamp, entryCode } = req.body;
+        const { name, phone, email, service, status, source, value, notes, nextFollowUp, assignedToId, lastVisitDate, followUpSent, entryCode } = req.body;
 
         const existingLead = await Lead.findById(req.params.id, req.user.clinic_id);
 
@@ -394,13 +380,6 @@ const updateLead = async (req, res) => {
             updatePayload.followUpSent = false;
         } else if (followUpSent !== undefined) {
             updatePayload.followUpSent = followUpSent;
-        }
-
-        if (consentGiven !== undefined) {
-            updatePayload.consentGiven = Boolean(consentGiven);
-            updatePayload.consentTimestamp = consentGiven
-                ? (consentTimestamp ? new Date(consentTimestamp).toISOString() : new Date().toISOString())
-                : null;
         }
 
         const lead = await Lead.update(req.params.id, req.user.clinic_id, updatePayload);
@@ -529,8 +508,9 @@ const addMessage = async (req, res) => {
                 return res.status(400).json({ message: 'Lead phone number is required to send WhatsApp messages.' });
             }
 
+            const personalizedBody = applyLeadPlaceholders(content, lead);
             const pendingMessage = await Message.create({
-                content,
+                content: personalizedBody,
                 type,
                 isBusiness: isBusiness || false,
                 leadId: lead.id,
@@ -542,7 +522,7 @@ const addMessage = async (req, res) => {
             try {
                 const providerResponse = await sendWhatsAppMessage({
                     to: lead.phone,
-                    body: content,
+                    body: personalizedBody,
                     mediaUrl,
                     clinicId: req.user.clinic_id
                 });
@@ -561,7 +541,7 @@ const addMessage = async (req, res) => {
 
                 await Activity.create({
                     type: 'MESSAGE_SENT',
-                    description: `Sent message: ${content.substring(0, 50)}...`,
+                    description: `Sent message: ${personalizedBody.substring(0, 50)}...`,
                     userId: req.user.id,
                     leadId: lead.id
                 });
@@ -699,6 +679,7 @@ const retryMessage = async (req, res) => {
             });
             return res.json(updated || pending);
         } catch (error) {
+            console.log("retryError", error);
             const failed = await Message.updateDeliveryById(message.id, {
                 deliveryStatus: 'failed',
                 deliveryError: error.response?.data?.error?.message || error.message || 'Failed to deliver WhatsApp message.',

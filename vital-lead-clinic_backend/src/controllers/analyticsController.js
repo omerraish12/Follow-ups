@@ -40,13 +40,11 @@ const getClinicMessages = async (req, res) => {
 const getKPI = async (req, res) => {
     try {
         const { period = 'month' } = req.query;
-
         const clinicId = req.user.clinic_id;
 
-        // Date ranges
+        // Date range start
         const now = new Date();
         let startDate;
-
         switch (period) {
             case 'week':
                 startDate = new Date(now.setDate(now.getDate() - 7));
@@ -64,13 +62,13 @@ const getKPI = async (req, res) => {
                 startDate = new Date(now.setMonth(now.getMonth() - 1));
         }
 
-        // Get lead stats
+        // Lead stats scoped to period
         const stats = await Lead.getStats(clinicId, startDate);
 
-        // Get follow-up needed
+        // Follow-up list (existing heuristic)
         const followupNeeded = await Lead.getFollowupNeeded(clinicId);
 
-        // Average hours since last contact (proxy for reminder cadence)
+        // Average hours since last contact (all leads with last_contacted)
         const responseResult = await query(
             `SELECT AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_contacted)) / 3600) AS avg_hours
              FROM leads
@@ -79,15 +77,28 @@ const getKPI = async (req, res) => {
         );
         const avgResponseHours = parseFloat(responseResult.rows[0]?.avg_hours) || 0;
 
-        // Get returned leads count
+        // Returned leads in period using simple keyword detection
+        const returnKeywords = [
+            '%return%',
+            '%returned%',
+            '%חוזר%',
+            '%חזרתי%',
+            '%שוב%',
+            '%חוזרת%'
+        ];
+        const keywordClauses = returnKeywords
+            .map((_kw, idx) => `m.content ILIKE $${idx + 3}`)
+            .join(' OR ');
         const returnedResult = await query(
-            `SELECT COUNT(DISTINCT lead_id) as count 
-       FROM messages 
-       WHERE lead_id IN (SELECT id FROM leads WHERE clinic_id = $1)
-         AND content ILIKE '%חוזר%' OR content ILIKE '%שוב%' OR content ILIKE '%חזרתי%'`,
-            [clinicId]
+            `SELECT COUNT(DISTINCT m.lead_id) as count 
+             FROM messages m
+             JOIN leads l ON l.id = m.lead_id
+             WHERE l.clinic_id = $1
+               AND m.timestamp >= $2
+               AND (${keywordClauses})`,
+            [clinicId, startDate, ...returnKeywords]
         );
-        const returnedLeads = parseInt(returnedResult.rows[0].count) || 0;
+        const returnedLeads = parseInt(returnedResult.rows[0]?.count || 0, 10) || 0;
 
         const totalLeads = parseInt(stats.total) || 0;
         const returnRate = totalLeads > 0 ? (returnedLeads / totalLeads) * 100 : 0;

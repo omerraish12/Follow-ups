@@ -10,7 +10,8 @@ const {
   getSessionStatus,
   getSessionQr,
   disconnectSession,
-  getFAQ
+  getFAQ,
+  backfillFollowups
 } = require('../controllers/whatsappController');
 const { protect } = require('../middleware/auth');
 
@@ -23,6 +24,7 @@ router.post('/bridge/events', handleBridgeEvent);
 router.post('/send-template', protect, sendTemplate);
 router.get('/latest-message', protect, getLatestLeadMessageTimestamp);
 router.get('/sender', protect, getSenderInfo);
+router.post('/followups/backfill', protect, backfillFollowups);
 router.post('/sessions/connect', protect, connectSession);
 router.get('/sessions/status', protect, getSessionStatus);
 router.get('/sessions/qr', protect, getSessionQr);

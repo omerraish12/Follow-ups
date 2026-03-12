@@ -480,8 +480,6 @@ export default function LeadDetail({
         window.localStorage.removeItem(draftStorageKey);
       }
 
-      console.log("send message", message, lead.id);
-
       toast({
         title: t("message_sent"),
         description: t("message_sent_successfully"),

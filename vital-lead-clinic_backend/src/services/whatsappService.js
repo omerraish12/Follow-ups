@@ -77,7 +77,15 @@ async function sendWaWebMessage({
   templateName,
   templateParameters = []
 }) {
-  const recipient = normalizePhone(to);
+  const normalized = normalizePhone(to);
+  let recipient = normalized;
+  if (!recipient) {
+    // Fallback: use raw digits with leading +
+    const digits = String(to || '').replace(/[^0-9+]/g, '');
+    if (digits) {
+      recipient = digits.startsWith('+') ? digits : `+${digits}`;
+    }
+  }
   if (!recipient) {
     throw new Error('Phone number is required for WhatsApp messages');
   }

@@ -106,6 +106,7 @@ const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettingsState = {
   pushNotifications: true,
   leadAlerts: true,
   automationAlerts: true,
+  soundAlerts: true,
   dailyDigest: false,
   weeklyReport: true,
   marketingEmails: false,
@@ -196,13 +197,14 @@ export default function SettingsPage() {
   ], [t]);
 
   const notificationToggleFields = useMemo<NotificationSettingField[]>(() => [
-    { key: "emailNotifications", title: t("email_notifications"), description: t("email_notifications_desc") },
-    { key: "pushNotifications", title: t("push_notifications"), description: t("push_notifications_desc"), dividerAfter: true },
     { key: "leadAlerts", title: t("lead_alerts"), description: t("lead_alerts_desc") },
-    { key: "automationAlerts", title: t("automation_alerts"), description: t("automation_alerts_desc"), dividerAfter: true },
+    { key: "automationAlerts", title: t("automation_alerts"), description: t("automation_alerts_desc") },
+    { key: "marketingEmails", title: t("marketing_updates"), description: t("marketing_updates_desc"), dividerAfter: true },
+    { key: "soundAlerts", title: t("sound_alerts"), description: t("sound_alerts_desc") },
+    { key: "pushNotifications", title: t("desktop_notifications"), description: t("desktop_notifications_desc"), dividerAfter: true },
     { key: "dailyDigest", title: t("daily_digest"), description: t("daily_digest_desc") },
     { key: "weeklyReport", title: t("weekly_report"), description: t("weekly_report_desc") },
-    { key: "marketingEmails", title: t("marketing_updates"), description: t("marketing_updates_desc") },
+    { key: "emailNotifications", title: t("email_notifications"), description: t("email_notifications_desc") },
   ], [t]);
 
   // User profile
@@ -340,7 +342,7 @@ export default function SettingsPage() {
       }
 
       if (data?.notificationSettings) {
-        setNotificationSettings(data.notificationSettings);
+        setNotificationSettings({ ...DEFAULT_NOTIFICATION_SETTINGS, ...data.notificationSettings });
       }
 
       if (data?.backupSettings) {
@@ -602,7 +604,7 @@ export default function SettingsPage() {
   const handleSaveNotifications = async () => {
     await runSaving(async () => {
       try {
-        await settingsService.updateNotifications(notificationSettings);
+    await settingsService.updateNotifications(notificationSettings);
 
         toast({
           title: t("settings_saved"),
@@ -1078,13 +1080,19 @@ export default function SettingsPage() {
                         <SelectItem value="closed">{t("closed")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    {i < 5 && (
-                      <>
-                        <Input type="time" defaultValue="09:00" className="w-24" />
-                        <span>-</span>
-                        <Input type="time" defaultValue="17:00" className="w-24" />
-                      </>
-                    )}
+                    <>
+                      <Input
+                        type="time"
+                        defaultValue={i === 5 ? "09:00" : i === 6 ? "10:00" : "09:00"}
+                        className="w-24"
+                      />
+                      <span>-</span>
+                      <Input
+                        type="time"
+                        defaultValue={i === 5 ? "13:00" : i === 6 ? "14:00" : "17:00"}
+                        className="w-24"
+                      />
+                    </>
                   </div>
                 ))}
               </div>

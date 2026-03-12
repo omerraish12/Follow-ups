@@ -1,4 +1,4 @@
-﻿const { sendTemplateMessage, getClinicWhatsappConfig } = require('../services/whatsappService');
+const { sendTemplateMessage, sendWhatsAppMessage, getClinicWhatsappConfig, isWhatsAppConfiguredForClinic } = require('../services/whatsappService');
 const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Execution = require('../models/Execution');
@@ -26,6 +26,25 @@ const normalizePhone = (value) => normalizeToE164(value, getDefaultCountry());
 const extractProviderMessageId = (response) =>
   response?.messages?.[0]?.id || response?.messageId || null;
 
+const DEFAULT_WELCOME_TEMPLATE = {
+  name: 'lead_welcome',
+  language: 'en',
+  body: 'Hi {name}, Thanks for contacting our clinic! A team member will reach out shortly.'
+};
+
+const firstNameOrDefault = (name) => {
+  if (!name) return 'there';
+  const first = String(name).trim().split(/\s+/)[0];
+  return first || 'there';
+};
+
+const normalizeLeadStatus = (status) => {
+  if (!status || typeof status !== 'string') return undefined;
+  const allowed = new Set(['NEW', 'HOT', 'CLOSED', 'LOST']);
+  const normalized = status.trim().toUpperCase();
+  return allowed.has(normalized) ? normalized : undefined;
+};
+
 const loadClinicIntegrationSettings = async (clinicId) => {
   const result = await query(
     `SELECT integration_settings FROM clinics WHERE id = $1`,
@@ -33,6 +52,19 @@ const loadClinicIntegrationSettings = async (clinicId) => {
   );
 
   return result.rows?.[0]?.integration_settings || {};
+};
+
+const resolveWelcomeTemplate = async (clinicId, fallbackName) => {
+  const integrations = await loadClinicIntegrationSettings(clinicId);
+  const welcome = integrations?.whatsapp?.welcomeTemplate || {};
+  const nameToken = firstNameOrDefault(fallbackName);
+
+  return {
+    name: welcome.templateName || welcome.name || DEFAULT_WELCOME_TEMPLATE.name,
+    language: welcome.language || DEFAULT_WELCOME_TEMPLATE.language,
+    body: (welcome.body || DEFAULT_WELCOME_TEMPLATE.body).replace('{name}', nameToken),
+    templateParameters: [nameToken]
+  };
 };
 
 const saveClinicWhatsappIntegration = async (clinicId, patch = {}) => {
@@ -93,47 +125,210 @@ const buildInboundMessagePayload = (msg = {}) => {
   };
 };
 
-const processInboundMessage = async (rawFrom, rawText, metadata = {}) => {
-  const from = normalizePhone(rawFrom);
+const sendWelcomeForLead = async ({ lead, clinicId, greetingName, adminId }) => {
+  if (!lead?.phone) {
+    return null;
+  }
+
+  const whatsappConfigured = await isWhatsAppConfiguredForClinic(clinicId);
+  if (!whatsappConfigured) {
+    await IntegrationLog.create({
+      type: 'whatsapp_send',
+      message: 'Skipped welcome message because WhatsApp is not connected',
+      metadata: { leadId: lead.id },
+      clinicId
+    });
+    return null;
+  }
+
+  const template = await resolveWelcomeTemplate(clinicId, greetingName || lead.name);
+  const templateParameters = template.templateParameters || [greetingName];
+  const resolvedAdminId = adminId || (await getClinicAdminId(clinicId));
+
+  try {
+    const providerResponse = await sendTemplateMessage({
+      to: lead.phone,
+      body: template.body,
+      templateName: template.name,
+      language: template.language,
+      templateParameters,
+      clinicId
+    });
+    const providerMessageId = extractProviderMessageId(providerResponse);
+    await Message.create({
+      content: template.body,
+      type: 'SENT',
+      isBusiness: true,
+      leadId: lead.id,
+      providerMessageId,
+      deliveryStatus: 'sent',
+      messageOrigin: 'automation',
+      metadata: {
+        templateName: template.name,
+        language: template.language,
+        templateParameters,
+        automation: 'inbound_welcome'
+      }
+    });
+    await Lead.updateLastContacted(lead.id);
+    await Activity.create({
+      type: 'MESSAGE_SENT',
+      description: 'Sent automatic WhatsApp welcome message.',
+      userId: resolvedAdminId,
+      leadId: lead.id
+    });
+    return true;
+  } catch (error) {
+    await Message.create({
+      content: template.body,
+      type: 'SENT',
+      isBusiness: true,
+      leadId: lead.id,
+      deliveryStatus: 'failed',
+      messageOrigin: 'automation',
+      deliveryError: error.response?.data?.message || error.message || 'Failed to send welcome message.',
+      metadata: {
+        templateName: template.name,
+        language: template.language,
+        templateParameters,
+        automation: 'inbound_welcome',
+        providerError: error.response?.data || error.message
+      }
+    });
+    await IntegrationLog.create({
+      type: 'whatsapp_send',
+      message: 'Automatic welcome message failed',
+      metadata: {
+        leadId: lead.id,
+        templateName: template.name,
+        error: error.response?.data || error.message
+      },
+      clinicId
+    });
+    return false;
+  }
+};
+
+const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, contactName = null) => {
+  const normalizedFrom = normalizePhone(rawFrom);
+  const from = normalizedFrom || String(rawFrom || '').trim();
   const text = rawText?.trim() || '';
   const messagePreview = text || metadata?.fileName || metadata?.mediaCaption || 'media attachment';
+
+  if (!normalizedFrom) {
+    await IntegrationLog.create({
+      type: 'whatsapp_inbound',
+      message: 'Inbound sender could not be normalized (likely masked or privacy-protected ID).',
+      clinicId,
+      metadata: {
+        rawFrom,
+        contactName,
+        text: messagePreview
+      }
+    });
+  }
+
+  if (!clinicId) {
+    console.info('Inbound WhatsApp message skipped because clinicId is missing', { from, text: messagePreview });
+    return;
+  }
+
   if (!from || (!text && !metadata?.mediaType)) {
     return;
   }
 
-  console.info('Inbound WhatsApp message', { from, text: messagePreview, receivedAt: new Date().toISOString() });
+  let lead = await Lead.findByPhone(from, clinicId);
+  let adminId = await getClinicAdminId(clinicId);
+  let leadWasCreated = false;
 
-  const lead = await Lead.findByPhone(from);
   if (!lead) {
-    console.info('Ignoring inbound WhatsApp message because no lead matches', { from, text: messagePreview });
-    return;
-  }
+    leadWasCreated = true;
+    const createdName = contactName?.trim() || from;
+    lead = await Lead.create({
+      name: createdName,
+      phone: from,
+      service: 'WhatsApp inquiry',
+      status: 'NEW',
+      source: 'whatsapp_inbound',
+      notes: text ? `First message: ${text}` : 'First WhatsApp message',
+      clinicId,
+      assignedToId: adminId
+    });
 
-  // Opt-out keywords
-  const lower = text.toLowerCase();
-  const optOutKeywords = ['stop', 'unsubscribe', 'בטל', 'הפסק', 'הסר'];
-  if (optOutKeywords.includes(lower)) {
-    await Lead.update(lead.id, lead.clinic_id, { consentGiven: false });
-    const adminId = await getClinicAdminId(lead.clinic_id);
     await Activity.create({
-      type: 'CONSENT_REVOKED',
-      description: `${lead.name || 'Lead'} opted out via WhatsApp.`,
+      type: 'LEAD_CREATED',
+      description: `Lead created from WhatsApp: ${createdName}`,
       userId: adminId,
       leadId: lead.id
     });
+
     await Notification.create({
       type: 'lead',
-      title: 'Lead opted out',
-      message: `${lead.name || 'Lead'} opted out via WhatsApp.`,
+      title: 'New WhatsApp lead',
+      message: `${createdName} messaged the clinic on WhatsApp.`,
       priority: 'high',
-      actionLabel: 'View lead',
+      actionLabel: 'Open lead',
       actionLink: `/leads/${lead.id}`,
-      metadata: { leadId: lead.id },
+      metadata: { leadId: lead.id, source: 'whatsapp_inbound' },
       userId: adminId,
-      clinicId: lead.clinic_id
+      clinicId
     });
-    return;
   }
+
+  console.info('Inbound WhatsApp message', { from, clinicId, text: messagePreview, receivedAt: new Date().toISOString() });
+
+  // Auto-acknowledge every incoming message AND persist it to history
+  const ackText = 'I got your message. I will respond asap!!!';
+  try {
+    const ackResp = await sendWhatsAppMessage({
+      to: from,
+      body: ackText,
+      clinicId
+    });
+    const providerMessageId = extractProviderMessageId(ackResp);
+    await Message.create({
+      content: ackText,
+      type: 'SENT',
+      isBusiness: true,
+      leadId: lead.id,
+      deliveryStatus: 'sent',
+      messageOrigin: 'automation',
+      providerMessageId,
+      metadata: {
+        automation: 'auto_ack',
+        providerResponse: ackResp
+      }
+    });
+    console.log('Auto-ack sent', { clinicId, to: from, providerResponse: ackResp });
+  } catch (ackError) {
+    console.error('Auto-ack send failed', ackError?.response?.data || ackError.message);
+    await Message.create({
+      content: ackText,
+      type: 'SENT',
+      isBusiness: true,
+      leadId: lead.id,
+      deliveryStatus: 'failed',
+      messageOrigin: 'automation',
+      deliveryError: ackError?.response?.data || ackError.message,
+      metadata: {
+        automation: 'auto_ack',
+        providerError: ackError?.response?.data || ackError.message
+      }
+    });
+    await IntegrationLog.create({
+      type: 'whatsapp_send',
+      message: 'Auto-ack send failed',
+      clinicId,
+      metadata: {
+        to: from,
+        leadId: lead.id,
+        error: ackError?.response?.data || ackError.message
+      }
+    });
+  }
+
+  const lower = text.toLowerCase();
+  // Consent/opt-out handling removed: messages continue regardless.
 
   await Message.create({
     content: text || messagePreview,
@@ -151,39 +346,47 @@ const processInboundMessage = async (rawFrom, rawText, metadata = {}) => {
       lastContacted: new Date(),
       lastInboundMessageAt: new Date()
     });
-    return;
+  } else {
+    await Execution.markReplied(pendingExecution.id);
+    await Automation.incrementReplyCount(pendingExecution.automation_id);
+    await Automation.updateSuccessRate(pendingExecution.automation_id);
+
+    await Lead.update(lead.id, lead.clinic_id, {
+      status: 'HOT',
+      lastContacted: new Date(),
+      lastInboundMessageAt: new Date()
+    });
+    await Notification.create({
+      type: 'lead',
+      title: 'WhatsApp reply received',
+      message: `${lead.name} replied to your automation.`,
+      priority: 'high',
+      actionLabel: 'View lead',
+      actionLink: `/leads/${lead.id}`,
+      metadata: {
+        leadId: lead.id,
+        automationId: pendingExecution.automation_id
+      },
+      userId: adminId,
+      clinicId: lead.clinic_id
+    });
+    await Activity.create({
+      type: 'MESSAGE_RECEIVED',
+      description: `Reply from ${lead.name}: ${messagePreview.substring(0, 80)}`,
+      userId: adminId,
+      leadId: lead.id
+    });
   }
 
-  await Execution.markReplied(pendingExecution.id);
-  await Automation.incrementReplyCount(pendingExecution.automation_id);
-  await Automation.updateSuccessRate(pendingExecution.automation_id);
-
-  const adminId = await getClinicAdminId(lead.clinic_id);
-  await Lead.update(lead.id, lead.clinic_id, {
-    status: 'HOT',
-    lastContacted: new Date(),
-    lastInboundMessageAt: new Date()
-  });
-  await Notification.create({
-    type: 'lead',
-    title: 'WhatsApp reply received',
-    message: `${lead.name} replied to your automation.`,
-    priority: 'high',
-    actionLabel: 'View lead',
-    actionLink: `/leads/${lead.id}`,
-    metadata: {
-      leadId: lead.id,
-      automationId: pendingExecution.automation_id
-    },
-    userId: adminId,
-    clinicId: lead.clinic_id
-  });
-  await Activity.create({
-    type: 'MESSAGE_RECEIVED',
-    description: `Reply from ${lead.name}: ${messagePreview.substring(0, 80)}`,
-    userId: adminId,
-    leadId: lead.id
-  });
+  if (leadWasCreated) {
+    const greetingName = firstNameOrDefault(contactName || lead.name || from);
+    await sendWelcomeForLead({
+      lead,
+      clinicId,
+      greetingName,
+      adminId
+    });
+  }
 };
 
 const processDeliveryStatus = async (statusPayload) => {
@@ -247,7 +450,13 @@ const handleBridgeEvent = async (req, res) => {
 
     const eventType = String(req.body?.type || '').trim().toLowerCase();
     if (eventType === 'message.received') {
-      await processInboundMessage(req.body?.from, req.body?.text, req.body?.metadata || {});
+      await processInboundMessage(
+        req.body?.from,
+        req.body?.text,
+        req.body?.metadata || {},
+        req.body?.clinicId,
+        req.body?.contactName || null
+      );
     } else if (eventType === 'message.status') {
       await processDeliveryStatus({
         id: req.body?.messageId,
@@ -328,10 +537,7 @@ const sendTemplate = async (req, res) => {
     if (!normalizedTo) {
       return res.status(400).json({ message: 'Invalid destination phone number' });
     }
-    const lead = await Lead.findByPhone(to);
-    if (lead && lead.consent_given === false) {
-      return res.status(403).json({ message: 'Lead has opted out of WhatsApp messages' });
-    }
+    const lead = await Lead.findByPhone(to, req.user?.clinic_id);
     const response = await sendTemplateMessage({
       to: normalizedTo,
       templateName,
@@ -366,7 +572,7 @@ const sendTemplate = async (req, res) => {
     res.json({ success: true, response, messageRecord });
   } catch (error) {
     console.error('WhatsApp sendTemplate error:', error.response?.data || error.message);
-    const lead = req.body?.to ? await Lead.findByPhone(req.body.to) : null;
+    const lead = req.body?.to ? await Lead.findByPhone(req.body.to, req.user?.clinic_id) : null;
     let messageRecord = null;
     if (lead && req.body?.templateName) {
       messageRecord = await Message.create({
@@ -404,6 +610,119 @@ const sendTemplate = async (req, res) => {
   }
 };
 
+// @desc    Backfill leads from past contacts and send follow-up message
+// @route   POST /api/whatsapp/followups/backfill
+const backfillFollowups = async (req, res) => {
+  try {
+    const clinicId = req.user.clinic_id;
+    const adminId = await getClinicAdminId(clinicId);
+    const contacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
+    const rawStatus = req.body?.status;
+    const desiredStatus = normalizeLeadStatus(rawStatus) || 'NEW';
+    const rawMessage = (req.body?.message || '').toString().trim();
+    if (!contacts.length) {
+      return res.status(400).json({ message: 'contacts array is required' });
+    }
+
+    const results = [];
+
+    for (const contact of contacts) {
+      const phone = normalizePhone(contact.phone);
+      if (!phone) {
+        results.push({ phone: contact.phone || null, success: false, error: 'Invalid phone' });
+        continue;
+      }
+
+      const name = (contact.name || '').trim() || phone;
+      const service = (contact.service || 'Follow-up').trim();
+      const source = (contact.source || 'backfill').trim();
+
+      let lead = await Lead.findByPhone(phone, clinicId);
+      if (!lead) {
+        lead = await Lead.create({
+          name,
+          phone,
+          service,
+          status: desiredStatus,
+          source,
+          clinicId,
+          assignedToId: adminId
+        });
+        await Activity.create({
+          type: 'LEAD_CREATED',
+          description: `Lead created from backfill: ${name}`,
+          userId: adminId,
+          leadId: lead.id
+        });
+      } else if (desiredStatus) {
+        await Lead.update(lead.id, clinicId, { status: desiredStatus });
+      }
+
+      const greetingName = firstNameOrDefault(name);
+      const fallbackMessage = `Hi ${greetingName}, we’re following up to see if you still need help with ${service}. Reply here and we’ll take care of you.`;
+      const messageBody = rawMessage || fallbackMessage;
+
+      try {
+        const providerResponse = await sendWhatsAppMessage({
+          to: phone,
+          body: messageBody,
+          clinicId
+        });
+        const providerMessageId = extractProviderMessageId(providerResponse);
+        await Message.create({
+          content: messageBody,
+          type: 'SENT',
+          isBusiness: true,
+          leadId: lead.id,
+          providerMessageId,
+          deliveryStatus: 'sent',
+          messageOrigin: 'backfill',
+          metadata: {
+            source: 'backfill_followup',
+            service,
+            status: desiredStatus
+          }
+        });
+        await Lead.updateLastContacted(lead.id);
+        await Activity.create({
+          type: 'MESSAGE_SENT',
+          description: `Backfill follow-up sent to ${lead.name}`,
+          userId: adminId,
+          leadId: lead.id
+        });
+        results.push({ phone, success: true, leadId: lead.id });
+      } catch (error) {
+        await Message.create({
+          content: messageBody,
+          type: 'SENT',
+          isBusiness: true,
+          leadId: lead.id,
+          deliveryStatus: 'failed',
+          messageOrigin: 'backfill',
+          deliveryError: error.response?.data?.message || error.message || 'Failed to send follow-up',
+          metadata: {
+            source: 'backfill_followup',
+            service,
+            status: desiredStatus,
+            providerError: error.response?.data || error.message
+          }
+        });
+        results.push({
+          phone,
+          success: false,
+          leadId: lead.id,
+          error: error.response?.data?.message || error.message
+        });
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('Backfill followups error:', error);
+    res.status(500).json({ message: 'Unable to process backfill followups' });
+  }
+};
+
 const connectSession = async (req, res) => {
   try {
     await saveClinicWhatsappIntegration(req.user.clinic_id, {
@@ -425,7 +744,6 @@ const connectSession = async (req, res) => {
       session
     });
   } catch (error) {
-    // console.log("waba connect error: ", error);
     await WhatsAppSession.upsert(req.user.clinic_id, {
       provider: WA_WEB_PROVIDER,
       status: 'disconnected',
@@ -556,5 +874,6 @@ module.exports = {
   getSessionStatus,
   getSessionQr,
   disconnectSession,
-  getFAQ
+  getFAQ,
+  backfillFollowups
 };

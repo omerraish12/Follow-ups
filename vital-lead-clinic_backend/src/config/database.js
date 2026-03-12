@@ -42,33 +42,13 @@ const normalizeConnectionString = (raw) => {
     return `${cleaned.slice(0, protoEnd + 3)}${user}:${passwordEncoded}@${hostAndDb}`;
 };
 
-// Build a Supabase connection string from the available env vars.
-const buildConnFromParts = () => {
-    const host = process.env.POSTGRES_HOST;
-    const database = process.env.POSTGRES_DATABASE || 'postgres';
-    const password = process.env.POSTGRES_PASSWORD;
-    const user = process.env.POSTGRES_USER || 'postgres';
-    const port = process.env.POSTGRES_PORT || 5432;
-
-    if (host && database && password) {
-        return normalizeConnectionString(`postgresql://${user}:${password}@${host}:${port}/${database}`);
-    }
-    return null;
-};
-
-// Prefer the pooled (POSTGRES_URL) string first to avoid IPv6/DNS issues, then fall back.
+// Minimal required env: POSTGRES_URL (Supabase pooled). DATABASE_URL kept as a backup.
 const connectionString = normalizeConnectionString(
-    process.env.POSTGRES_URL ||               // Supabase pooled / session pooler
-    process.env.SUPABASE_DB_URL ||            // Optional custom var
-    process.env.POSTGRES_PRISMA_URL ||        // Supabase pooled/pgbouncer
-    process.env.DATABASE_URL ||               // Direct connection (IPv6-only sometimes)
-    process.env.POSTGRES_URL_NON_POOL         // Any other override
-) || buildConnFromParts();
+    process.env.POSTGRES_URL || process.env.DATABASE_URL
+);
 
 if (!connectionString) {
-    throw new Error(
-        'Missing Supabase connection string. Provide SUPABASE_DB_URL, DATABASE_URL, POSTGRES_URL, POSTGRES_PRISMA_URL, or POSTGRES_HOST/POSTGRES_DATABASE/POSTGRES_PASSWORD.'
-    );
+    throw new Error('Missing database connection string. Set POSTGRES_URL (preferred) or DATABASE_URL.');
 }
 
 try {

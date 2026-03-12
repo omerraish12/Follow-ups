@@ -118,8 +118,6 @@ class Lead {
         assignedToId,
         lastVisitDate,
         followUpSent,
-        consentGiven,
-        consentTimestamp,
         clinicId
     } = leadData;
     const result = await query(
@@ -139,8 +137,8 @@ class Lead {
                 nextFollowUp || null,
                 lastVisitDate || null,
                 followUpSent || false,
-                consentGiven || false,
-                consentTimestamp || null,
+                true,
+                new Date().toISOString(),
                 assignedToId,
                 clinicId
             ]
@@ -148,18 +146,30 @@ class Lead {
         return result.rows[0];
     }
 
-    static async findByPhone(phone) {
+    static async findByPhone(phone, clinicId = null) {
         const variants = generatePhoneVariants(phone);
         if (!variants.length) {
             return null;
         }
 
+        const values = [variants];
+        const conditions = [
+            "regexp_replace(phone, '[^0-9+]', '', 'g') = ANY($1)",
+            "regexp_replace(phone, '[^0-9]', '', 'g') = ANY($1)"
+        ];
+
+        let clinicClause = '';
+        if (clinicId) {
+            clinicClause = ' AND clinic_id = $2';
+            values.push(clinicId);
+        }
+
         const result = await query(
             `SELECT * FROM leads 
-             WHERE regexp_replace(phone, '[^0-9+]', '', 'g') = ANY($1)
-             OR regexp_replace(phone, '[^0-9]', '', 'g') = ANY($1)
+             WHERE (${conditions.join(' OR ')})
+             ${clinicClause}
              LIMIT 1`,
-            [variants]
+            values
         );
         return result.rows[0] || null;
     }
@@ -171,6 +181,9 @@ class Lead {
 
         for (const [key, value] of Object.entries(leadData)) {
             if (value !== undefined) {
+                if (key === 'consentGiven' || key === 'consentTimestamp') {
+                    continue;
+                }
                 let dbKey = key;
                 if (key === 'assignedToId') dbKey = 'assigned_to_id';
                 if (key === 'lastContacted') dbKey = 'last_contacted';
@@ -178,8 +191,6 @@ class Lead {
                 if (key === 'nextFollowUp') dbKey = 'next_follow_up';
                 if (key === 'lastVisitDate') dbKey = 'last_visit_date';
                 if (key === 'followUpSent') dbKey = 'follow_up_sent';
-                if (key === 'consentGiven') dbKey = 'consent_given';
-                if (key === 'consentTimestamp') dbKey = 'consent_timestamp';
                 if (key === 'entryCode') dbKey = 'entry_code';
 
                 fields.push(`${dbKey} = $${paramIndex}`);
@@ -264,12 +275,12 @@ class Lead {
     static async getStats(clinicId, startDate) {
         const result = await query(
             `SELECT 
-         COUNT(*) as total,
-         COUNT(CASE WHEN status = 'NEW' AND created_at >= $2 THEN 1 END) as new,
-         COUNT(CASE WHEN status = 'HOT' THEN 1 END) as hot,
-         COUNT(CASE WHEN status = 'CLOSED' AND updated_at >= $2 THEN 1 END) as closed,
-         COUNT(CASE WHEN status = 'LOST' THEN 1 END) as lost,
-         COALESCE(SUM(CASE WHEN status = 'CLOSED' THEN value ELSE 0 END), 0) as revenue
+         COUNT(*) FILTER (WHERE created_at >= $2) as total,
+         COUNT(*) FILTER (WHERE status = 'NEW' AND created_at >= $2) as new,
+         COUNT(*) FILTER (WHERE status = 'HOT' AND updated_at >= $2) as hot,
+         COUNT(*) FILTER (WHERE status = 'CLOSED' AND updated_at >= $2) as closed,
+         COUNT(*) FILTER (WHERE status = 'LOST' AND updated_at >= $2) as lost,
+         COALESCE(SUM(CASE WHEN status = 'CLOSED' AND updated_at >= $2 THEN value ELSE 0 END), 0) as revenue
        FROM leads 
        WHERE clinic_id = $1`,
             [clinicId, startDate]

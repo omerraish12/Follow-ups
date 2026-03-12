@@ -140,7 +140,7 @@ async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         clinic_id INTEGER REFERENCES clinics(id) ON DELETE CASCADE,
         assigned_to_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        consent_given BOOLEAN DEFAULT FALSE,
+        consent_given BOOLEAN DEFAULT TRUE,
         consent_timestamp TIMESTAMP
       );
     `);
@@ -148,8 +148,9 @@ async function initializeDatabase() {
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_inbound_message_at TIMESTAMP;`);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_visit_date DATE;`);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS follow_up_sent BOOLEAN DEFAULT FALSE;`);
-        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_given BOOLEAN DEFAULT FALSE;`);
+        await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_given BOOLEAN DEFAULT TRUE;`);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS consent_timestamp TIMESTAMP;`);
+        await query(`UPDATE leads SET consent_given = TRUE WHERE consent_given IS NULL OR consent_given = FALSE;`);
         await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS entry_code VARCHAR(50);`);
 
         // Create messages table
@@ -175,13 +176,6 @@ async function initializeDatabase() {
         await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_origin VARCHAR(32);`);
         await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS delivery_error TEXT;`);
         await query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;`);
-
-        await query(`
-          ALTER TABLE automations
-            ADD COLUMN IF NOT EXISTS daily_cap INTEGER,
-            ADD COLUMN IF NOT EXISTS cooldown_hours INTEGER,
-            ADD COLUMN IF NOT EXISTS media_url TEXT;
-        `);
 
         await query(`
       CREATE TABLE IF NOT EXISTS whatsapp_sessions (
@@ -216,6 +210,8 @@ async function initializeDatabase() {
         template_name VARCHAR(255),
         template_language VARCHAR(10) DEFAULT 'en',
         media_url TEXT,
+        daily_cap INTEGER,
+        cooldown_hours INTEGER,
         components JSONB DEFAULT '[]'::jsonb,
         target_status lead_status,
         active BOOLEAN DEFAULT true,
@@ -235,10 +231,14 @@ async function initializeDatabase() {
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_name VARCHAR(255);`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_language VARCHAR(10) DEFAULT 'en';`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS media_url TEXT;`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS daily_cap INTEGER;`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS cooldown_hours INTEGER;`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS components JSONB DEFAULT '[]'::jsonb;`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_status VARCHAR(32) DEFAULT 'pending';`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_sid VARCHAR(64);`);
         await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS template_approval_sid VARCHAR(64);`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS pre_appointment BOOLEAN DEFAULT FALSE;`);
+        await query(`ALTER TABLE automations ADD COLUMN IF NOT EXISTS pre_appointment_minutes INTEGER;`);
 
         // Create executions table
         await query(`
@@ -312,6 +312,15 @@ async function initializeDatabase() {
         await query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);`);
         await query(`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read);`);
         await query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_clinic_id ON whatsapp_sessions(clinic_id);`);
+
+        // Google tokens table
+        await query(`
+          CREATE TABLE IF NOT EXISTS google_tokens (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            token_encrypted TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
 
         console.log('✅ Database tables created successfully');
     } catch (error) {

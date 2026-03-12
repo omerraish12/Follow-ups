@@ -277,7 +277,9 @@ const createAutomation = async (req, res) => {
             templateName,
             templateLanguage,
             mediaUrl,
-            components
+            components,
+            preAppointment,
+            preAppointmentMinutes
         } = req.body;
 
         const automation = await Automation.create({
@@ -289,6 +291,8 @@ const createAutomation = async (req, res) => {
             mediaUrl,
             components,
             targetStatus,
+            preAppointment,
+            preAppointmentMinutes,
             dailyCap: req.body.dailyCap,
             cooldownHours: req.body.cooldownHours,
             notifyOnReply: notifyOnReply !== undefined ? notifyOnReply : true,
@@ -351,7 +355,9 @@ const updateAutomation = async (req, res) => {
             templateName,
             templateLanguage,
             mediaUrl,
-            components
+            components,
+            preAppointment,
+            preAppointmentMinutes
         } = req.body;
 
         const automation = await Automation.findById(req.params.id, req.user.clinic_id);
@@ -372,6 +378,8 @@ const updateAutomation = async (req, res) => {
             templateLanguage,
             mediaUrl,
             components,
+            preAppointment,
+            preAppointmentMinutes,
             dailyCap: req.body.dailyCap,
             cooldownHours: req.body.cooldownHours
         });
@@ -490,12 +498,6 @@ const resubmitTemplateApproval = async (req, res) => {
                 source: 'resubmission'
             });
         }
-        console.log('Template resubmission result', {
-            automationId: automation.id,
-            templateStatus: automationResponse?.template_status,
-            templateSid: automationResponse?.template_sid,
-            templateApprovalSid: automationResponse?.template_approval_sid
-        });
         res.json(automationResponse);
     } catch (error) {
         console.error('Template resubmission failed:', error);
@@ -534,8 +536,6 @@ const approveTemplate = async (req, res) => {
                 source: 'manual_approval'
             });
         }
-
-        console.log("____approved-template____: ");
 
         res.json(updated || automation);
     } catch (error) {

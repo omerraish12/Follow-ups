@@ -3,8 +3,8 @@ import {
   Phone, DollarSign, Clock, MessageSquare, Users, Zap,
   BarChart3, Shield, ChevronLeft, Star, CheckCircle,
   ArrowLeft, Sparkles, Rocket, Target, HeartHandshake,
-  Activity, TrendingUp, Calendar, MessageCircle,
-  Award, Download, Play, Pause, RotateCcw, Bell,
+  Calendar, MessageCircle,
+  Award, Download, Play, Pause,
   PhoneCall, Video, MoreVertical, Send, Smile, Paperclip,
   Badge
 } from "lucide-react";
@@ -13,7 +13,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import LogoMark from "@/assets/followup-logo-light.svg";
@@ -88,13 +87,12 @@ export default function LandingPage() {
     new: []
   });
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
   const [isNavScrolled, setIsNavScrolled] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(76);
   const sectionRefs = useRef({});
   const navRef = useRef<HTMLElement | null>(null);
   const timersRef = useRef<number[]>([]);
-  const stepIntervalRef = useRef<number | null>(null);
+  const hasAutoPlayedDemoRef = useRef(false);
   const chatPreviewMessages = useMemo(
     () => [
       { time: "2m", name: "Lior Day Spa", text: t("landing_hero_chat_msg1"), avatar: "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=80&q=80", icon: Grid, bg: "#f26a8a", color: "#ffffff" },
@@ -106,32 +104,6 @@ export default function LandingPage() {
     ],
     [t, language]
   );
-
-  // דמו מונפש - הודעות לדוגמה
-  const demoScenarios = [
-    {
-      title: t("landing_demo_scenario1_title"),
-      steps: [
-        { time: 0, message: t("landing_demo_scenario1_step1"), icon: Clock },
-        { time: 2, message: t("landing_demo_scenario1_step2"), icon: MessageSquare },
-        { time: 5, message: t("landing_demo_scenario1_step3"), icon: Phone },
-        { time: 7, message: t("landing_demo_scenario1_step4"), icon: TrendingUp },
-        { time: 10, message: t("landing_demo_scenario1_step5"), icon: Bell },
-        { time: 15, message: t("landing_demo_scenario1_step6"), icon: DollarSign },
-      ]
-    },
-    {
-      title: t("landing_demo_scenario2_title"),
-      steps: [
-        { time: 0, message: t("landing_demo_scenario2_step1"), icon: MessageSquare },
-        { time: 1, message: t("landing_demo_scenario2_step2"), icon: Zap },
-        { time: 3, message: t("landing_demo_scenario2_step3"), icon: Rocket },
-        { time: 6, message: t("landing_demo_scenario2_step4"), icon: Clock },
-        { time: 8, message: t("landing_demo_scenario2_step5"), icon: Bell },
-        { time: 12, message: t("landing_demo_scenario2_step6"), icon: CheckCircle },
-      ]
-    }
-  ];
 
   const faqItems = [
     {
@@ -156,27 +128,46 @@ export default function LandingPage() {
     }
   ];
 
-  // אנימציית צ'אט - לקוח ישן
-  const oldClientMessages = [
-    { id: 1, type: 'received', text: t("landing_chat_old_1"), delay: 500, status: 'sent' },
-    { id: 2, type: 'received', text: t("landing_chat_old_2"), delay: 1500, status: 'sent' },
-    { id: 3, type: 'sent', text: t("landing_chat_old_3"), delay: 3000, status: 'delivered' },
-    { id: 4, type: 'received', text: t("landing_chat_old_4"), delay: 4500, status: 'sent' },
-    { id: 5, type: 'sent', text: t("landing_chat_old_5"), delay: 6000, status: 'read' },
-    { id: 6, type: 'received', text: t("landing_chat_old_6"), delay: 7500, status: 'sent' },
-    { id: 7, type: 'system', text: t("landing_chat_old_7"), delay: 8000, status: 'alert' },
-  ];
+  // Demo chat scripts — switch language based on current locale
+  const oldClientMessages = useMemo(() => (
+    language === 'he'
+      ? [
+          { id: 1, type: 'note', text: "לפני 14 ימים", delay: 200 },
+          { id: 2, type: 'received', text: "אוקיי אני אחשוב על זה...", time: "", delay: 400, status: 'sent' },
+          { id: 3, type: 'sent', text: "שלום יעל! רצינו לבדוק אם את עדיין מעוניינת בהצעה שלנו 😊", time: "היום 14:32", delay: 800, status: 'sent' },
+          { id: 4, type: 'received', text: "שכחתי מזה לגמרי, אני מעוניינת. מה הצעד הבא?", time: "היום 14:45", delay: 2200, status: 'sent' },
+          { id: 5, type: 'sent', text: "מעולה! אפשר לקבוע תור כאן:\n✅ https://cal.com/meeting", time: "היום 14:46", delay: 3700, status: 'delivered' },
+          { id: 6, type: 'received', text: "סיימתי, הזמנתי תור.", time: "היום 15:12", delay: 5200, status: 'read' },
+          { id: 7, type: 'cta', text: "לקוח חוזר! 🔥", delay: 7000 },
+        ]
+      : [
+          { id: 1, type: 'note', text: "14 days ago", delay: 200 },
+          { id: 2, type: 'received', text: "Ok, I'll think about it...", time: "", delay: 400, status: 'sent' },
+          { id: 3, type: 'sent', text: "Hey Yael! Wanted to check if you're still interested in our offer 😊", time: "Today 2:32 PM", delay: 800, status: 'sent' },
+          { id: 4, type: 'received', text: "I totally forgot, yes I'm interested. What’s next?", time: "Today 2:45 PM", delay: 2200, status: 'sent' },
+          { id: 5, type: 'sent', text: "Great! You can book a slot here:\n✅ https://cal.com/meeting", time: "Today 2:46 PM", delay: 3700, status: 'delivered' },
+          { id: 6, type: 'received', text: "Done, booked a slot.", time: "Today 3:12 PM", delay: 5200, status: 'read' },
+          { id: 7, type: 'cta', text: "Returning customer! 🔥", delay: 7000 },
+        ]
+  ), [language]);
 
-  // אנימציית צ'אט - לקוח חדש
-  const newClientMessages = [
-    { id: 1, type: 'sent', text: t("landing_chat_new_1"), delay: 500, status: 'read' },
-    { id: 2, type: 'received', text: t("landing_chat_new_2"), delay: 2000, status: 'sent' },
-    { id: 3, type: 'sent', text: t("landing_chat_new_3"), delay: 3500, status: 'delivered' },
-    { id: 4, type: 'received', text: t("landing_chat_new_4"), delay: 5000, status: 'sent' },
-    { id: 5, type: 'sent', text: t("landing_chat_new_5"), delay: 6500, status: 'read' },
-    { id: 6, type: 'received', text: t("landing_chat_new_6"), delay: 8000, status: 'sent' },
-    { id: 7, type: 'system', text: t("landing_chat_new_7"), delay: 8500, status: 'alert' },
-  ];
+  const newClientMessages = useMemo(() => (
+    language === 'he'
+      ? [
+          { id: 1, type: 'received', text: "שלום, אני מחפש טיפול פנים בתל אביב", time: "היום 10:15", delay: 500, status: 'sent' },
+          { id: 2, type: 'sent', text: "שלום! אנחנו עסק לטיפולי פנים בתל אביב. אני אשמח להסביר על השירותים שלנו 😊", time: "היום 10:16", delay: 2000, status: 'sent' },
+          { id: 3, type: 'sent', text: "אילו טיפולים מעניינים אותך? אנו מציעים טיפול פנים מתקדמים עם תוצאות מהירות ✨", time: "היום 10:16", delay: 3500, status: 'delivered' },
+          { id: 4, type: 'received', text: "מעוניין לדעת עוד על טיפול אנטי-אייג'ינג.", time: "היום 10:20", delay: 5000, status: 'sent' },
+          { id: 5, type: 'cta', text: "לקוח חדש 🔥", delay: 6800 },
+        ]
+      : [
+          { id: 1, type: 'received', text: "Hi, I'm looking for a facial treatment in Tel Aviv", time: "Today 10:15 AM", delay: 500, status: 'sent' },
+          { id: 2, type: 'sent', text: "Hi! We’re a facial clinic in Tel Aviv. Happy to explain our services 😊", time: "Today 10:16 AM", delay: 2000, status: 'sent' },
+          { id: 3, type: 'sent', text: "Which treatments interest you? We offer advanced facials with fast results ✨", time: "Today 10:16 AM", delay: 3500, status: 'delivered' },
+          { id: 4, type: 'received', text: "Interested in more info on anti-aging treatment.", time: "Today 10:20 AM", delay: 5000, status: 'sent' },
+          { id: 5, type: 'cta', text: "New customer! 🔥", delay: 6800 },
+        ]
+  ), [language]);
 
   useEffect(() => {
     const initialTheme = resolvedTheme || theme || "dark";
@@ -243,7 +234,6 @@ export default function LandingPage() {
       });
       setActiveChat('both');
       setIsPlaying(false);
-      setCurrentStep(0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language]);
@@ -251,10 +241,6 @@ export default function LandingPage() {
   const clearChatTimers = () => {
     timersRef.current.forEach((id) => window.clearTimeout(id));
     timersRef.current = [];
-    if (stepIntervalRef.current) {
-      window.clearInterval(stepIntervalRef.current);
-      stepIntervalRef.current = null;
-    }
   };
 
   const startChatAnimation = () => {
@@ -263,8 +249,10 @@ export default function LandingPage() {
     setActiveChat('both');
     setIsPlaying(true);
 
-    // Reset messages
+    const messageDurations: number[] = [];
+
     oldClientMessages.forEach((msg) => {
+      messageDurations.push(msg.delay);
       const id = window.setTimeout(() => {
         setChatMessages(prev => ({
           ...prev,
@@ -275,6 +263,7 @@ export default function LandingPage() {
     });
 
     newClientMessages.forEach((msg) => {
+      messageDurations.push(msg.delay);
       const id = window.setTimeout(() => {
         setChatMessages(prev => ({
           ...prev,
@@ -284,30 +273,28 @@ export default function LandingPage() {
       timersRef.current.push(id);
     });
 
-    // Start step animation
-    let step = 0;
-    const interval = window.setInterval(() => {
-      if (step < demoScenarios[0].steps.length - 1) {
-        step++;
-        setCurrentStep(step);
-      } else {
-        if (stepIntervalRef.current) {
-          window.clearInterval(stepIntervalRef.current);
-          stepIntervalRef.current = null;
-        }
-        setIsPlaying(false);
-      }
-    }, 2000);
-    stepIntervalRef.current = interval;
+    const completionDelay = Math.max(...messageDurations, 0) + 800;
+    const completionId = window.setTimeout(() => {
+      setIsPlaying(false);
+    }, completionDelay);
+    timersRef.current.push(completionId);
   };
 
-  const resetAnimation = () => {
-    clearChatTimers();
-    setChatMessages({ old: [], new: [] });
-    setActiveChat(null);
-    setCurrentStep(0);
-    setIsPlaying(false);
-  };
+  useEffect(() => {
+    if (
+      isVisible["demo"] &&
+      !hasAutoPlayedDemoRef.current &&
+      !isPlaying &&
+      chatMessages.old.length === 0 &&
+      chatMessages.new.length === 0
+    ) {
+      hasAutoPlayedDemoRef.current = true;
+      startChatAnimation();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVisible, isPlaying, chatMessages.old.length, chatMessages.new.length]);
+
+  useEffect(() => () => clearChatTimers(), []);
 
   const fadeInUpClass = (section) =>
     `transition-all duration-1000 transform ${isVisible[section]
@@ -327,6 +314,18 @@ export default function LandingPage() {
         return null;
     }
   };
+
+  const SafariChrome = () => (
+    <div className="bg-[#f3f3f3] text-[#111] px-4 py-2 flex items-center justify-between text-xs border-b border-black/5">
+      <span>9:38</span>
+      <div className="flex items-center gap-2">
+        <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block"></span>
+        <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full inline-block"></span>
+        <span className="w-1.5 h-1.5 bg-green-500 rounded-full inline-block"></span>
+      </div>
+      <span>4G 81%</span>
+    </div>
+  );
 
   const TypingIndicator = () => (
     <div className="mr-auto max-w-[60px] rounded-xl rounded-br-sm bg-card border border-border p-3">
@@ -730,75 +729,19 @@ export default function LandingPage() {
           </div>
 
           <div className="space-y-10">
-            <div className="grid lg:grid-cols-[1fr_1.1fr] gap-10">
-              {/* Demo Controls */}
-              <div className="space-y-6">
-                <Card className="border-2 border-primary/20">
-                  <CardContent className="p-6">
-                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                      <Activity className="h-5 w-5 text-primary" />
-                      {t("landing_demo_process_title")}
-                    </h3>
-
-                    <div className="space-y-4">
-                      {demoScenarios[0].steps.map((step, index) => (
-                        <div
-                          key={index}
-                          className={cn(
-                            "flex items-start gap-3 p-3 rounded-xl transition-all",
-                            index === currentStep ? "bg-primary/10 border border-primary/20" : "opacity-50"
-                          )}
-                        >
-                          <div className={cn(
-                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                            index === currentStep ? "bg-primary text-white" : "bg-muted"
-                          )}>
-                            <step.icon className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm">{step.message}</p>
-                            {index === currentStep && (
-                              <Progress value={(index + 1) * (100 / demoScenarios[0].steps.length)} className="h-1 mt-2" />
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex gap-3 mt-6">
-                      <Button
-                        onClick={startChatAnimation}
-                        className="flex-1 rounded-xl"
-                        disabled={isPlaying}
-                      >
-                        <Play className="h-4 w-4 ml-2" />
-                        {t("landing_demo_play")}
-                      </Button>
-                      <Button
-                        onClick={resetAnimation}
-                        variant="outline"
-                        className="rounded-xl"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Chat Mockups */}
-              <div className="grid sm:grid-cols-2 gap-4">
+            <div className="flex justify-center">
+              <div className="grid sm:grid-cols-2 gap-6 max-w-5xl w-full">
                 {/* Old Client Chat */}
                 <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-1">
-                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]" dir={language === 'he' ? 'rtl' : 'ltr'}>
-                    {/* Top bar */}
+                  <div className="flex flex-col h-[620px] rounded-[26px] overflow-hidden bg-[#e5ddd5]" dir={language === 'he' ? 'rtl' : 'ltr'}>
+                    <SafariChrome />
                     <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
                         <Users className="h-4 w-4" />
                       </div>
                       <div className="flex-1 leading-tight">
-                        <p className="text-sm font-semibold">{t("landing_chat_old_header_title")}</p>
-                        <p className="text-[11px] text-white/80">{t("landing_chat_old_header_subtitle")}</p>
+                        <p className="text-sm font-semibold">ניהול לידים</p>
+                        <p className="text-[11px] text-white/80">Lead Oscar Smith was created</p>
                       </div>
                       <div className="flex items-center gap-3 text-white/85">
                         <Video className="h-4 w-4" />
@@ -806,35 +749,38 @@ export default function LandingPage() {
                         <MoreVertical className="h-4 w-4" />
                       </div>
                     </div>
-                    {/* Messages */}
                     <div className="flex-1 px-3 py-3 space-y-2 overflow-y-auto custom-scroll">
                       {chatMessages.old.map((msg, i) => (
                         <div
                           key={i}
                           className={cn(
                             "flex",
-                            msg.type === 'sent'
-                              ? (language === 'he' ? 'justify-start' : 'justify-end')
-                              : (language === 'he' ? 'justify-end' : 'justify-start')
+                            msg.type === 'cta'
+                              ? 'justify-center'
+                              : msg.type === 'sent'
+                                ? (language === 'he' ? 'justify-start' : 'justify-end')
+                                : (language === 'he' ? 'justify-end' : 'justify-start')
                           )}
                         >
                           <div
                             className={cn(
-                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
-                              msg.type === 'sent'
-                                ? 'bg-[#d9fdd3] text-[#111827]'
+                              "max-w-[88%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed shadow-sm",
+                              msg.type === 'cta'
+                                ? 'bg-gradient-to-r from-[#1fb05b] to-[#199d44] text-white font-bold text-center px-6 py-3 rounded-full shadow-[0_12px_30px_-12px_rgba(25,157,68,0.8)]'
+                                : msg.type === 'note'
+                                  ? 'bg-transparent text-[#c62828] text-[12px] font-semibold text-center shadow-none px-0 py-0'
+                                : msg.type === 'sent'
+                                  ? 'bg-[#dcf8c6] text-[#1f2a2e]'
                                 : msg.type === 'system'
                                   ? 'bg-yellow-100 text-yellow-800 text-xs text-center w-full'
-                                  : 'bg-white text-[#111827]'
+                                  : 'bg-white text-[#1f2a2e]'
                             )}
                             dir={language === 'he' ? 'rtl' : 'ltr'}
                           >
                             {msg.text}
-                            {msg.type !== 'system' && (
+                            {msg.type !== 'system' && msg.type !== 'cta' && msg.type !== 'note' && (
                               <div className="flex justify-end items-center gap-1 mt-1">
-                                <span className="text-[10px] text-gray-500">
-                                  {new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
+                                {msg.time && <span className="text-[10px] text-gray-500">{msg.time}</span>}
                                 {msg.type === 'sent' && <MessageStatus status={msg.status} />}
                               </div>
                             )}
@@ -847,14 +793,13 @@ export default function LandingPage() {
                         </div>
                       )}
                     </div>
-                    {/* Input */}
                     <div className="bg-white/95 border-t border-black/5 px-3 py-1.5 flex items-center gap-2">
                       <Smile className="h-5 w-5 text-gray-500" />
                       <Paperclip className="h-5 w-5 text-gray-500" />
                       <input
                         disabled
                         className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
-                        placeholder={t("landing_chat_old_header_subtitle")}
+                        placeholder={language === 'he' ? "הקלד/י הודעה" : "Type a message"}
                       />
                       <Send className="h-5 w-5 text-[#25D366]" />
                     </div>
@@ -863,14 +808,15 @@ export default function LandingPage() {
 
                 {/* New Client Chat */}
                 <div className="relative w-full max-w-[320px] mx-auto rounded-[32px] bg-black shadow-[0_25px_90px_-35px_rgba(0,0,0,0.6)] p-1">
-                  <div className="flex flex-col h-[570px] rounded-[26px] overflow-hidden bg-[#e5ddd5]" dir={language === 'he' ? 'rtl' : 'ltr'}>
+                  <div className="flex flex-col h-[620px] rounded-[26px] overflow-hidden bg-[#e5ddd5]" dir={language === 'he' ? 'rtl' : 'ltr'}>
+                    <SafariChrome />
                     <div className="bg-[#075E54] text-white px-3 py-2 flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center">
                         <Rocket className="h-4 w-4" />
                       </div>
                       <div className="flex-1 leading-tight">
-                        <p className="text-sm font-semibold">{t("landing_chat_new_header_title")}</p>
-                        <p className="text-[11px] text-white/80">{t("landing_chat_new_header_subtitle")}</p>
+                        <p className="text-sm font-semibold">דני לוי</p>
+                        <p className="text-[11px] text-white/80">לקוח חדש</p>
                       </div>
                       <div className="flex items-center gap-3 text-white/85">
                         <Video className="h-4 w-4" />
@@ -884,19 +830,23 @@ export default function LandingPage() {
                           key={i}
                           className={cn(
                             "flex",
-                            msg.type === 'sent'
-                              ? (language === 'he' ? 'justify-start' : 'justify-end')
-                              : (language === 'he' ? 'justify-end' : 'justify-start')
+                            msg.type === 'cta'
+                              ? 'justify-center'
+                              : msg.type === 'sent'
+                                ? (language === 'he' ? 'justify-start' : 'justify-end')
+                                : (language === 'he' ? 'justify-end' : 'justify-start')
                           )}
                         >
                           <div
                             className={cn(
-                              "max-w-[78%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm",
+                              "max-w-[88%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed shadow-sm",
                               msg.type === 'sent'
-                                ? 'bg-[#d9fdd3] text-[#111827]'
+                                ? 'bg-[#dcf8c6] text-[#1f2a2e]'
                                 : msg.type === 'system'
                                   ? 'bg-amber-50 text-amber-900 text-xs text-center w-full'
-                                  : 'bg-white text-[#111827]'
+                                  : msg.type === 'cta'
+                                    ? 'bg-gradient-to-r from-[#1fb05b] to-[#199d44] text-white font-bold text-center px-6 py-3 rounded-full shadow-[0_12px_30px_-12px_rgba(25,157,68,0.8)]'
+                                  : 'bg-white text-[#1f2a2e]'
                             )}
                             dir={language === 'he' ? 'rtl' : 'ltr'}
                           >
@@ -904,7 +854,7 @@ export default function LandingPage() {
                             {msg.type !== 'system' && (
                               <div className="flex justify-end items-center gap-1 mt-1">
                                 <span className="text-[10px] text-gray-500">
-                                  {new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                                  {msg.time || new Date().toLocaleTimeString(language === 'he' ? 'he-IL' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                                 {msg.type === 'sent' && <MessageStatus status={msg.status} />}
                               </div>
@@ -924,7 +874,7 @@ export default function LandingPage() {
                       <input
                         disabled
                         className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder:text-gray-400"
-                        placeholder={t("landing_chat_new_header_subtitle")}
+                        placeholder={language === 'he' ? "הקלד/י הודעה" : "Type a message"}
                       />
                       <Send className="h-5 w-5 text-[#25D366]" />
                     </div>
@@ -933,29 +883,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <Card className="border-2">
-              <CardContent className="p-6">
-                <h4 className="font-bold mb-3">{t("landing_demo_realtime_title")}</h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">{t("landing_demo_realtime_identified")}</span>
-                    <Badge>3</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">{t("landing_demo_realtime_sent")}</span>
-                    <Badge variant="secondary">5</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">{t("landing_demo_realtime_replies")}</span>
-                    <Badge className="bg-success">2</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">{t("landing_demo_realtime_revenue")}</span>
-                    <span className="font-bold text-success">₪1,200</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
         </div>
@@ -1220,18 +1147,18 @@ export default function LandingPage() {
               <h3 className="text-3xl font-display font-extrabold leading-tight text-white">{t("landing_footer_title")}</h3>
               <p className="text-sm text-white/80">{t("landing_footer_subtitle")}</p>
               <div className="flex flex-wrap gap-3">
-                <Link
-                  to="/contact"
+                <a
+                  href="mailto:OMER.RAISH@GMAIL.COM?subject=Follow-ups%20Contact%20Request"
                   className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#f26a8a] via-[#f6b76c] to-[#70d7b4] px-5 py-2 text-sm font-semibold text-white shadow-[0_16px_40px_-14px_rgba(17,10,14,0.55)] transition hover:scale-[1.02]"
                 >
                   {t("landing_footer_cta_contact")}
-                </Link>
-                <Link
-                  to="/demo"
+                </a>
+                <a
+                  href="mailto:OMER.RAISH@GMAIL.COM?subject=Follow-ups%20Demo%20Request"
                   className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-5 py-2 text-sm font-semibold text-white/90 transition hover:border-white hover:bg-white/14"
                 >
                   {t("landing_footer_cta_demo")}
-                </Link>
+                </a>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 text-sm text-white/80">
                 <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3">
@@ -1286,7 +1213,7 @@ export default function LandingPage() {
                 </li>
                 <li className="flex items-center gap-3 text-white">
                   <Mail className="h-5 w-5 text-primary" />
-                  <a href="mailto:hello@clinicgrowth.com" className="font-semibold transition hover:text-white">
+                  <a href="mailto:OMER.RAISH@GMAIL.COM?subject=Follow-ups%20Inquiry" className="font-semibold transition hover:text-white">
                     {t("landing_footer_contact_email")}
                   </a>
                 </li>
