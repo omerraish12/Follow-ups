@@ -29,6 +29,7 @@ const customWebhookBasePath = (() => {
 // Middleware
 const allowedOrigins = [
     process.env.FRONTEND_URL,
+    process.env.ALLOWED_ORIGINS, // comma-separated list
     'http://localhost:8080',
     'https://follow-ups-vx12.vercel.app'
 ]
@@ -38,15 +39,18 @@ const allowedOrigins = [
     .filter(Boolean)
     .map((value) => value.replace(/\/$/, ''));
 
+// Helper: allow any Vercel preview/production domain for this project if not explicitly set
+const isAllowedOrigin = (origin) => {
+    if (!origin) return true; // same-origin / server-to-server
+    const normalized = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(normalized)) return true;
+    // allow *.vercel.app by default to simplify preview deployments
+    if (/\.vercel\.app$/.test(normalized)) return true;
+    return false;
+};
+
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) {
-            callback(null, true);
-            return;
-        }
-        const normalizedOrigin = origin.replace(/\/$/, '');
-        callback(null, allowedOrigins.includes(normalizedOrigin));
-    },
+    origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
