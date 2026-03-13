@@ -1,13 +1,18 @@
-import { z } from "zod";
+const envApi = import.meta.env.VITE_API_URL as string | undefined;
 
-const envSchema = z.object({
-  VITE_API_URL: z.string().url(),
-});
+// If we're on HTTPS and the env points to http://localhost, avoid mixed-content blocks.
+const shouldIgnoreEnvApi =
+  typeof window !== "undefined" &&
+  window.location.protocol === "https:" &&
+  envApi?.startsWith("http://localhost");
 
-const parsed = envSchema.parse(import.meta.env);
+const resolvedApi =
+  !envApi || shouldIgnoreEnvApi
+    ? `${typeof window !== "undefined" ? window.location.origin : "http://localhost:4000"}/api`
+    : envApi;
 
 export const appConfig = {
-  apiUrl: parsed.VITE_API_URL.replace(/\/$/, ""),
+  apiUrl: resolvedApi.replace(/\/$/, ""),
 };
 
 export type AppConfig = typeof appConfig;

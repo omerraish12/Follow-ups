@@ -137,20 +137,29 @@ const getAutomations = async (req, res) => {
 // @route   POST /api/automations/defaults
 const seedDefaultAutomations = async (req, res) => {
     try {
-        const created = await Automation.seedDefaults(Number(req.user.clinic_id));
+        const clinicId = Number(req.user.clinic_id);
+        if (!Number.isFinite(clinicId)) {
+            return res.status(400).json({ message: 'Invalid clinic id' });
+        }
+
+        const created = await Automation.seedDefaults(clinicId);
 
         if (created.length > 0) {
-            await Notification.create({
-                type: 'system',
-                title: 'Default automations added',
-                message: `${created.length} default automation rules were added to your clinic.`,
-                priority: 'low',
-                actionLabel: 'View automations',
-                actionLink: '/automations',
-                metadata: { createdCount: created.length },
-                userId: req.user.id,
-                clinicId: Number(req.user.clinic_id)
-            });
+            try {
+                await Notification.create({
+                    type: 'system',
+                    title: 'Default automations added',
+                    message: `${created.length} default automation rules were added to your clinic.`,
+                    priority: 'low',
+                    actionLabel: 'View automations',
+                    actionLink: '/automations',
+                    metadata: { createdCount: created.length },
+                    userId: req.user.id,
+                    clinicId
+                });
+            } catch (err) {
+                console.error('Notification create failed (defaults seed):', err);
+            }
         }
 
         res.status(created.length > 0 ? 201 : 200).json({
