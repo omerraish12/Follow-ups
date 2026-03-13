@@ -2,7 +2,8 @@ vital-lead-clinic_frontend/node_modules/
 vital-lead-clinic_backend/node_modules/
 vital-lead-clinic_frontend/.env
 vital-lead-clinic_backend/.env
-whatsapp-bridge-service/
+whatsapp-bridge-service/node_modules/
+whatsapp-bridge-service/.env
 
 
 vital-lead-clinic_frontend/build/
