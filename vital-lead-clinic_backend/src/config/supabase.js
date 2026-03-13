@@ -7,18 +7,20 @@ const url = process.env.SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const anonKey = process.env.SUPABASE_ANON_KEY || null;
 
-if (!url || !serviceRoleKey) {
-    throw new Error('Supabase is not configured. Please set SUPABASE_URL and SUPABASE_ROLE_KEY in the environment.');
-}
+const isSupabaseConfigured = Boolean(url && serviceRoleKey);
 
-const supabaseAdmin = createClient(url, serviceRoleKey, {
-    auth: {
-        autoRefreshToken: false,
-        persistSession: false
-    }
-});
+// When not configured (e.g., Vercel preview without envs), export null clients so the app can still boot
+// and surface a clear error rather than hanging at import time.
+const supabaseAdmin = isSupabaseConfigured
+    ? createClient(url, serviceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    })
+    : null;
 
-const supabaseAnon = anonKey
+const supabaseAnon = isSupabaseConfigured && anonKey
     ? createClient(url, anonKey, {
         auth: { autoRefreshToken: false, persistSession: false }
     })
@@ -26,5 +28,6 @@ const supabaseAnon = anonKey
 
 module.exports = {
     supabaseAdmin,
-    supabaseAnon
+    supabaseAnon,
+    isSupabaseConfigured
 };

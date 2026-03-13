@@ -1,4 +1,4 @@
-const { supabaseAdmin } = require('./supabase');
+const { supabaseAdmin, isSupabaseConfigured } = require('./supabase');
 
 /**
  * Executes arbitrary SQL via Supabase RPC function `exec_sql`.
@@ -31,6 +31,9 @@ const normalizeParam = (value) => {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const query = async (text, params = []) => {
+    if (!isSupabaseConfigured || !supabaseAdmin) {
+        throw new Error('Database unavailable: Supabase environment variables are missing.');
+    }
     const normalizedParams = Array.isArray(params) ? params.map(normalizeParam) : [];
     const retries = parseInt(process.env.DB_QUERY_RETRIES || '3', 10);
     const baseDelay = 150; // ms

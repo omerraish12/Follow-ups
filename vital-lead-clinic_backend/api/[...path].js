@@ -7,6 +7,7 @@ module.exports = (req, res) => {
     // Allow list - add any frontend origins you need here or use env var
     const allowedOrigins = [
         process.env.FRONTEND_URL,
+        process.env.ALLOWED_ORIGINS,
         'https://follow-ups-vx12.vercel.app',
         'https://www.businessfollowup.com'
     ]
@@ -19,7 +20,13 @@ module.exports = (req, res) => {
     const origin = req.headers.origin;
     const normalizedOrigin = origin ? origin.replace(/\/$/, '') : '';
 
-    if (normalizedOrigin && allowedOrigins.includes(normalizedOrigin)) {
+    const isAllowed = normalizedOrigin &&
+        (allowedOrigins.includes(normalizedOrigin) ||
+            /\.vercel\.app$/.test(normalizedOrigin) ||
+            /\.ngrok-free\.app$/.test(normalizedOrigin) ||
+            /\.ngrok-free\.dev$/.test(normalizedOrigin));
+
+    if (isAllowed) {
         res.setHeader('Access-Control-Allow-Origin', normalizedOrigin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');

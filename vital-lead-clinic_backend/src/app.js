@@ -31,7 +31,8 @@ const allowedOrigins = [
     process.env.FRONTEND_URL,
     process.env.ALLOWED_ORIGINS, // comma-separated list
     'http://localhost:8080',
-    'https://follow-ups-vx12.vercel.app'
+    'https://follow-ups-vx12.vercel.app',
+    'https://www.businessfollowup.com'
 ]
     .filter(Boolean)
     .flatMap((value) => value.split(','))
@@ -39,13 +40,13 @@ const allowedOrigins = [
     .filter(Boolean)
     .map((value) => value.replace(/\/$/, ''));
 
-// Helper: allow any Vercel preview/production domain for this project if not explicitly set
+// Helper: allow any Vercel preview/production domain or ngrok tunnel by default
 const isAllowedOrigin = (origin) => {
     if (!origin) return true; // same-origin / server-to-server
     const normalized = origin.replace(/\/$/, '');
     if (allowedOrigins.includes(normalized)) return true;
-    // allow *.vercel.app by default to simplify preview deployments
     if (/\.vercel\.app$/.test(normalized)) return true;
+    if (/\.ngrok-free\.app$/.test(normalized) || /\.ngrok-free\.dev$/.test(normalized)) return true;
     return false;
 };
 
@@ -88,7 +89,12 @@ app.use('/api/platform', platformRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+    const { isSupabaseConfigured } = require('./config/supabase');
+    res.json({
+        status: 'OK',
+        supabaseConfigured: Boolean(isSupabaseConfigured),
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Error handler
