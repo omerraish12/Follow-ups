@@ -27,7 +27,7 @@ const generateToken = (id) => {
 // @desc    Register user
 // @route   POST /api/auth/signup
 const signup = async (req, res) => {
-  try {
+    try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             const details = errors.array();
@@ -50,10 +50,13 @@ const signup = async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create clinic
+        // Upsert clinic by email in a single statement to avoid FK race/duplicates
         const clinicResult = await query(
-            `INSERT INTO clinics (name, email) VALUES ($1, $2) RETURNING id`,
-            [clinicName || `${name}'s Clinic`, email]
+            `INSERT INTO clinics (name, email)
+             VALUES ($1, $2)
+             ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name
+             RETURNING id`,
+            [clinicName || `${name}'s Clinic`, normalizedEmail]
         );
         const clinicId = clinicResult.rows[0].id;
 
@@ -95,6 +98,8 @@ const login = async (req, res) => {
         // Find user
         const user = await User.findByEmail(normalizedEmail);
 
+        console.log("__user__", user);
+
         if (!user) {
             console.log(`Login attempt failed for ${normalizedEmail}: user not found`);
             return res.status(401).json({ message: 'Invalid email or password' });
@@ -133,7 +138,8 @@ const login = async (req, res) => {
         // Log activity
         await query(
             `INSERT INTO activities (type, description, user_id) 
-       VALUES ($1, $2, $3)`,
+       VALUES ($1::activity_type, $2, $3::int)
+       RETURNING id`,
             ['USER_LOGIN', `User ${user.name} logged in`, user.id]
         );
 

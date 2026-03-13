@@ -29,9 +29,9 @@ class Execution {
        FROM executions e
        JOIN automations a ON e.automation_id = a.id
        JOIN leads l ON e.lead_id = l.id
-       WHERE a.clinic_id = $1 AND e.replied = true
+       WHERE a.clinic_id = $1::int AND e.replied = true
        ORDER BY e.replied_at DESC
-       LIMIT $2`,
+       LIMIT $2::int`,
             [clinicId, limit]
         );
         return result.rows;

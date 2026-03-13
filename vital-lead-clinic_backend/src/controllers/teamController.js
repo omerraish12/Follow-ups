@@ -170,7 +170,7 @@ const deleteMember = async (req, res) => {
         }
 
         const result = await query(
-            `DELETE FROM users WHERE id = $1 AND clinic_id = $2 RETURNING id`,
+            `DELETE FROM users WHERE id = $1 AND clinic_id = $2::int RETURNING id`,
             [id, req.user.clinic_id]
         );
 
@@ -238,7 +238,7 @@ const getClinics = async (req, res) => {
                 FROM leads
                 GROUP BY clinic_id
              ) l ON l.clinic_id = c.id
-             WHERE c.id = $1`,
+             WHERE c.id = $1::int`,
             [req.user.clinic_id]
         );
 

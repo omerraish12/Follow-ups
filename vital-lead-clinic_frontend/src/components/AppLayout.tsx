@@ -29,6 +29,7 @@ import ThemeToggle from "./ThemeToggle";
 import { useNotifications } from "@/hooks/useNotifications";
 import { usePermissions } from "@/hooks/usePermissions";
 import { leadService } from "@/services/leadService";
+import { useIsFetching } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,6 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { hasPermission } = usePermissions();
   const notificationCount = unreadCount;
   const visibleNavItems = navItemsConfig.filter((item) => hasPermission(item.permission));
+  const isFetching = useIsFetching();
 
   const refreshLeadsNeedingFollowup = useCallback(async () => {
     try {
@@ -257,6 +259,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
           </div>
+          {isFetching > 0 && (
+            <div className="hidden md:flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
+              <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              {t("syncing")}...
+            </div>
+          )}
 
           {/* Search */}
           <div className="hidden md:block relative">

@@ -3,7 +3,7 @@ import {
   Zap, Clock, MessageSquare, ToggleLeft, ToggleRight, Trash2, Info,
   Users, AlertCircle, CheckCircle, TrendingUp, Bell, Rocket, ArrowRight, Phone, Plus, X
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import StatusBadge from "@/components/StatusBadge";
@@ -76,6 +76,7 @@ export default function Automations() {
   const [activeTab, setActiveTab] = useState("rules");
   const [templateName, setTemplateName] = useState("");
   const [templateMessage, setTemplateMessage] = useState("");
+  const templateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [includeMedia, setIncludeMedia] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>(["new_lead"]);
@@ -589,7 +590,44 @@ export default function Automations() {
             </div>
             <div className="space-y-2">
               <p className="text-sm font-semibold text-foreground">{t("template_message_label")}</p>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="uppercase tracking-[0.25em]">{t("insert_variable")}</span>
+                {[
+                  { key: "name", label: t("variable_name") },
+                  { key: "service", label: t("variable_service") },
+                  { key: "appointment_date", label: t("variable_appointment_date") },
+                  { key: "phone", label: t("variable_phone") },
+                ].map((variable) => (
+                  <Button
+                    key={variable.key}
+                    type="button"
+                    size="xs"
+                    variant="secondary"
+                    className="rounded-full px-3 py-1 text-[11px]"
+                    onClick={() => {
+                      const el = templateTextareaRef.current;
+                      const insert = `{${variable.key}}`;
+                      if (el) {
+                        const start = el.selectionStart ?? el.value.length;
+                        const end = el.selectionEnd ?? el.value.length;
+                        const next = el.value.slice(0, start) + insert + el.value.slice(end);
+                        setTemplateMessage(next);
+                        requestAnimationFrame(() => {
+                          const pos = start + insert.length;
+                          el.selectionStart = el.selectionEnd = pos;
+                          el.focus();
+                        });
+                        return;
+                      }
+                      setTemplateMessage((prev) => `${prev}${insert}`);
+                    }}
+                  >
+                    {variable.label}
+                  </Button>
+                ))}
+              </div>
               <Textarea
+                ref={templateTextareaRef}
                 placeholder={t("template_message_placeholder")}
                 value={templateMessage}
                 onChange={(e) => setTemplateMessage(e.target.value)}
@@ -1185,91 +1223,7 @@ export default function Automations() {
         </TabsContent>
       </Tabs>
 
-      <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-card/90 to-card p-6 shadow-xl shadow-primary/20">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("recent_replies_tag")}</p>
-            <h3 className="text-xl font-semibold text-foreground">{t("recent_replies_title")}</h3>
-            <p className="text-sm text-muted-foreground">{t("recent_replies_subtitle")}</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            onClick={refreshReplies}
-            disabled={repliesLoading}
-          >
-            {repliesLoading ? t("loading") : t("recent_replies_refresh")}
-          </Button>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          {repliesLoading && (
-            <p className="text-sm text-muted-foreground">{t("loading")}</p>
-          )}
-          {repliesError && (
-            <p className="text-sm text-destructive">{repliesError}</p>
-          )}
-          {!repliesLoading && !replies.length && (
-            <p className="text-sm text-muted-foreground">{t("recent_replies_empty")}</p>
-          )}
-          {!repliesLoading && replies.map((item) => (
-            <div key={item.id} className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
-                <span>{item.automation_name}</span>
-                <span>{new Date(item.replied_at).toLocaleString()}</span>
-              </div>
-              <p className="mt-2 text-sm text-foreground">{item.lead_name}</p>
-              <p className="text-xs text-muted-foreground">{item.message}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-primary/20 bg-gradient-to-br from-card/80 to-card p-6 shadow-xl shadow-primary/20">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">{t("system_logs_tag")}</p>
-            <h3 className="text-xl font-semibold text-foreground">{t("system_logs_title")}</h3>
-            <p className="text-sm text-muted-foreground">{t("system_logs_subtitle")}</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            onClick={refreshLogs}
-            disabled={logsLoading}
-          >
-            {logsLoading ? t("loading") : t("system_logs_refresh")}
-          </Button>
-        </div>
-
-        <div className="mt-5 space-y-3">
-          {logsLoading && (
-            <p className="text-sm text-muted-foreground">{t("loading")}</p>
-          )}
-          {logsError && (
-            <p className="text-sm text-destructive">{logsError}</p>
-          )}
-          {!logsLoading && !logs.length && (
-            <p className="text-sm text-muted-foreground">{t("system_logs_empty")}</p>
-          )}
-          {!logsLoading && logs.map((log) => (
-            <div key={log.id} className="rounded-2xl border border-border/60 bg-card/80 p-4 shadow-sm transition hover:border-primary/60">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-[0.3em] text-muted-foreground">
-                <span>{log.type.replace(/_/g, " ")}</span>
-                <span>{new Date(log.created_at).toLocaleString()}</span>
-              </div>
-              <p className="mt-2 text-sm text-foreground">{log.message}</p>
-              {log.metadata && (
-                <pre className="mt-3 overflow-x-auto text-[11px] text-muted-foreground">
-                  {JSON.stringify(log.metadata, null, 2)}
-                </pre>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* Webhook replies and integration logs removed per request */}
     </div>
   );
 }

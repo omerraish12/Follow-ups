@@ -12,6 +12,7 @@ import { useAutomations } from "@/hooks/useAutomations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { whatsappService } from "@/services/whatsappService";
 import { toast } from "@/hooks/use-toast";
+import useUnsavedChanges from "@/hooks/useUnsavedChanges";
 
 interface AutomationRuleDialogProps {
   rule?: Automation;
@@ -181,6 +182,9 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
     setTestNumber("");
   };
 
+  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(buildFormState()), [form]);
+  useUnsavedChanges(open && isDirty, t("settings_unsaved_warning") || "You have unsaved changes. Leave anyway?");
+
   const defaultTrigger = isEdit ? (
     <Button variant="ghost" size="sm" className="rounded-xl gap-1.5 text-xs">
       <Pencil className="h-3.5 w-3.5" />
@@ -197,10 +201,15 @@ export default function AutomationRuleDialog({ rule, onSuccess, trigger }: Autom
     <Dialog open={open} onOpenChange={(v) => { if (v) resetForm(); setOpen(v); }}>
       <DialogTrigger asChild>{trigger || defaultTrigger}</DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between gap-2">
           <DialogTitle className="text-lg font-extrabold">
             {isEdit ? t("edit_rule") : t("new_rule")}
           </DialogTitle>
+          {open && isDirty && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700">
+              {t("unsaved_changes") || "Unsaved changes"}
+            </span>
+          )}
         </DialogHeader>
         <div className="space-y-4 mt-4">
         <div className="space-y-1.5">

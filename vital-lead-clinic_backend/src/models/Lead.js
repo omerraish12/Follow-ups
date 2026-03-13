@@ -49,7 +49,7 @@ class Lead {
         let paramIndex = 1;
 
         if (filters.clinicId) {
-            sql += ` AND l.clinic_id = $${paramIndex}`;
+            sql += ` AND l.clinic_id = $${paramIndex}::int`;
             values.push(filters.clinicId);
             paramIndex++;
         }
@@ -97,7 +97,7 @@ class Lead {
               (SELECT timestamp FROM messages WHERE lead_id = l.id AND type = 'RECEIVED' ORDER BY timestamp DESC LIMIT 1) as last_inbound_message_at
        FROM leads l
        LEFT JOIN users u ON l.assigned_to_id = u.id
-       WHERE l.id = $1 AND l.clinic_id = $2`,
+       WHERE l.id = $1 AND l.clinic_id = $2::int`,
             [id, clinicId]
         );
         return result.rows[0];
@@ -160,7 +160,7 @@ class Lead {
 
         let clinicClause = '';
         if (clinicId) {
-            clinicClause = ' AND clinic_id = $2';
+            clinicClause = ' AND clinic_id = $2::int';
             values.push(clinicId);
         }
 
@@ -204,7 +204,7 @@ class Lead {
         values.push(id, clinicId);
         const result = await query(
             `UPDATE leads SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1} RETURNING *`,
+       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1}::int RETURNING *`,
             values
         );
         return result.rows[0];
@@ -212,7 +212,7 @@ class Lead {
 
     static async delete(id, clinicId) {
         const result = await query(
-            `DELETE FROM leads WHERE id = $1 AND clinic_id = $2 RETURNING id`,
+            `DELETE FROM leads WHERE id = $1 AND clinic_id = $2::int RETURNING id`,
             [id, clinicId]
         );
         return result.rows[0];
@@ -233,9 +233,9 @@ class Lead {
             `SELECT l.*, u.name as assigned_to_name
        FROM leads l
        LEFT JOIN users u ON l.assigned_to_id = u.id
-       WHERE l.clinic_id = $1 
+       WHERE l.clinic_id = $1::int 
          AND l.status NOT IN ('CLOSED', 'LOST')
-         AND l.last_contacted < $2
+         AND l.last_contacted < $2::timestamptz
          AND EXISTS (
            SELECT 1 FROM messages m 
            WHERE m.lead_id = l.id AND m.type = 'RECEIVED'
@@ -265,7 +265,7 @@ class Lead {
         const result = await query(
             `UPDATE leads 
        SET ${setClause.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-       WHERE id IN (${placeholders}) AND clinic_id = $${paramIndex}
+       WHERE id IN (${placeholders}) AND clinic_id = $${paramIndex}::int
        RETURNING id`,
             values
         );
@@ -275,24 +275,24 @@ class Lead {
     static async getStats(clinicId, startDate) {
         const result = await query(
             `SELECT 
-         COUNT(*) FILTER (WHERE created_at >= $2) as total,
-         COUNT(*) FILTER (WHERE status = 'NEW' AND created_at >= $2) as new,
-         COUNT(*) FILTER (WHERE status = 'HOT' AND updated_at >= $2) as hot,
-         COUNT(*) FILTER (WHERE status = 'CLOSED' AND updated_at >= $2) as closed,
-         COUNT(*) FILTER (WHERE status = 'LOST' AND updated_at >= $2) as lost,
-         COALESCE(SUM(CASE WHEN status = 'CLOSED' AND updated_at >= $2 THEN value ELSE 0 END), 0) as revenue
+         COUNT(*) FILTER (WHERE created_at >= $2::timestamptz) as total,
+         COUNT(*) FILTER (WHERE status = 'NEW' AND created_at >= $2::timestamptz) as new,
+         COUNT(*) FILTER (WHERE status = 'HOT' AND updated_at >= $2::timestamptz) as hot,
+         COUNT(*) FILTER (WHERE status = 'CLOSED' AND updated_at >= $2::timestamptz) as closed,
+         COUNT(*) FILTER (WHERE status = 'LOST' AND updated_at >= $2::timestamptz) as lost,
+         COALESCE(SUM(CASE WHEN status = 'CLOSED' AND updated_at >= $2::timestamptz THEN value ELSE 0 END), 0) as revenue
        FROM leads 
-       WHERE clinic_id = $1`,
+       WHERE clinic_id = $1::int`,
             [clinicId, startDate]
         );
         return result.rows[0];
     }
 
     static async getStatusDistribution(clinicId) {
-        const result = await query(
+       const result = await query(
             `SELECT status, COUNT(*) as count 
        FROM leads 
-       WHERE clinic_id = $1 
+       WHERE clinic_id = $1::int 
        GROUP BY status`,
             [clinicId]
         );
@@ -300,14 +300,14 @@ class Lead {
     }
 
     static async getSourcePerformance(clinicId) {
-        const result = await query(
+       const result = await query(
             `SELECT 
          COALESCE(source, 'Other') as source,
          COUNT(*) as count,
          COALESCE(SUM(value), 0) as total_value,
          COALESCE(AVG(value), 0) as avg_value
        FROM leads 
-       WHERE clinic_id = $1 
+       WHERE clinic_id = $1::int 
        GROUP BY source`,
             [clinicId]
         );
@@ -315,12 +315,12 @@ class Lead {
     }
 
     static async getWeeklyActivity(clinicId) {
-        const result = await query(
+       const result = await query(
             `SELECT 
          EXTRACT(DOW FROM created_at) as day_of_week,
          COUNT(*) as count
        FROM leads 
-       WHERE clinic_id = $1 
+       WHERE clinic_id = $1::int 
          AND created_at >= CURRENT_DATE - INTERVAL '7 days'
        GROUP BY EXTRACT(DOW FROM created_at)
        ORDER BY day_of_week`,

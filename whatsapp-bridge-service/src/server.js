@@ -1,9 +1,7 @@
 const express = require('express');
-const path = require('path');
-const dotenv = require('dotenv');
-
-// Load env *before* any other modules so DB creds are available.
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+const crypto = require('crypto');
+const { config } = require('./config');
+const { healthCheck } = require('./db');
 
 const {
   ensureBridge,
@@ -19,14 +17,26 @@ const {
 } = require('./manager');
 
 const app = express();
-const port = parseInt(process.env.PORT || '5050', 10);
-const bridgeApiKey = String(process.env.WA_WEB_BRIDGE_API_KEY || '').trim();
-if (!bridgeApiKey) {
-  console.error('WA_WEB_BRIDGE_API_KEY is required for the WhatsApp bridge. Set it in the environment.');
-  process.exit(1);
-}
+const port = config.port;
+const bridgeApiKey = config.bridgeApiKey;
 
 app.use(express.json({ limit: '5mb' }));
+
+app.use((req, res, next) => {
+  const requestId = crypto.randomUUID();
+  req.requestId = requestId;
+  res.locals.requestId = requestId;
+  res.setHeader('x-request-id', requestId);
+  next();
+});
+
+const sendError = (res, status, message, code = undefined) => {
+  res.status(status).json({
+    message,
+    code,
+    requestId: res.locals.requestId
+  });
+};
 
 app.use((req, res, next) => {
   if (req.path === '/health') {
@@ -43,7 +53,24 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  healthCheck()
+    .then(() => {
+      res.json({
+        status: 'ok',
+        db: 'up',
+        timestamp: new Date().toISOString(),
+        env: config.env
+      });
+    })
+    .catch((err) => {
+      res.status(503).json({
+        status: 'degraded',
+        db: 'down',
+        message: err.message,
+        timestamp: new Date().toISOString(),
+        env: config.env
+      });
+    });
 });
 
 app.get('/bridge/state', (_req, res) => {
@@ -55,7 +82,7 @@ app.post('/bridge/start', async (_req, res) => {
     await ensureBridge();
     res.json(getBridgeState());
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to start bridge' });
+    sendError(res, 500, error.message || 'Unable to start bridge');
   }
 });
 
@@ -70,7 +97,7 @@ app.post('/bridge/welcome', async (req, res) => {
     await sendWelcomeMessage(phone, name);
     res.json({ status: 'sent' });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to send welcome message' });
+    sendError(res, 500, error.message || 'Unable to send welcome message');
   }
 });
 
@@ -81,7 +108,7 @@ app.post('/sessions/:clinicId/connect', async (req, res) => {
     console.log("One session is connecting: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to connect WhatsApp session' });
+    sendError(res, 500, error.message || 'Unable to connect WhatsApp session');
   }
 });
 
@@ -90,7 +117,7 @@ app.get('/sessions/:clinicId', async (req, res) => {
     const response = await getSessionStatus(req.params.clinicId);
     res.json(response);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to fetch WhatsApp session' });
+    sendError(res, 500, error.message || 'Unable to fetch WhatsApp session');
   }
 });
 
@@ -100,7 +127,7 @@ app.post('/sessions/:clinicId/disconnect', async (req, res) => {
     console.log("One session is disconnected: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to disconnect WhatsApp session' });
+    sendError(res, 500, error.message || 'Unable to disconnect WhatsApp session');
   }
 });
 
@@ -110,7 +137,7 @@ app.post('/messages/send', async (req, res) => {
     console.log("One session sent message: ", req.body, response);
     res.json(response);
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Unable to send WhatsApp message' });
+    sendError(res, 500, error.message || 'Unable to send WhatsApp message');
   }
 });
 

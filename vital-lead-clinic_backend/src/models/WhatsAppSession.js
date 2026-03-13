@@ -1,4 +1,4 @@
-const { query } = require('../config/database');
+const { supabaseAdmin } = require('../config/supabase');
 
 const formatSession = (row) => {
   if (!row) {
@@ -17,51 +17,38 @@ const formatSession = (row) => {
 
 class WhatsAppSession {
   static async findByClinicId(clinicId) {
-    const result = await query(
-      `SELECT *
-       FROM whatsapp_sessions
-       WHERE clinic_id = $1
-       LIMIT 1`,
-      [clinicId]
-    );
-
-    return formatSession(result.rows[0]);
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_sessions')
+      .select('*')
+      .eq('clinic_id', clinicId)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return formatSession(data);
   }
 
   static async upsert(clinicId, payload = {}) {
     const session = await this.findByClinicId(clinicId);
     if (!session) {
-      const result = await query(
-        `INSERT INTO whatsapp_sessions (
-          clinic_id,
-          provider,
-          status,
-          auth_state_encrypted,
-          qr_code,
-          device_jid,
-          last_connected_at,
-          last_error
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING *`,
-        [
-          clinicId,
-          payload.provider || 'wa_web',
-          payload.status || 'disconnected',
-          payload.authStateEncrypted || null,
-          payload.qrCode || null,
-          payload.deviceJid || null,
-          payload.lastConnectedAt || null,
-          payload.lastError || null
-        ]
-      );
-      return formatSession(result.rows[0]);
+      const { data, error } = await supabaseAdmin
+        .from('whatsapp_sessions')
+        .insert({
+          clinic_id: clinicId,
+          provider: payload.provider || 'wa_web',
+          status: payload.status || 'disconnected',
+          auth_state_encrypted: payload.authStateEncrypted || null,
+          qr_code: payload.qrCode || null,
+          device_jid: payload.deviceJid || null,
+          last_connected_at: payload.lastConnectedAt || null,
+          last_error: payload.lastError || null
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+      return formatSession(data);
     }
 
-    const fields = [];
-    const values = [];
-    let paramIndex = 1;
-
+    const updates = {};
     const mapping = {
       provider: 'provider',
       status: 'status',
@@ -73,47 +60,43 @@ class WhatsAppSession {
     };
 
     for (const [key, dbKey] of Object.entries(mapping)) {
-      if (payload[key] === undefined) {
-        continue;
+      if (payload[key] !== undefined) {
+        updates[dbKey] = payload[key];
       }
-      fields.push(`${dbKey} = $${paramIndex}`);
-      values.push(payload[key]);
-      paramIndex++;
     }
 
-    if (!fields.length) {
+    if (Object.keys(updates).length === 0) {
       return session;
     }
 
-    fields.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(clinicId);
+    updates.updated_at = new Date().toISOString();
 
-    const result = await query(
-      `UPDATE whatsapp_sessions
-       SET ${fields.join(', ')}
-       WHERE clinic_id = $${paramIndex}
-       RETURNING *`,
-      values
-    );
-
-    return formatSession(result.rows[0]);
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_sessions')
+      .update(updates)
+      .eq('clinic_id', clinicId)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return formatSession(data);
   }
 
   static async clearForClinic(clinicId) {
-    const result = await query(
-      `UPDATE whatsapp_sessions
-       SET status = 'disconnected',
-           auth_state_encrypted = NULL,
-           qr_code = NULL,
-           device_jid = NULL,
-           last_error = NULL,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE clinic_id = $1
-       RETURNING *`,
-      [clinicId]
-    );
-
-    return formatSession(result.rows[0]);
+    const { data, error } = await supabaseAdmin
+      .from('whatsapp_sessions')
+      .update({
+        status: 'disconnected',
+        auth_state_encrypted: null,
+        qr_code: null,
+        device_jid: null,
+        last_error: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('clinic_id', clinicId)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return formatSession(data);
   }
 }
 

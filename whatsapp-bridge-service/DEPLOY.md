@@ -13,11 +13,13 @@ Required (must match backend):
 
 Optional:
 - `LOG_LEVEL=info`
-- `WA_WEB_SESSIONS_DIR=./data/sessions` (path for Baileys auth files; absolute or relative to repo)
 - `WA_WEB_BRIDGE_TIMEOUT_MS=15000`
 
+## Migrations
+- Run `npm run migrate` to create/upgrade the Postgres tables (`whatsapp_sessions`, `whatsapp_session_dirs`) using the same connection string as the service.
+
 ## 2) Persistence
-- Mount the sessions directory (`WA_WEB_SESSIONS_DIR`, default `./data/sessions/`) to a durable volume (e.g., `/var/lib/whatsapp-bridge/sessions`).
+- Auth state is stored in Postgres (Supabase); the service uses temporary runtime directories only. No disk volume is required for session persistence.
 - Use the same Postgres as the backend so `whatsapp_sessions` stays in sync.
 
 ## 3) Systemd example

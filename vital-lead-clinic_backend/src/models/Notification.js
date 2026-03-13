@@ -1,15 +1,16 @@
-const { query } = require('../config/database');
+const { supabaseAdmin } = require('../config/database');
 
 class Notification {
     static async findAll(clinicId, userId, limit = 50) {
-        const result = await query(
-            `SELECT * FROM notifications
-             WHERE clinic_id = $1 AND (user_id = $2 OR user_id IS NULL)
-             ORDER BY created_at DESC
-             LIMIT $3`,
-            [clinicId, userId, limit]
-        );
-        return result.rows;
+        const { data, error } = await supabaseAdmin
+            .from('notifications')
+            .select('*')
+            .eq('clinic_id', clinicId)
+            .or(`user_id.eq.${userId},user_id.is.null`)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        if (error) throw error;
+        return data;
     }
 
     static async create(notification) {
@@ -25,67 +26,81 @@ class Notification {
             clinicId
         } = notification;
 
-        const result = await query(
-            `INSERT INTO notifications
-             (type, title, message, priority, action_label, action_link, metadata, user_id, clinic_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-             RETURNING *`,
-            [type, title, message, priority, actionLabel, actionLink, metadata || null, userId, clinicId]
-        );
-        return result.rows[0];
+        const { data, error } = await supabaseAdmin
+            .from('notifications')
+            .insert({
+                type,
+                title,
+                message,
+                priority,
+                action_label: actionLabel,
+                action_link: actionLink,
+                metadata: metadata || null,
+                user_id: userId,
+                clinic_id: clinicId
+            })
+            .select('*')
+            .single();
+        if (error) throw error;
+        return data;
     }
 
     static async markRead(id, clinicId, userId) {
-        const result = await query(
-            `UPDATE notifications
-             SET read = true
-             WHERE id = $1 AND clinic_id = $2 AND (user_id = $3 OR user_id IS NULL)
-             RETURNING *`,
-            [id, clinicId, userId]
-        );
-        return result.rows[0];
+        const { data, error } = await supabaseAdmin
+            .from('notifications')
+            .update({ read: true })
+            .eq('id', id)
+            .eq('clinic_id', clinicId)
+            .or(`user_id.eq.${userId},user_id.is.null`)
+            .select('*')
+            .single();
+        if (error) throw error;
+        return data;
     }
 
     static async markAllRead(clinicId, userId) {
-        const result = await query(
-            `UPDATE notifications
-             SET read = true
-             WHERE clinic_id = $1 AND (user_id = $2 OR user_id IS NULL)
-             RETURNING id`,
-            [clinicId, userId]
-        );
-        return result.rows;
+        const { data, error } = await supabaseAdmin
+            .from('notifications')
+            .update({ read: true })
+            .eq('clinic_id', clinicId)
+            .or(`user_id.eq.${userId},user_id.is.null`)
+            .select('id');
+        if (error) throw error;
+        return data;
     }
 
     static async delete(id, clinicId, userId) {
-        const result = await query(
-            `DELETE FROM notifications
-             WHERE id = $1 AND clinic_id = $2 AND (user_id = $3 OR user_id IS NULL)
-             RETURNING id`,
-            [id, clinicId, userId]
-        );
-        return result.rows[0];
+        const { data, error } = await supabaseAdmin
+            .from('notifications')
+            .delete()
+            .eq('id', id)
+            .eq('clinic_id', clinicId)
+            .or(`user_id.eq.${userId},user_id.is.null`)
+            .select('id')
+            .single();
+        if (error) throw error;
+        return data;
     }
 
     static async clearAll(clinicId, userId) {
-        const result = await query(
-            `DELETE FROM notifications
-             WHERE clinic_id = $1 AND (user_id = $2 OR user_id IS NULL)`,
-            [clinicId, userId]
-        );
-        return { count: result.rowCount };
+        const { error, count } = await supabaseAdmin
+            .from('notifications')
+            .delete({ count: 'exact' })
+            .eq('clinic_id', clinicId)
+            .or(`user_id.eq.${userId},user_id.is.null`);
+        if (error) throw error;
+        return { count: count || 0 };
     }
 
     static async countUnread(clinicId, userId) {
-        const result = await query(
-            `SELECT COUNT(*)::int as count
-             FROM notifications
-             WHERE clinic_id = $1
-               AND read = false
-               AND (user_id = $2 OR user_id IS NULL)`,
-            [clinicId, userId]
-        );
-        return result.rows[0]?.count || 0;
+        const { count, error } = await supabaseAdmin
+            .from('notifications')
+            .select('id', { count: 'exact', head: true })
+            .eq('clinic_id', clinicId)
+            .eq('read', false)
+            .or(`user_id.eq.${userId},user_id.is.null`);
+        if (error) throw error;
+        return count || 0;
     }
 }
 

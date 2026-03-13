@@ -100,13 +100,13 @@ const collectClinicData = async (clinicId) => {
         query(
             `SELECT id, name, email, phone, address, timezone, language, currency, logo, whatsapp_number
              FROM clinics
-             WHERE id = $1`,
+             WHERE id = $1::int`,
             [clinicId]
         ),
         query(
             `SELECT id, name, email, phone, role, status, created_at
              FROM users
-             WHERE clinic_id = $1
+             WHERE clinic_id = $1::int
              ORDER BY created_at DESC`,
             [clinicId]
         ),
@@ -114,7 +114,7 @@ const collectClinicData = async (clinicId) => {
             `SELECT id, name, phone, email, service, status, source, value, notes,
                     last_contacted, next_follow_up, created_at, updated_at, assigned_to_id
              FROM leads
-             WHERE clinic_id = $1
+             WHERE clinic_id = $1::int
              ORDER BY created_at DESC`,
             [clinicId]
         ),
@@ -122,7 +122,7 @@ const collectClinicData = async (clinicId) => {
             `SELECT id, name, trigger_days, message, target_status, active, notify_on_reply,
                     last_executed, total_executions, reply_count, success_rate, created_at
              FROM automations
-             WHERE clinic_id = $1
+             WHERE clinic_id = $1::int
              ORDER BY id DESC`,
             [clinicId]
         ),
@@ -130,7 +130,7 @@ const collectClinicData = async (clinicId) => {
             `SELECT id, type, title, message, priority, action_label, action_link, metadata,
                     read, created_at
              FROM notifications
-             WHERE clinic_id = $1
+             WHERE clinic_id = $1::int
              ORDER BY created_at DESC
              LIMIT 500`,
             [clinicId]
@@ -179,7 +179,7 @@ const mergeRepeatingAutomationMessages = (rows) => {
 };
 
 const collectConversationHistory = async (clinicId, filters = {}) => {
-    const whereClauses = ['l.clinic_id = $1'];
+    const whereClauses = ['l.clinic_id = $1::int'];
     const values = [clinicId];
     let paramIndex = 2;
 
@@ -357,7 +357,7 @@ const getSettings = async (req, res) => {
         `SELECT id, name, email, phone, address, timezone, language, currency, logo, whatsapp_number,
                     integration_settings, backup_settings
              FROM clinics
-             WHERE id = $1`,
+             WHERE id = $1::int`,
             [req.user.clinic_id]
         );
         const clinic = clinicResult.rows[0] || {};
@@ -365,7 +365,7 @@ const getSettings = async (req, res) => {
         const userResult = await query(
             `SELECT id, name, email, phone, role, avatar, created_at, notification_settings
              FROM users
-             WHERE id = $1`,
+             WHERE id = $1::int`,
             [req.user.id]
         );
         const profile = userResult.rows[0] || {};
@@ -442,7 +442,7 @@ const updateClinic = async (req, res) => {
         const result = await query(
             `UPDATE clinics
              SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $${paramIndex}
+             WHERE id = $${paramIndex}::int
              RETURNING id, name, email, phone, address, timezone, language, currency, logo, whatsapp_number`,
             values
         );
@@ -514,8 +514,8 @@ const updateNotifications = async (req, res) => {
 
         const result = await query(
             `UPDATE users
-             SET notification_settings = $1, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2
+             SET notification_settings = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2::int
              RETURNING notification_settings`,
             [settings, req.user.id]
         );
@@ -530,7 +530,7 @@ const updateBackupSettings = async (req, res) => {
     try {
         const incoming = req.body || {};
         const clinicResult = await query(
-            `SELECT backup_settings FROM clinics WHERE id = $1`,
+            `SELECT backup_settings FROM clinics WHERE id = $1::int`,
             [req.user.clinic_id]
         );
         const current = clinicResult.rows[0]?.backup_settings || defaultBackupSettings;
@@ -541,8 +541,8 @@ const updateBackupSettings = async (req, res) => {
         };
         const result = await query(
             `UPDATE clinics
-             SET backup_settings = $1, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2
+             SET backup_settings = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2::int
              RETURNING backup_settings`,
             [settings, req.user.clinic_id]
         );
@@ -564,7 +564,7 @@ const runBackup = async (req, res) => {
         await fs.promises.writeFile(filepath, JSON.stringify(data, null, 2), 'utf8');
 
         const clinicResult = await query(
-            `SELECT backup_settings FROM clinics WHERE id = $1`,
+            `SELECT backup_settings FROM clinics WHERE id = $1::int`,
             [req.user.clinic_id]
         );
         const current = clinicResult.rows[0]?.backup_settings || defaultBackupSettings;
@@ -572,8 +572,9 @@ const runBackup = async (req, res) => {
 
         await query(
             `UPDATE clinics
-             SET backup_settings = $1, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2`,
+             SET backup_settings = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2::int
+            RETURNING backup_settings`,
             [next, req.user.clinic_id]
         );
 
@@ -623,7 +624,7 @@ const updateIntegration = async (req, res) => {
 
         const safeData = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
         const clinicResult = await query(
-            `SELECT integration_settings FROM clinics WHERE id = $1`,
+            `SELECT integration_settings FROM clinics WHERE id = $1::int`,
             [req.user.clinic_id]
         );
         const stored = clinicResult.rows[0]?.integration_settings || {};
@@ -666,8 +667,8 @@ const updateIntegration = async (req, res) => {
             };
             const result = await query(
                 `UPDATE clinics
-                 SET integration_settings = $1, updated_at = CURRENT_TIMESTAMP
-                 WHERE id = $2
+                 SET integration_settings = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+                 WHERE id = $2::int
                  RETURNING integration_settings`,
                 [next, req.user.clinic_id]
             );
@@ -694,8 +695,8 @@ const updateIntegration = async (req, res) => {
 
         const result = await query(
             `UPDATE clinics
-             SET integration_settings = $1, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $2
+             SET integration_settings = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $2::int
              RETURNING integration_settings`,
             [next, req.user.clinic_id]
         );
@@ -799,7 +800,7 @@ const deleteAccount = async (req, res) => {
             const adminResult = await query(
                 `SELECT COUNT(*)::int as count
                  FROM users
-                 WHERE clinic_id = $1 AND role = 'ADMIN' AND id <> $2`,
+                WHERE clinic_id = $1::int AND role = 'ADMIN' AND id <> $2`,
                 [req.user.clinic_id, req.user.id]
             );
             if ((adminResult.rows[0]?.count || 0) === 0) {
@@ -808,7 +809,7 @@ const deleteAccount = async (req, res) => {
         }
 
         await query(
-            `DELETE FROM users WHERE id = $1 AND clinic_id = $2`,
+            `DELETE FROM users WHERE id = $1 AND clinic_id = $2::int`,
             [req.user.id, req.user.clinic_id]
         );
 
@@ -831,7 +832,7 @@ const uploadLogo = async (req, res) => {
         const dataUrl = `data:${mime};base64,${base64}`;
 
         await query(
-            `UPDATE clinics SET logo = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            `UPDATE clinics SET logo = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2::int`,
             [dataUrl, req.user.clinic_id]
         );
 
@@ -852,7 +853,7 @@ const uploadProfilePhoto = async (req, res) => {
         const dataUrl = `data:${mime};base64,${base64}`;
 
         await query(
-            `UPDATE users SET avatar = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            `UPDATE users SET avatar = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2::int`,
             [dataUrl, req.user.id]
         );
 

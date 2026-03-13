@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +11,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
 import type { Lead } from "@/types/leads";
 import { SERVICE_OPTIONS } from "@/lib/serviceOptions";
+import useUnsavedChanges from "@/hooks/useUnsavedChanges";
 
 interface EditLeadDialogProps {
   lead: Lead | null;
@@ -40,10 +41,12 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
   const { updateLead } = useLeads();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState(() => (lead ? getInitialForm(lead) : getInitialForm({} as Lead)));
+  const [initialForm, setInitialForm] = useState(form);
 
   useEffect(() => {
     if (lead) {
       setForm(getInitialForm(lead));
+      setInitialForm(getInitialForm(lead));
     }
   }, [lead]);
 
@@ -89,13 +92,21 @@ export default function EditLeadDialog({ lead, open, onOpenChange, onSuccess }: 
     }
   };
 
+  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialForm), [form, initialForm]);
+  useUnsavedChanges(open && isDirty, t("settings_unsaved_warning") || "You have unsaved changes. Leave anyway?");
+
   if (!lead) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between gap-2">
           <DialogTitle className="text-lg font-extrabold">{t("edit_lead")}</DialogTitle>
+          {isDirty && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700">
+              {t("unsaved_changes") || "Unsaved changes"}
+            </span>
+          )}
         </DialogHeader>
         <div className="space-y-4 mt-4">
           <div className="space-y-1.5">

@@ -1,5 +1,5 @@
-const { query } = require('../config/database');
 const WhatsAppSession = require('../models/WhatsAppSession');
+const { supabaseAdmin } = require('../config/supabase');
 const { sendMessage: sendWaWebBridgeMessage } = require('./waWebBridgeService');
 const {
   WA_WEB_PROVIDER,
@@ -34,12 +34,14 @@ const getClinicIntegrationSettings = async (clinicId) => {
     return {};
   }
 
-  const result = await query(
-    `SELECT integration_settings FROM clinics WHERE id = $1`,
-    [clinicId]
-  );
-
-  return result.rows?.[0]?.integration_settings || {};
+  const { data, error } = await supabaseAdmin
+    .from('clinics')
+    .select('integration_settings')
+    .eq('id', clinicId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.integration_settings || {};
 };
 
 const getClinicWhatsappConfig = async (clinicId) => {

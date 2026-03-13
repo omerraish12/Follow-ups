@@ -4,7 +4,7 @@ class IntegrationLog {
     static async create({ type, level = 'error', message, metadata = null, clinicId = null }) {
         const result = await query(
             `INSERT INTO integration_logs (type, level, message, metadata, clinic_id)
-             VALUES ($1, $2, $3, $4, $5)
+             VALUES ($1, $2, $3, $4::jsonb, $5::int)
              RETURNING *`,
             [type, level, message, metadata, clinicId]
         );
@@ -14,9 +14,9 @@ class IntegrationLog {
     static async findRecent(clinicId, limit = 20) {
         const result = await query(
             `SELECT * FROM integration_logs
-             WHERE clinic_id = $1 OR clinic_id IS NULL
+             WHERE clinic_id = $1::int OR clinic_id IS NULL
              ORDER BY created_at DESC
-             LIMIT $2`,
+             LIMIT $2::int`,
             [clinicId, limit]
         );
         return result.rows;

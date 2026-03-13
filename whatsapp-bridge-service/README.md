@@ -18,7 +18,7 @@ Set these in the bridge container/VM:
 - `WA_BACKEND_URL` — base URL of the backend (e.g., `https://api.yourdomain.com`).
 - `WA_WEB_BACKEND_SHARED_SECRET` — sent as `x-bridge-secret` to `/api/whatsapp/bridge/events` and must match the backend.
 - `WA_WEB_SESSIONS_DIR` — where Baileys auth files live; absolute path or relative to repo. Defaults to `./data/sessions`.
-- `POSTGRES_URL` (or `POSTGRES_*`) — same database the backend uses so `whatsapp_sessions` stays in sync.
+- `POSTGRES_URL`/`SUPABASE_DB_URL` (or `POSTGRES_*`) — same database the backend uses so `whatsapp_sessions` stays in sync. Use your Supabase pooled URL here.
 - Optional: `LOG_LEVEL` (default `info`), `WA_WEB_BRIDGE_TIMEOUT_MS` if your network is slow.
 
 Backend-side env (already wired):
@@ -46,14 +46,22 @@ npm run dev    # watches with nodemon
 npm start      # plain node
 ```
 
-Persist `data/sessions/` on a volume if you containerize. Auto-reconnect is enabled; on start the service restores all rows that have `auth_state_encrypted`.
-You can change the path with `WA_WEB_SESSIONS_DIR`; useful if the volume is mounted elsewhere.
-Each clinic’s auth files now live under a stable UUID folder (tracked in `data/sessions/session_map.json`) so the on-disk path stays consistent across restarts while keeping clinic IDs off the filesystem.
+ Auth state is now persisted in Postgres (Supabase) only; the bridge uses temporary runtime directories per clinic. No host volume is required for WhatsApp auth files.
+
+## Migrations
+
+Run database migrations before starting the service:
+
+```bash
+npm run migrate
+```
+
+The script applies `migrations/*.sql` in order using the Postgres connection in your `.env`.
 
 ## Deployment checklist
 
-- Place the bridge on a 24/7 host (e.g., small VM on AWS/DO/GCP). Do **not** use serverless.
-- Keep disk + Postgres storage persistent so users avoid rescanning the QR.
+- Place the bridge on a 24/7 host (e.g., small VM on AWS/DO/GCP). Serverless (Vercel/Netlify) will drop the long-lived WhatsApp Web socket; use them only for dashboards, not the bridge.
+- Keep disk + Postgres storage persistent so users avoid rescanning the QR. If disk is wiped, auth blobs and session mapping can be restored from Postgres (Supabase) but users may need to rescan if the on-disk Baileys files vanish mid-run.
 - Restrict ingress: allow only the backend IPs or require `WA_WEB_BRIDGE_API_KEY`.
 - Back up the Postgres DB; auth blobs are AES-256-GCM encrypted with `WA_WEB_AUTH_SECRET`.
 - Monitor `/health` and log stream; restart on failures (systemd, PM2, or container restart policy).

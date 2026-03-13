@@ -8,6 +8,7 @@ const {
   useMultiFileAuthState
 } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
+const { config } = require('./config');
 
 const state = {
   status: 'idle',
@@ -19,19 +20,17 @@ let socket = null;
 let starting = false;
 
 const resolveAuthDir = () => {
-  const custom = String(process.env.WA_WEB_SINGLE_AUTH_DIR || '').trim();
-  const target = custom
-    ? path.isAbsolute(custom)
-      ? custom
-      : path.join(__dirname, '..', custom)
-    : path.join(__dirname, '..', 'data', 'single_session');
-
-  fs.mkdirSync(target, { recursive: true });
-  return target;
+  const custom = config.singleAuthDir ? String(config.singleAuthDir).trim() : '';
+  const base = custom
+    ? (path.isAbsolute(custom) ? custom : path.join(__dirname, '..', custom))
+    : null;
+  const dir = base || fs.mkdtempSync(path.join(require('os').tmpdir(), 'wa-single-'));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 };
 
 const AUTH_DIR = resolveAuthDir();
-const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
+const logger = pino({ level: config.logLevel });
 
 const resetAuthDir = async () => {
   await fs.promises.rm(AUTH_DIR, { recursive: true, force: true });

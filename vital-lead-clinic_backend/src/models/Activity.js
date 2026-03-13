@@ -38,12 +38,12 @@ class Activity {
     }
 
     static async getRecent(clinicId, limit = 20) {
-        const result = await query(
+       const result = await query(
             `SELECT a.*, u.name as user_name, l.name as lead_name 
        FROM activities a
        JOIN users u ON a.user_id = u.id
        LEFT JOIN leads l ON a.lead_id = l.id
-       WHERE u.clinic_id = $1 
+       WHERE u.clinic_id = $1::int 
        ORDER BY a.created_at DESC 
        LIMIT $2`,
             [clinicId, limit]

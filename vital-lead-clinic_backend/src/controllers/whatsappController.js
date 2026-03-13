@@ -47,7 +47,7 @@ const normalizeLeadStatus = (status) => {
 
 const loadClinicIntegrationSettings = async (clinicId) => {
   const result = await query(
-    `SELECT integration_settings FROM clinics WHERE id = $1`,
+    `SELECT integration_settings FROM clinics WHERE id = $1::int`,
     [clinicId]
   );
 
@@ -88,8 +88,9 @@ const saveClinicWhatsappIntegration = async (clinicId, patch = {}) => {
 
   await query(
     `UPDATE clinics
-     SET integration_settings = $1, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $2`,
+     SET integration_settings = $1::jsonb, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2::int
+     RETURNING integration_settings`,
     [next, clinicId]
   );
 
@@ -486,7 +487,7 @@ const getLatestLeadMessageTimestamp = async (req, res) => {
       `SELECT MAX(m.timestamp) AS last_message_at
        FROM messages m
        JOIN leads l ON m.lead_id = l.id
-       WHERE l.clinic_id = $1`,
+       WHERE l.clinic_id = $1::int`,
       [req.user.clinic_id]
     );
     const lastMessageAt = result.rows?.[0]?.last_message_at || null;
@@ -499,7 +500,7 @@ const getLatestLeadMessageTimestamp = async (req, res) => {
 const getSenderInfo = async (req, res) => {
   try {
     const clinicResult = await query(
-      `SELECT whatsapp_number, integration_settings FROM clinics WHERE id = $1`,
+      `SELECT whatsapp_number, integration_settings FROM clinics WHERE id = $1::int`,
       [req.user.clinic_id]
     );
     const clinic = clinicResult.rows?.[0] || {};
@@ -724,14 +725,19 @@ const backfillFollowups = async (req, res) => {
 };
 
 const connectSession = async (req, res) => {
+  const clinicId = Number(req.user?.clinic_id);
+  if (!Number.isFinite(clinicId)) {
+    return res.status(400).json({ message: 'Invalid clinic id' });
+  }
   try {
-    await saveClinicWhatsappIntegration(req.user.clinic_id, {
+
+    await saveClinicWhatsappIntegration(clinicId, {
       provider: WA_WEB_PROVIDER,
       status: 'connecting'
     });
 
-    const response = await connectWaWebBridgeSession(req.user.clinic_id);
-    const session = await WhatsAppSession.upsert(req.user.clinic_id, {
+    const response = await connectWaWebBridgeSession(clinicId);
+    const session = await WhatsAppSession.upsert(clinicId, {
       provider: WA_WEB_PROVIDER,
       status: response?.status || 'connecting',
       qrCode: response?.qrCode || null,
@@ -744,11 +750,14 @@ const connectSession = async (req, res) => {
       session
     });
   } catch (error) {
-    await WhatsAppSession.upsert(req.user.clinic_id, {
-      provider: WA_WEB_PROVIDER,
-      status: 'disconnected',
-      lastError: error.response?.data?.message || error.message || 'Unable to connect WhatsApp Web session'
-    });
+    const safeClinicId = clinicId;
+    if (safeClinicId) {
+      await WhatsAppSession.upsert(safeClinicId, {
+        provider: WA_WEB_PROVIDER,
+        status: 'disconnected',
+        lastError: error.response?.data?.message || error.message || 'Unable to connect WhatsApp Web session'
+      });
+    }
     return res.status(error.response?.status || 502).json({
       message: error.response?.data?.message || error.message || 'Unable to connect WhatsApp Web session'
     });

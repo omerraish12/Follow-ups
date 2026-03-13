@@ -79,6 +79,20 @@ const getTemplateLogLevel = (status) => {
     return 'info';
 };
 
+const parseTriggerDays = (value) => {
+    if (Array.isArray(value)) {
+        return value.map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v));
+    }
+    if (typeof value === 'string') {
+        const parts = value.split(/[,\\s]+/).map((v) => parseInt(v, 10)).filter((v) => Number.isFinite(v));
+        return parts;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return [value];
+    }
+    return null;
+};
+
 const logTemplateStatusChange = async ({
     automation,
     templateStatus,
@@ -123,7 +137,7 @@ const getAutomations = async (req, res) => {
 // @route   POST /api/automations/defaults
 const seedDefaultAutomations = async (req, res) => {
     try {
-        const created = await Automation.seedDefaults(req.user.clinic_id);
+        const created = await Automation.seedDefaults(Number(req.user.clinic_id));
 
         if (created.length > 0) {
             await Notification.create({
@@ -135,7 +149,7 @@ const seedDefaultAutomations = async (req, res) => {
                 actionLink: '/automations',
                 metadata: { createdCount: created.length },
                 userId: req.user.id,
-                clinicId: req.user.clinic_id
+                clinicId: Number(req.user.clinic_id)
             });
         }
 
@@ -178,7 +192,7 @@ const getAutomation = async (req, res) => {
 const getAutomationTemplates = async (req, res) => {
     try {
         const statusFilter = req.query.status;
-        const conditions = ['clinic_id = $1', 'template_name IS NOT NULL'];
+        const conditions = ['clinic_id = $1::int', 'template_name IS NOT NULL'];
         const params = [req.user.clinic_id];
         if (statusFilter) {
             params.push(statusFilter);
@@ -284,7 +298,7 @@ const createAutomation = async (req, res) => {
 
         const automation = await Automation.create({
             name,
-            triggerDays: triggerDays || [3, 7, 14],
+            triggerDays: parseTriggerDays(triggerDays) || [3, 7, 14],
             message,
             templateName,
             templateLanguage,
@@ -368,7 +382,7 @@ const updateAutomation = async (req, res) => {
 
         const updated = await Automation.update(req.params.id, req.user.clinic_id, {
             name,
-            triggerDays,
+            triggerDays: parseTriggerDays(triggerDays) || (triggerDays === undefined ? undefined : []),
             message,
             targetStatus,
             active,
@@ -570,7 +584,7 @@ const getDeliveryStats = async (req, res) => {
                 COUNT(*) FILTER (WHERE delivery_status = 'failed')    AS failed
              FROM messages m
              JOIN leads l ON l.id = m.lead_id
-             WHERE l.clinic_id = $1
+             WHERE l.clinic_id = $1::int
                AND m.message_origin IN ('automation','template')`,
             [req.user.clinic_id]
         );
@@ -585,7 +599,8 @@ const getDeliveryStats = async (req, res) => {
 // @route   GET /api/automations/replies/recent
 const getRecentReplies = async (req, res) => {
     try {
-        const replies = await Execution.findRecentReplies(req.user.clinic_id, 6);
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 6, 1), 50);
+        const replies = await Execution.findRecentReplies(req.user.clinic_id, limit);
         res.json(replies);
     } catch (error) {
         console.error('Error fetching recent replies:', error);

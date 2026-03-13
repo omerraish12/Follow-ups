@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useLeads } from "@/hooks/useLeads";
 import type { LeadStatus } from "@/types/leads";
 import { SERVICE_OPTIONS } from "@/lib/serviceOptions";
+import useUnsavedChanges from "@/hooks/useUnsavedChanges";
 
 interface AddLeadDialogProps {
   onSuccess?: () => void;
@@ -59,6 +60,19 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
   const [errors, setErrors] = useState<Record<string, string>>({});
   const isControlled = typeof open === "boolean";
   const dialogOpen = isControlled ? open : internalOpen;
+  const initialForm = useMemo(() => ({
+    name: "",
+    phone: "",
+    email: "",
+    service: "",
+    source: "",
+    status: "NEW" as LeadStatus,
+    notes: "",
+    value: "",
+    nextFollowUp: "",
+    entryCode: "",
+    consentGiven: false
+  }), []);
 
   const setDialogOpen = (nextOpen: boolean) => {
     if (!isControlled) {
@@ -80,6 +94,9 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
+
+  const isDirty = useMemo(() => JSON.stringify(form) !== JSON.stringify(initialForm), [form, initialForm]);
+  useUnsavedChanges(dialogOpen && isDirty, t("settings_unsaved_warning") || "You have unsaved changes. Leave anyway?");
 
   const handleSubmit = async () => {
     if (!validate()) return;
@@ -137,8 +154,13 @@ export default function AddLeadDialog({ onSuccess, open, onOpenChange, hideTrigg
         </DialogTrigger>
       )}
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between gap-2">
           <DialogTitle className="text-lg font-extrabold">{t("add_new_lead")}</DialogTitle>
+          {dialogOpen && isDirty && (
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700">
+              {t("unsaved_changes") || "Unsaved changes"}
+            </span>
+          )}
         </DialogHeader>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
           <Field label={t("full_name") + " *"} error={errors.name}>

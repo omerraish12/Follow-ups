@@ -18,7 +18,7 @@ const getClinicMessages = async (req, res) => {
                 l.status AS lead_status
              FROM messages m
              JOIN leads l ON l.id = m.lead_id
-             WHERE l.clinic_id = $1
+             WHERE l.clinic_id = $1::int
                AND m.timestamp >= NOW() - ($2 || ' months')::interval
              ORDER BY m.timestamp DESC`,
             [clinicId, months]
@@ -72,9 +72,10 @@ const getKPI = async (req, res) => {
         const responseResult = await query(
             `SELECT AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - last_contacted)) / 3600) AS avg_hours
              FROM leads
-             WHERE clinic_id = $1 AND last_contacted IS NOT NULL`,
+             WHERE clinic_id = $1::int AND last_contacted IS NOT NULL`,
             [clinicId]
         );
+
         const avgResponseHours = parseFloat(responseResult.rows[0]?.avg_hours) || 0;
 
         // Returned leads in period using simple keyword detection
@@ -93,8 +94,8 @@ const getKPI = async (req, res) => {
             `SELECT COUNT(DISTINCT m.lead_id) as count 
              FROM messages m
              JOIN leads l ON l.id = m.lead_id
-             WHERE l.clinic_id = $1
-               AND m.timestamp >= $2
+             WHERE l.clinic_id = $1::int
+               AND m.timestamp >= $2::timestamptz
                AND (${keywordClauses})`,
             [clinicId, startDate, ...returnKeywords]
         );
@@ -179,28 +180,45 @@ const getWeeklyActivity = async (req, res) => {
 // @route   GET /api/analytics/team-performance
 const getTeamPerformance = async (req, res) => {
     try {
-        const users = await User.getClinicUsers(req.user.clinic_id);
+        const clinicId = Number(req.user.clinic_id);
+        if (!Number.isFinite(clinicId)) {
+            return res.status(400).json({ message: 'Invalid clinic id' });
+        }
+
+        const users = await User.getClinicUsers(clinicId);
 
         const performance = [];
 
         for (const user of users) {
-            const leadStats = await query(
-                `SELECT 
-           COUNT(*) as assigned,
-           COUNT(CASE WHEN status = 'CLOSED' THEN 1 END) as conversions,
-           COALESCE(SUM(value), 0) as revenue
-         FROM leads 
-         WHERE assigned_to_id = $1`,
-                [user.id]
-            );
+            let leadStats;
+            try {
+                leadStats = await query(
+                    `SELECT 
+          COUNT(*) as assigned,
+          COUNT(CASE WHEN status = 'CLOSED' THEN 1 END) as conversions,
+          COALESCE(SUM(value), 0) as revenue
+        FROM leads 
+        WHERE assigned_to_id = $1::int`,
+                    [user.id]
+                );
+            } catch (err) {
+                console.error('leadStats error', err);
+                throw err;
+            }
 
-            const activityCount = await query(
-                `SELECT COUNT(*) as count 
+            let activityCount;
+            try {
+                activityCount = await query(
+                    `SELECT COUNT(*) as count 
          FROM activities 
-         WHERE user_id = $1 
+         WHERE user_id = $1::int 
            AND created_at >= CURRENT_DATE - INTERVAL '30 days'`,
-                [user.id]
-            );
+                    [user.id]
+                );
+            } catch (err) {
+                console.error('activityCount error', err);
+                throw err;
+            }
 
             performance.push({
                 id: user.id,

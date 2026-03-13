@@ -1,122 +1,70 @@
-const { Pool } = require('pg');
-const dns = require('node:dns');
-const dotenv = require('dotenv');
+const { supabaseAdmin } = require('./supabase');
 
-dotenv.config();
-
-const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-
-// Prefer IPv4 when both A/AAAA exist to avoid resolver issues on some Windows setups.
-if (dns.setDefaultResultOrder) {
-    dns.setDefaultResultOrder('ipv4first');
-}
-
-// Normalize any Supabase/Postgres URL, safely encoding passwords that contain '@' or special chars.
-const normalizeConnectionString = (raw) => {
-    if (!raw) return null;
-    const cleaned = raw.replace(/"/g, '').replace(/^postgres:\/\//, 'postgresql://');
-    try {
-        // Try native parsing first
-        const u = new URL(cleaned);
-        if (u.password) return cleaned; // already valid
-    } catch (_) {
-        // fall through to manual fix
+/**
+ * Executes arbitrary SQL via Supabase RPC function `exec_sql`.
+ * The function must be created in your Supabase project:
+ *
+ * create or replace function public.exec_sql(sql text, params jsonb default '[]')
+ * returns setof jsonb
+ * language plpgsql
+ * security definer
+ * set search_path = public
+ * as $$
+ * declare vals text[] := array(select jsonb_array_elements_text(params));
+ * begin
+ *   return query execute 'select to_jsonb(t.*) from (' || sql || ') t'
+ *   using variadic vals;
+ * end;
+ * $$;
+ */
+const normalizeParam = (value) => {
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (/^-?\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+        if (/^-?\d+\.\d+$/.test(trimmed)) return parseFloat(trimmed);
+        if (trimmed === 'true') return true;
+        if (trimmed === 'false') return false;
     }
-
-    // Manual fix: find the last '@' (host separator) and URL-encode the password portion.
-    const protoEnd = cleaned.indexOf('://');
-    if (protoEnd === -1) return cleaned;
-    const afterProto = cleaned.slice(protoEnd + 3);
-    const lastAt = afterProto.lastIndexOf('@');
-    if (lastAt === -1) return cleaned;
-
-    const auth = afterProto.slice(0, lastAt);
-    const hostAndDb = afterProto.slice(lastAt + 1);
-    const colon = auth.indexOf(':');
-    if (colon === -1) return cleaned;
-
-    const user = auth.slice(0, colon);
-    const passwordRaw = auth.slice(colon + 1);
-    const passwordEncoded = encodeURIComponent(passwordRaw);
-
-    return `${cleaned.slice(0, protoEnd + 3)}${user}:${passwordEncoded}@${hostAndDb}`;
+    return value;
 };
-
-// Minimal required env: POSTGRES_URL (Supabase pooled). DATABASE_URL kept as a backup.
-const connectionString = normalizeConnectionString(
-    process.env.POSTGRES_URL || process.env.DATABASE_URL
-);
-
-if (!connectionString) {
-    throw new Error('Missing database connection string. Set POSTGRES_URL (preferred) or DATABASE_URL.');
-}
-
-try {
-    const parsed = new URL(connectionString);
-    console.log(`Database client targeting host ${parsed.hostname}:${parsed.port || 5432} (ssl on, pool max ${parseInt(process.env.DB_POOL_MAX, 10) || 20})`);
-} catch (e) {
-    console.log('Database connection string set (host parse skipped)');
-}
-
-const pool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-    max: parseInt(process.env.DB_POOL_MAX, 10) || (isServerless ? 1 : 20),
-    idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT, 10) || 30000,
-    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) || 20000,
-    keepAlive: true
-});
-
-console.log('Database client initialized using Supabase connection string');
-
-pool.on('error', (err) => {
-    console.error('Unexpected database pool error:', err);
-});
-
-// Test connection on startup (skip in serverless to avoid cold-start failures).
-if (!isServerless) {
-    pool.connect((err, client, release) => {
-        if (err) {
-            console.error('Error connecting to database:', err.stack);
-        } else {
-            console.log('Database connected successfully');
-            release();
-        }
-    });
-}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const isTransientConnectionError = (err) => {
-    if (!err) return false;
-    const message = (err.message || '').toLowerCase();
-    return (
-        err.code === 'ECONNRESET' ||
-        err.code === 'ETIMEDOUT' ||
-        message.includes('connection terminated unexpectedly') ||
-        message.includes('connection terminated due to connection timeout') ||
-        message.includes('terminating connection due to administrator command')
-    );
-};
+const query = async (text, params = []) => {
+    const normalizedParams = Array.isArray(params) ? params.map(normalizeParam) : [];
+    const retries = parseInt(process.env.DB_QUERY_RETRIES || '3', 10);
+    const baseDelay = 150; // ms
 
-const queryWithRetry = async (text, params) => {
-    const maxAttempts = parseInt(process.env.DB_QUERY_RETRIES, 10) || 2;
-    let attempt = 0;
-    while (true) {
-        attempt += 1;
-        try {
-            return await pool.query(text, params);
-        } catch (err) {
-            if (!isTransientConnectionError(err) || attempt >= maxAttempts) {
-                throw err;
-            }
-            const backoffMs = 250 * attempt;
-            await sleep(backoffMs);
+    let lastError;
+    for (let attempt = 0; attempt < retries; attempt++) {
+        const { data, error } = await supabaseAdmin.rpc('exec_sql', {
+            sql: text,
+            params: normalizedParams
+        });
+
+        if (!error) {
+            return {
+                rows: data || [],
+                rowCount: Array.isArray(data) ? data.length : 0
+            };
+        }
+
+        lastError = error;
+        // Retry only on network-ish errors
+        const msg = (error.message || '').toLowerCase();
+        if (!msg.includes('fetch failed') && !msg.includes('ecconnreset') && !msg.includes('timeout')) {
+            break;
+        }
+        if (attempt < retries - 1) {
+            await sleep(baseDelay * (attempt + 1));
         }
     }
+
+    throw lastError;
 };
 
 module.exports = {
-    query: queryWithRetry,
-    pool
+    query,
+    pool: supabaseAdmin, // kept for compatibility; not a PG pool
+    supabaseAdmin
 };

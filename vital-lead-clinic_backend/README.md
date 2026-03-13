@@ -8,7 +8,7 @@ Express/Node API for the clinic platform (auth, leads, automations, notification
 - PostgreSQL (Supabase/Neon pooled URLs or any direct connection string)
 
 ## Quickstart
-1. Copy `.env.sample` → `.env` and fill the required values (`POSTGRES_URL`, `JWT_SECRET`, `FRONTEND_URL`, WhatsApp keys once available).
+1. Copy `.env.sample` → `.env` and fill the required values (`POSTGRES_URL`/`SUPABASE_DB_URL`, `JWT_SECRET`, `FRONTEND_URL`, WhatsApp keys once available).
 2. Install dependencies:
    ```bash
    npm install
@@ -25,7 +25,7 @@ Express/Node API for the clinic platform (auth, leads, automations, notification
 
 ## Environment reference
 - **Server**: `PORT`, `NODE_ENV`
-- **Database**: Preferred pooled URL (`POSTGRES_URL`, fallback `DATABASE_URL`). Tune pools with `DB_POOL_MAX`, `DB_IDLE_TIMEOUT`, `DB_CONNECTION_TIMEOUT`, `DB_QUERY_RETRIES`.
+- **Database**: Prefer the Supabase pooled URL in `POSTGRES_URL` (fallbacks: `SUPABASE_DB_URL`, `DATABASE_URL`). Tune pools with `DB_POOL_MAX`, `DB_IDLE_TIMEOUT`, `DB_CONNECTION_TIMEOUT`, `DB_QUERY_RETRIES`.
 - **JWT**: `JWT_SECRET`, `JWT_EXPIRE`
 - **Email/SMTP**: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`
 - **Contact notifications**: `CONTACT_NOTIFICATION_EMAIL` (where landing/contact form submissions are forwarded)

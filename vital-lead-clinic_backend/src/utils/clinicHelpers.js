@@ -37,7 +37,7 @@ async function getClinicAdminId(clinicId) {
     }
 
     const adminResult = await query(
-        `SELECT id FROM users WHERE clinic_id = $1 AND role = 'ADMIN' ORDER BY id LIMIT 1`,
+        `SELECT id FROM users WHERE clinic_id = $1::int AND role = 'ADMIN' ORDER BY id LIMIT 1`,
         [clinicId]
     );
     if (adminResult.rows[0]) {
@@ -45,7 +45,7 @@ async function getClinicAdminId(clinicId) {
     }
 
     const fallback = await query(
-        `SELECT id FROM users WHERE clinic_id = $1 ORDER BY id LIMIT 1`,
+        `SELECT id FROM users WHERE clinic_id = $1::int ORDER BY id LIMIT 1`,
         [clinicId]
     );
     return fallback.rows[0]?.id || null;

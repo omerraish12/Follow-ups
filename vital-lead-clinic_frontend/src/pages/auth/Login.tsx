@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { z } from 'zod';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -19,9 +20,15 @@ export default function Login() {
         email: '',
         password: '',
     });
+    const [formErrors, setFormErrors] = useState<{ email?: string; password?: string }>({});
     const isRtl = language === 'he';
     const from = (location.state as any)?.from?.pathname || '/dashboard';
     const [redirectAfterLogin, setRedirectAfterLogin] = useState(from);
+
+    const schema = z.object({
+        email: z.string().email(t('invalid_email') || 'Invalid email'),
+        password: z.string().min(6, t('password_min_length') || 'At least 6 characters'),
+    });
 
     // Redirect if already logged in
     useEffect(() => {
@@ -38,9 +45,17 @@ export default function Login() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const payload = {
-            ...formData,
-        };
+        const validation = schema.safeParse(formData);
+        if (!validation.success) {
+            const fieldErrors = validation.error.formErrors.fieldErrors;
+            setFormErrors({
+                email: fieldErrors.email?.[0],
+                password: fieldErrors.password?.[0],
+            });
+            return;
+        }
+        setFormErrors({});
+        const payload = validation.data;
 
         try {
             const result = await login(payload);
@@ -82,19 +97,22 @@ export default function Login() {
                             <Label htmlFor="email" className={isRtl ? 'text-right' : ''}>{t('email')}</Label>
                             <div className="relative">
                                 <Mail className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground`} />
-                                <Input
-                                    id="email"
-                                    name="email"
-                                    type="email"
-                                    placeholder="your@email.com"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                    className={`${isRtl ? 'pl-10' : 'pr-10'} rounded-xl`}
-                                    required
-                                    dir="ltr"
-                                />
-                            </div>
+                            <Input
+                                id="email"
+                                name="email"
+                                type="email"
+                                placeholder="your@email.com"
+                                value={formData.email}
+                                onChange={handleChange}
+                                className={`${isRtl ? 'pl-10' : 'pr-10'} rounded-xl`}
+                                required
+                                dir="ltr"
+                            />
+                            {formErrors.email && (
+                                <p className="mt-1 text-xs text-destructive">{formErrors.email}</p>
+                            )}
                         </div>
+                    </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="password" className={isRtl ? 'text-right' : ''}>{t('password')}</Label>
@@ -107,10 +125,10 @@ export default function Login() {
                                     placeholder="********"
                                     value={formData.password}
                                     onChange={handleChange}
-                                    className={`${isRtl ? 'pl-10 pr-10 text-right' : 'pr-10 pl-10'} rounded-xl`}
-                                    required
-                                    dir="ltr"
-                                />
+                                className={`${isRtl ? 'pl-10 pr-10 text-right' : 'pr-10 pl-10'} rounded-xl`}
+                                required
+                                dir="ltr"
+                            />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
@@ -119,6 +137,9 @@ export default function Login() {
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
                             </div>
+                            {formErrors.password && (
+                                <p className="mt-1 text-xs text-destructive">{formErrors.password}</p>
+                            )}
                         </div>
 
                         <div className="text-left">

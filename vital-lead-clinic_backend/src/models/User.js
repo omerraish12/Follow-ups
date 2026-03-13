@@ -26,7 +26,7 @@ class User {
             `SELECT u.*, c.name as clinic_name, c.email as clinic_email 
        FROM users u 
        LEFT JOIN clinics c ON u.clinic_id = c.id 
-       WHERE u.id = $1`,
+       WHERE u.id = $1::int`,
             [id]
         );
         return result.rows[0];
@@ -48,9 +48,22 @@ class User {
         const storedEmail = email ? email.trim().toLowerCase() : '';
         const result = await query(
             `INSERT INTO users (email, password, name, phone, clinic_id, role, status, permissions, entry_type, entry_code) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+       VALUES ($1, $2, $3, $4, $5::int, $6::user_role, $7, 
+               COALESCE(ARRAY(SELECT jsonb_array_elements_text($8::jsonb)), ARRAY[]::text[]),
+               $9, $10) 
        RETURNING id, email, name, role, status, clinic_id, entry_type, entry_code`,
-            [storedEmail, password, name, phone, clinicId, role, status, permissions, entryType, entryCode]
+            [
+                storedEmail,
+                password,
+                name,
+                phone || null,
+                clinicId,
+                role,
+                status,
+                permissions || [],
+                entryType,
+                entryCode
+            ]
         );
         return result.rows[0];
     }
@@ -72,7 +85,11 @@ class User {
 
         for (const [key, value] of Object.entries(userData)) {
             if (value !== undefined) {
-                fields.push(`${key} = $${paramIndex}`);
+                if (key === 'role') {
+                    fields.push(`${key} = $${paramIndex}::user_role`);
+                } else {
+                    fields.push(`${key} = $${paramIndex}`);
+                }
                 values.push(value);
                 paramIndex++;
             }
@@ -114,7 +131,7 @@ class User {
     static async getClinicUsers(clinicId) {
         const result = await query(
             `SELECT id, name, email, phone, role, created_at 
-       FROM users WHERE clinic_id = $1 ORDER BY created_at DESC`,
+       FROM users WHERE clinic_id = $1::int ORDER BY created_at DESC`,
             [clinicId]
         );
         return result.rows;
@@ -139,12 +156,12 @@ class User {
              FROM users u
              LEFT JOIN clinics c ON u.clinic_id = c.id
              LEFT JOIN (
-                SELECT assigned_to_id,
+               SELECT assigned_to_id,
                        COUNT(*) as assigned,
                        SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) as conversions,
                        COALESCE(SUM(value), 0) as revenue
                 FROM leads
-                WHERE clinic_id = $1
+                WHERE clinic_id = $1::int
                 GROUP BY assigned_to_id
              ) ls ON ls.assigned_to_id = u.id
              LEFT JOIN (
@@ -152,7 +169,7 @@ class User {
                 FROM activities
                 GROUP BY user_id
              ) al ON al.user_id = u.id
-             WHERE u.clinic_id = $1
+             WHERE u.clinic_id = $1::int
              ORDER BY u.created_at DESC`,
             [clinicId]
         );

@@ -3,6 +3,7 @@ import { authService } from '@/services/authService';
 import { toast } from '@/hooks/use-toast';
 import type { User, LoginCredentials, SignupCredentials, EntryType } from '@/types/auth';
 import { normalizeRole } from '@/lib/roles';
+import { getErrorDetails } from '@/lib/errors';
 
 type AuthContextValue = {
     user: User | null;
@@ -89,11 +90,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             });
             return data;
         } catch (error) {
-            const message =
-                error.response?.data?.message ||
-                error.response?.data?.errors?.[0]?.msg ||
-                'Sign in failed';
+            const { message, requestId } = getErrorDetails(error as any, 'Sign in failed');
             setError(message);
+            toast({
+                title: "Sign in failed",
+                description: requestId ? `${message} (req: ${requestId})` : message,
+                variant: "destructive"
+            });
             throw error;
         } finally {
             setIsLoading(false);
@@ -116,11 +119,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             });
             return data;
         } catch (error) {
-            const message =
-                error.response?.data?.message ||
-                error.response?.data?.errors?.[0]?.msg ||
-                'Sign up failed';
+            const { message, requestId } = getErrorDetails(error as any, 'Sign up failed');
             setError(message);
+            toast({
+                title: "Sign up failed",
+                description: requestId ? `${message} (req: ${requestId})` : message,
+                variant: "destructive"
+            });
             throw error;
         } finally {
             setIsLoading(false);

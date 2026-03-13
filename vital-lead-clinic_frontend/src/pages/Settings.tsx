@@ -35,6 +35,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
+import useUnsavedChanges from "@/hooks/useUnsavedChanges";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage, type Language } from "@/contexts/LanguageContext";
 import { settingsService } from "@/services/settingsService";
@@ -266,6 +267,13 @@ export default function SettingsPage() {
 
   // Backup settings
   const [backupSettings, setBackupSettings] = useState<BackupSettingsState>(DEFAULT_BACKUP_SETTINGS);
+
+  // Snapshot for unsaved-changes detection
+  const [initialSnapshot, setInitialSnapshot] = useState<{
+    clinic: ClinicSettings;
+    notification: NotificationSettingsState;
+    backup: BackupSettingsState;
+  } | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMemberApi[]>([]);
   const [isTeamLoading, setIsTeamLoading] = useState<boolean>(false);
   const [teamError, setTeamError] = useState<string | null>(null);
@@ -301,6 +309,17 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [t]);
+
+  const isDirty = useMemo(() => {
+    if (!initialSnapshot) return false;
+    const clinicDirty = JSON.stringify(clinicSettings) !== JSON.stringify(initialSnapshot.clinic);
+    const notificationDirty =
+      JSON.stringify(notificationSettings) !== JSON.stringify(initialSnapshot.notification);
+    const backupDirty = JSON.stringify(backupSettings) !== JSON.stringify(initialSnapshot.backup);
+    return clinicDirty || notificationDirty || backupDirty;
+  }, [clinicSettings, notificationSettings, backupSettings, initialSnapshot]);
+
+  useUnsavedChanges(isDirty, t("settings_unsaved_warning") || "You have unsaved changes. Leave anyway?");
 
   const loadSettings = async () => {
     setIsLoading(true);
@@ -352,6 +371,35 @@ export default function SettingsPage() {
           retentionDays: data.backupSettings.retentionDays ?? DEFAULT_BACKUP_SETTINGS.retentionDays,
           lastBackup: data.backupSettings.lastBackup || DEFAULT_BACKUP_SETTINGS.lastBackup,
           lastBackupFile: data.backupSettings.lastBackupFile || DEFAULT_BACKUP_SETTINGS.lastBackupFile
+        });
+      }
+      // Capture initial snapshot once
+      if (!initialSnapshot) {
+        setInitialSnapshot({
+          clinic: {
+            id: data?.clinic?.id || clinicSettings.id,
+            name: data?.clinic?.name || clinicSettings.name,
+            email: data?.clinic?.email || clinicSettings.email,
+            phone: data?.clinic?.phone || clinicSettings.phone,
+            address: data?.clinic?.address || clinicSettings.address,
+            logo: data?.clinic?.logo || clinicSettings.logo,
+            timezone: data?.clinic?.timezone || clinicSettings.timezone,
+            language: data?.clinic?.language || clinicSettings.language,
+            currency: data?.clinic?.currency || clinicSettings.currency,
+            whatsappNumber: data?.clinic?.whatsappNumber || clinicSettings.whatsappNumber
+          },
+          notification: data?.notificationSettings
+            ? { ...DEFAULT_NOTIFICATION_SETTINGS, ...data.notificationSettings }
+            : notificationSettings,
+          backup: data?.backupSettings
+            ? {
+                autoBackup: data.backupSettings.autoBackup ?? DEFAULT_BACKUP_SETTINGS.autoBackup,
+                backupFrequency: data.backupSettings.backupFrequency || DEFAULT_BACKUP_SETTINGS.backupFrequency,
+                retentionDays: data.backupSettings.retentionDays ?? DEFAULT_BACKUP_SETTINGS.retentionDays,
+                lastBackup: data.backupSettings.lastBackup || DEFAULT_BACKUP_SETTINGS.lastBackup,
+                lastBackupFile: data.backupSettings.lastBackupFile || DEFAULT_BACKUP_SETTINGS.lastBackupFile
+              }
+            : backupSettings
         });
       }
 
@@ -862,6 +910,13 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-5 lg:space-y-6" dir={isRTL ? 'rtl' : 'ltr'}>
+      {isDirty && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+          <div className="text-sm font-semibold">{t("unsaved_changes") || "Unsaved changes"}</div>
+          <div className="text-xs text-amber-700/80">{t("settings_unsaved_warning")}</div>
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-semibold text-foreground font-display">{t("settings_title")}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">{t("settings_description")}</p>

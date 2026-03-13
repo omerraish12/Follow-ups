@@ -19,6 +19,8 @@ import {
   type WhatsAppSessionRecord,
 } from "@/services/whatsappService";
 import { settingsService } from "@/services/settingsService";
+import { getErrorDetails } from "@/lib/errors";
+import useUnsavedChanges from "@/hooks/useUnsavedChanges";
 
 const formatDate = (value: string | null | undefined, locale: string, fallback: string) => {
   if (!value) {
@@ -45,7 +47,9 @@ export default function WhatsAppIntegration() {
   const [quietStart, setQuietStart] = useState("22:00");
   const [quietEnd, setQuietEnd] = useState("08:00");
   const [savingQuiet, setSavingQuiet] = useState(false);
+  const [qrSecondsRemaining, setQrSecondsRemaining] = useState<number | null>(null);
   const locale = language === "he" ? "he-IL" : "en-US";
+  const [initialQuiet, setInitialQuiet] = useState<{ start: string; end: string }>({ start: "22:00", end: "08:00" });
 
   const loadConfig = useCallback(async () => {
     const config = await whatsappService.getConfig();
@@ -53,6 +57,7 @@ export default function WhatsAppIntegration() {
     if (config.quietHours?.start && config.quietHours?.end) {
       setQuietStart(config.quietHours.start);
       setQuietEnd(config.quietHours.end);
+      setInitialQuiet({ start: config.quietHours.start, end: config.quietHours.end });
     }
     return config;
   }, []);
@@ -66,6 +71,9 @@ export default function WhatsAppIntegration() {
   const loadSession = useCallback(async () => {
     const response = await whatsappService.getSessionStatus();
     setSession(response.session);
+    if (response.session?.qr_code) {
+      setQrSecondsRemaining(60);
+    }
     return response.session;
   }, []);
 
@@ -76,10 +84,13 @@ export default function WhatsAppIntegration() {
       await loadSenderInfo();
       await loadSession();
     } catch (error) {
+      const details = getErrorDetails(error as any, t("settings_save_failed"));
       console.error("Error loading WhatsApp page:", error);
       toast({
         title: t("error"),
-        description: t("settings_save_failed"),
+        description: details.requestId
+          ? `${details.message} (req: ${details.requestId})`
+          : details.message,
         variant: "destructive",
       });
     } finally {
@@ -91,15 +102,41 @@ export default function WhatsAppIntegration() {
     loadPage();
   }, [loadPage]);
 
+  const sessionStatus = session?.status || senderInfo?.sessionStatus || whatsappConfig.status;
+  const qrImageUrl = session?.qr_code
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(session.qr_code)}`
+    : null;
+
   useEffect(() => {
+    const intervalMs = sessionStatus === "connecting" ? 5000 : 15000;
     const interval = window.setInterval(() => {
       loadSession().catch((error) => {
         console.error("Error polling WhatsApp session:", error);
       });
-    }, 10000);
+    }, intervalMs);
 
     return () => window.clearInterval(interval);
-  }, [loadSession]);
+  }, [loadSession, sessionStatus]);
+
+  useEffect(() => {
+    if (!qrImageUrl) {
+      setQrSecondsRemaining(null);
+      return;
+    }
+    setQrSecondsRemaining((prev) => (prev && prev > 0 ? prev : 60));
+    const tick = window.setInterval(() => {
+      setQrSecondsRemaining((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          // QR expired; ask backend for fresh status
+          loadSession().catch(() => {});
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(tick);
+  }, [qrImageUrl, loadSession]);
 
   const handleConnectSession = async () => {
     setIsConnecting(true);
@@ -113,10 +150,13 @@ export default function WhatsAppIntegration() {
         description: "QR code requested. Scan it from the clinic's WhatsApp app.",
       });
     } catch (error) {
+      const details = getErrorDetails(error as any, "Unable to start the WhatsApp Web session.");
       console.error("Failed to connect WhatsApp Web session:", error);
       toast({
         title: t("error"),
-        description: "Unable to start the WhatsApp Web session.",
+        description: details.requestId
+          ? `${details.message} (req: ${details.requestId})`
+          : details.message,
         variant: "destructive",
       });
     } finally {
@@ -129,10 +169,13 @@ export default function WhatsAppIntegration() {
     try {
       await loadSession();
     } catch (error) {
+      const details = getErrorDetails(error as any, "Unable to refresh the WhatsApp session status.");
       console.error("Failed to refresh WhatsApp Web session:", error);
       toast({
         title: t("error"),
-        description: "Unable to refresh the WhatsApp session status.",
+        description: details.requestId
+          ? `${details.message} (req: ${details.requestId})`
+          : details.message,
         variant: "destructive",
       });
     } finally {
@@ -150,10 +193,13 @@ export default function WhatsAppIntegration() {
         description: "WhatsApp Web session disconnected.",
       });
     } catch (error) {
+      const details = getErrorDetails(error as any, "Unable to disconnect the WhatsApp session.");
       console.error("Failed to disconnect WhatsApp Web session:", error);
       toast({
         title: t("error"),
-        description: "Unable to disconnect the WhatsApp session.",
+        description: details.requestId
+          ? `${details.message} (req: ${details.requestId})`
+          : details.message,
         variant: "destructive",
       });
     } finally {
@@ -161,7 +207,8 @@ export default function WhatsAppIntegration() {
     }
   };
 
-  const sessionStatus = session?.status || senderInfo?.sessionStatus || whatsappConfig.status;
+  const quietDirty = quietStart !== initialQuiet.start || quietEnd !== initialQuiet.end;
+  useUnsavedChanges(quietDirty, t("settings_unsaved_warning") || "You have unsaved changes. Leave anyway?");
   const statusIndicatorClass = cn(
     "h-3 w-3 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.35)]",
     sessionStatus === "connected"
@@ -170,9 +217,6 @@ export default function WhatsAppIntegration() {
         ? "bg-amber-400"
         : "bg-slate-400"
   );
-  const qrImageUrl = session?.qr_code
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(session.qr_code)}`
-    : null;
   const fallbackDate = t("not_available");
   const healthBadgeClass = cn(
     "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold",
@@ -190,10 +234,13 @@ export default function WhatsAppIntegration() {
         description: t("settings_saved"),
       });
     } catch (error) {
+      const details = getErrorDetails(error as any, t("settings_save_failed"));
       console.error("Failed to save quiet hours", error);
       toast({
         title: t("error"),
-        description: t("settings_save_failed"),
+        description: details.requestId
+          ? `${details.message} (req: ${details.requestId})`
+          : details.message,
         variant: "destructive",
       });
     } finally {
@@ -205,7 +252,14 @@ export default function WhatsAppIntegration() {
     <div className="space-y-6" dir={language === "he" ? "rtl" : "ltr"}>
       <Card className="rounded-3xl border border-border bg-card text-foreground shadow-xl">
         <CardHeader className="space-y-2">
-          <CardTitle className="text-3xl">{t("whatsapp_connection_title")}</CardTitle>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle className="text-3xl">{t("whatsapp_connection_title")}</CardTitle>
+            {quietDirty && (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700">
+                {t("unsaved_changes") || "Unsaved changes"}
+              </span>
+            )}
+          </div>
           <CardDescription className="text-muted-foreground">
             Persistent WhatsApp Web session managed by your bridge server.
           </CardDescription>
@@ -318,9 +372,32 @@ export default function WhatsAppIntegration() {
 
           <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
             <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-5">
-              <div className="mb-4 flex items-center gap-3">
-                <QrCode className="h-5 w-5 text-muted-foreground" />
-                <p className="text-sm font-semibold">QR code</p>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <QrCode className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-semibold">QR code</p>
+                    {qrSecondsRemaining !== null && (
+                      <span className="text-xs text-muted-foreground">
+                        Expires in {qrSecondsRemaining}s
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRefreshSession}
+                  disabled={isRefreshing}
+                  className="rounded-full px-3 py-1 text-xs font-semibold"
+                >
+                  {isRefreshing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                  )}
+                  {t("refresh")}
+                </Button>
               </div>
               {qrImageUrl ? (
                 <img

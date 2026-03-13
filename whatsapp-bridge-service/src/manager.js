@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const axios = require('axios');
 const crypto = require('crypto');
 const P = require('pino');
@@ -10,24 +11,14 @@ const {
   useMultiFileAuthState,
   jidNormalizedUser
 } = require('@whiskeysockets/baileys');
-const { query } = require('./db');
+const { supabase } = require('./db');
 const { encrypt, decrypt } = require('./crypto');
+const { config } = require('./config');
 
-// Allow overriding the on-disk auth directory; default stays under repo for local dev.
-const resolveSessionsDir = () => {
-  const custom = String(process.env.WA_WEB_SESSIONS_DIR || '').trim();
-  if (!custom) {
-    return path.join(__dirname, '..', 'data', 'sessions');
-  }
-  return path.isAbsolute(custom)
-    ? custom
-    : path.join(__dirname, '..', custom);
-};
-
-const DATA_DIR = resolveSessionsDir();
-const SESSION_MAP_FILE = path.join(DATA_DIR, 'session_map.json');
+// Runtime-only temp directories per clinic; state is persisted in Supabase.
+const sessionTempDirs = new Map();
 // Default to warn to reduce Baileys verbose session logs (can override via LOG_LEVEL).
-const logger = P({ level: process.env.LOG_LEVEL || 'warn' });
+const logger = P({ level: config.logLevel });
 const activeSessions = new Map();
 let sessionDirMapCache = null;
 
@@ -39,71 +30,22 @@ const removeDir = async (dir) => {
   await fs.promises.rm(dir, { recursive: true, force: true });
 };
 
-const loadSessionDirMap = async () => {
-  if (sessionDirMapCache) {
-    return sessionDirMapCache;
-  }
-
-  try {
-    const raw = await fs.promises.readFile(SESSION_MAP_FILE, 'utf8');
-    sessionDirMapCache = JSON.parse(raw);
-  } catch (_err) {
-    sessionDirMapCache = {};
-  }
-  return sessionDirMapCache;
-};
-
-const saveSessionDirMap = async () => {
-  if (!sessionDirMapCache) {
-    return;
-  }
-  await ensureDir(DATA_DIR);
-  await fs.promises.writeFile(
-    SESSION_MAP_FILE,
-    JSON.stringify(sessionDirMapCache, null, 2)
-  );
-};
-
-const migrateOldClinicDir = async (clinicId, targetDir) => {
-  const legacyDir = path.join(DATA_DIR, String(clinicId));
-  if (!fs.existsSync(legacyDir) || legacyDir === targetDir) {
-    return;
-  }
-
-  await ensureDir(path.dirname(targetDir));
-  try {
-    await fs.promises.rename(legacyDir, targetDir);
-  } catch (_err) {
-    // Cross-device rename fallback: copy then delete.
-    await fs.promises.cp(legacyDir, targetDir, { recursive: true });
-    await removeDir(legacyDir);
-  }
-};
-
 const getOrCreateSessionDir = async (clinicId) => {
-  await ensureDir(DATA_DIR);
-  const map = await loadSessionDirMap();
   const key = String(clinicId);
-
-  if (!map[key]) {
-    map[key] = crypto.randomUUID();
-    await saveSessionDirMap();
+  if (sessionTempDirs.has(key)) {
+    return sessionTempDirs.get(key);
   }
-
-  const target = path.join(DATA_DIR, map[key]);
-  await migrateOldClinicDir(key, target);
-  await ensureDir(target);
-  return target;
+  const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), `wa-${key}-`));
+  sessionTempDirs.set(key, tmp);
+  return tmp;
 };
 
 const getKnownSessionDir = async (clinicId) => {
-  const map = await loadSessionDirMap();
   const key = String(clinicId);
-  if (map[key]) {
-    return path.join(DATA_DIR, map[key]);
+  if (sessionTempDirs.has(key)) {
+    return sessionTempDirs.get(key);
   }
-  // Fallback to legacy naming if map entry is missing.
-  return path.join(DATA_DIR, key);
+  return getOrCreateSessionDir(key);
 };
 
 const serializeDirectory = async (dir) => {
@@ -142,90 +84,40 @@ const restoreDirectory = async (dir, files = {}) => {
 };
 
 const getSessionRecord = async (clinicId) => {
-  const result = await query(
-    `SELECT *
-     FROM whatsapp_sessions
-     WHERE clinic_id = $1
-     LIMIT 1`,
-    [clinicId]
-  );
-  return result.rows[0] || null;
+  const { data, error } = await supabase
+    .from('whatsapp_sessions')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
 };
 
 const upsertSessionRecord = async (clinicId, patch = {}) => {
-  const existing = await getSessionRecord(clinicId);
-  if (!existing) {
-    const result = await query(
-      `INSERT INTO whatsapp_sessions (
-        clinic_id,
-        provider,
-        status,
-        auth_state_encrypted,
-        qr_code,
-        device_jid,
-        last_connected_at,
-        last_error
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *`,
-      [
-        clinicId,
-        patch.provider || 'wa_web',
-        patch.status || 'disconnected',
-        patch.authStateEncrypted || null,
-        patch.qrCode || null,
-        patch.deviceJid || null,
-        patch.lastConnectedAt || null,
-        patch.lastError || null
-      ]
-    );
-    return result.rows[0];
-  }
-
-  const fields = [];
-  const values = [];
-  let index = 1;
-  const mapping = {
-    provider: 'provider',
-    status: 'status',
-    authStateEncrypted: 'auth_state_encrypted',
-    qrCode: 'qr_code',
-    deviceJid: 'device_jid',
-    lastConnectedAt: 'last_connected_at',
-    lastError: 'last_error'
+  const base = {
+    clinic_id: clinicId,
+    provider: patch.provider || 'wa_web',
+    status: patch.status || 'disconnected',
+    auth_state_encrypted: patch.authStateEncrypted ?? null,
+    qr_code: patch.qrCode ?? null,
+    device_jid: patch.deviceJid ?? null,
+    last_connected_at: patch.lastConnectedAt ?? null,
+    last_error: patch.lastError ?? null,
+    updated_at: new Date().toISOString()
   };
 
-  for (const [key, dbField] of Object.entries(mapping)) {
-    if (patch[key] === undefined) {
-      continue;
-    }
-    fields.push(`${dbField} = $${index}`);
-    values.push(patch[key]);
-    index++;
-  }
-
-  if (!fields.length) {
-    return existing;
-  }
-
-  fields.push(`updated_at = CURRENT_TIMESTAMP`);
-  values.push(clinicId);
-
-  const result = await query(
-    `UPDATE whatsapp_sessions
-     SET ${fields.join(', ')}
-     WHERE clinic_id = $${index}
-     RETURNING *`,
-    values
-  );
-  return result.rows[0];
+  const { data, error } = await supabase
+    .from('whatsapp_sessions')
+    .upsert(base, { onConflict: 'clinic_id' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
 };
 
 const notifyBackend = async (payload) => {
-  const backendUrl = String(process.env.WA_BACKEND_URL || '').trim();
-  if (!backendUrl) {
-    return;
-  }
+  const backendUrl = config.backendUrl;
 
   const body = payload || {};
   const timestamp = Date.now();
@@ -233,8 +125,8 @@ const notifyBackend = async (payload) => {
     'x-bridge-timestamp': timestamp
   };
 
-  if (process.env.WA_WEB_BACKEND_SHARED_SECRET) {
-    const secret = process.env.WA_WEB_BACKEND_SHARED_SECRET;
+  if (config.backendSharedSecret) {
+    const secret = config.backendSharedSecret;
     const serialized = JSON.stringify(body);
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(`${timestamp}.${serialized}`);
@@ -311,6 +203,18 @@ const jidForPhone = (phone) => {
   return `${normalized}@s.whatsapp.net`;
 };
 
+const resolveJid = ({ to, toJid, toPn }) => {
+  const candidate = toJid || to || toPn || '';
+  if (!candidate) {
+    throw new Error('to or toJid is required');
+  }
+  // If it already looks like a JID, use it directly.
+  if (candidate.includes('@')) {
+    return candidate;
+  }
+  return jidForPhone(candidate);
+};
+
 const persistAuthState = async (clinicId, dir) => {
   const archive = await serializeDirectory(dir);
   const encrypted = encrypt(JSON.stringify(archive));
@@ -322,13 +226,15 @@ const persistAuthState = async (clinicId, dir) => {
 
 const restoreAuthState = async (clinicId, dir) => {
   const record = await getSessionRecord(clinicId);
-  if (!record?.auth_state_encrypted) {
+  const encrypted = record?.auth_state_encrypted || null;
+
+  if (!encrypted) {
     await removeDir(dir);
     await ensureDir(dir);
     return;
   }
 
-  const decrypted = decrypt(record.auth_state_encrypted);
+  const decrypted = decrypt(encrypted);
   const files = decrypted ? JSON.parse(decrypted) : {};
   await restoreDirectory(dir, files);
 };
@@ -450,7 +356,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
 
       // Immediate auto-ack from the bridge socket (mirrors frontend/manual sends)
       if (normalizedJid && !message.key.fromMe) {
-        const autoAckText = process.env.WA_WEB_AUTO_ACK_TEXT || 'I got your message. I will respond asap!!!';
+        const autoAckText = config.autoAckText || 'I got your message. I will respond asap!!!';
         try {
           await socket.sendMessage(normalizedJid, { text: autoAckText });
           logger.info({ clinicId, to: normalizedJid, autoAck: true }, 'Bridge auto-ack sent');
@@ -474,6 +380,8 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
           type: 'message.received',
           from,
           contactName,
+          fromJid: normalizedJid || null,
+          senderPn: message.key?.senderPn || message .senderPn || null,
           text: payload.text,
           metadata: payload.metadata,
           messageId: message.key?.id || null
@@ -558,6 +466,7 @@ const disconnectSession = async (clinicId) => {
     active?.authDir ||
     await getKnownSessionDir(clinicId);
   await removeDir(authDir);
+  sessionTempDirs.delete(String(clinicId));
   await upsertSessionRecord(clinicId, {
     provider: 'wa_web',
     status: 'disconnected',
@@ -570,7 +479,7 @@ const disconnectSession = async (clinicId) => {
   return { success: true };
 };
 
-const sendMessage = async ({ clinicId, to, body, mediaUrl }) => {
+const sendMessage = async ({ clinicId, to, toJid, toPn, body, mediaUrl, templateParameters }) => {
   let active = activeSessions.get(String(clinicId));
   if (!active?.socket) {
     await connectSession(clinicId);
@@ -581,10 +490,21 @@ const sendMessage = async ({ clinicId, to, body, mediaUrl }) => {
     throw new Error('WhatsApp Web session is not active');
   }
 
-  const jid = jidForPhone(to);
+  const jid = resolveJid({ to, toJid, toPn });
+  const renderTemplate = (template = '', params = {}) => {
+    if (!template || !params) return template;
+    return String(template).replace(/\{(\w+)\}/g, (_m, key) => {
+      const val = params[key];
+      return val === undefined || val === null ? `{${key}}` : String(val);
+    });
+  };
+
+  const templateParams = templateParameters || {};
+  const renderedBody = renderTemplate(body || '', templateParams);
+
   const message = mediaUrl
-    ? inferMediaMessage(mediaUrl, body)
-    : { text: body };
+    ? inferMediaMessage(mediaUrl, renderedBody)
+    : { text: renderedBody };
 
   const response = await active.socket.sendMessage(jid, message);
   return {
@@ -594,17 +514,31 @@ const sendMessage = async ({ clinicId, to, body, mediaUrl }) => {
 };
 
 const restoreExistingSessions = async () => {
-  await ensureDir(DATA_DIR);
-  const result = await query(
-    `SELECT clinic_id
-     FROM whatsapp_sessions
-     WHERE provider = 'wa_web'
-       AND auth_state_encrypted IS NOT NULL`
-  );
+  let rows = [];
+  try {
+    const { data, error } = await supabase
+      .from('whatsapp_sessions')
+      .select('clinic_id')
+      .eq('provider', 'wa_web')
+      .not('auth_state_encrypted', 'is', null);
 
-  for (const row of result.rows) {
-    connectSession(row.clinic_id).catch((error) => {
-      logger.error({ clinicId: row.clinic_id, error }, 'Failed to restore WhatsApp session');
+    if (error) {
+      // If PostgREST schema cache is stale, log and continue without hard crash.
+      if (error.code === 'PGRST205') {
+        logger.warn('whatsapp_sessions table not in schema cache yet; skipping restore this boot');
+        return;
+      }
+      throw error;
+    }
+    rows = data || [];
+  } catch (err) {
+    logger.error({ error: err }, 'Failed to fetch existing WhatsApp sessions');
+    return;
+  }
+
+  for (const row of rows) {
+    connectSession(row.clinic_id).catch((err) => {
+      logger.error({ clinicId: row.clinic_id, error: err }, 'Failed to restore WhatsApp session');
     });
   }
 };

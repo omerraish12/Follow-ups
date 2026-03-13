@@ -96,7 +96,7 @@ const formatAutomationRow = (row) => {
 class Automation {
     static async findAll(clinicId) {
         const result = await query(
-            `SELECT * FROM automations WHERE clinic_id = $1 ORDER BY created_at DESC`,
+            `SELECT * FROM automations WHERE clinic_id = $1::int ORDER BY created_at DESC`,
             [clinicId]
         );
         return result.rows.map(formatAutomationRow);
@@ -107,7 +107,7 @@ class Automation {
             `SELECT a.*, 
               (SELECT COUNT(*) FROM executions WHERE automation_id = a.id) as execution_count
        FROM automations a
-       WHERE a.id = $1 AND a.clinic_id = $2`,
+       WHERE a.id = $1 AND a.clinic_id = $2::int`,
             [id, clinicId]
         );
         return formatAutomationRow(result.rows[0]);
@@ -140,7 +140,7 @@ class Automation {
         const result = await query(
             `INSERT INTO automations 
             (name, trigger_days, message, template_name, template_language, media_url, components, target_status, notify_on_reply, personalization, clinic_id, template_status, template_sid, template_approval_sid, daily_cap, cooldown_hours, pre_appointment, pre_appointment_minutes) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
+       VALUES ($1, $2::int[], $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) 
        RETURNING *`,
             [
                 name,
@@ -176,7 +176,7 @@ class Automation {
 
     static async seedDefaults(clinicId) {
         const existingResult = await query(
-            `SELECT LOWER(name) as name FROM automations WHERE clinic_id = $1`,
+            `SELECT LOWER(name) as name FROM automations WHERE clinic_id = $1::int`,
             [clinicId]
         );
 
@@ -228,7 +228,8 @@ class Automation {
                     normalizedValue = normalizedComponents.length ? JSON.stringify(normalizedComponents) : '[]';
                 }
 
-                fields.push(`${dbKey} = $${paramIndex}`);
+                const cast = dbKey === 'trigger_days' ? '::int[]' : '';
+                fields.push(`${dbKey} = $${paramIndex}${cast}`);
                 values.push(normalizedValue);
                 paramIndex++;
             }
@@ -239,7 +240,7 @@ class Automation {
         values.push(id, clinicId);
         const result = await query(
             `UPDATE automations SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1} RETURNING *`,
+       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1}::int RETURNING *`,
             values
         );
         return formatAutomationRow(result.rows[0]);
@@ -247,7 +248,7 @@ class Automation {
 
     static async delete(id, clinicId) {
         const result = await query(
-            `DELETE FROM automations WHERE id = $1 AND clinic_id = $2 RETURNING id`,
+            `DELETE FROM automations WHERE id = $1 AND clinic_id = $2::int RETURNING id`,
             [id, clinicId]
         );
         return result.rows[0];
@@ -257,7 +258,7 @@ class Automation {
         const result = await query(
             `UPDATE automations 
        SET active = NOT active, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $1 AND clinic_id = $2 
+       WHERE id = $1 AND clinic_id = $2::int 
        RETURNING *`,
             [id, clinicId]
         );
@@ -297,7 +298,7 @@ class Automation {
         const result = await query(
             `UPDATE automations 
        SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1} RETURNING *`,
+       WHERE id = $${paramIndex} AND clinic_id = $${paramIndex + 1}::int RETURNING *`,
             values
         );
 
@@ -347,7 +348,7 @@ class Automation {
             `SELECT 
          id, name, total_executions, reply_count, success_rate, active
        FROM automations 
-       WHERE clinic_id = $1`,
+       WHERE clinic_id = $1::int`,
             [clinicId]
         );
         return result.rows;
@@ -360,7 +361,7 @@ class Automation {
          COALESCE(SUM(reply_count), 0) as total_replies,
          COUNT(CASE WHEN active THEN 1 END) as active_count
        FROM automations 
-       WHERE clinic_id = $1`,
+       WHERE clinic_id = $1::int`,
             [clinicId]
         );
         return result.rows[0];

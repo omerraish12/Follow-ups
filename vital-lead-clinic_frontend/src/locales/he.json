@@ -1,4 +1,4 @@
-﻿{
+{
   "app_name": "ליד קליניק",
   "app_title": "מערכת ניהול לידים",
   "app_subtitle": "ניהול חכם של לקוחות",
@@ -667,8 +667,6 @@
   "media_preview_generic": "מצורפת מדיה: {url}",
   "test_sent": "נשלח",
   "test_send_failed": "שליחת הבדיקה נכשלה",
-  "connected": "מחובר",
-  "disconnected": "מנותק",
   "automation_builder_help": "כל אוטומציה שומרת תבנית הודעת WhatsApp שאתם מגדירים; שייכו אותה ללוח הזמנים כדי שהגשר ישלח את התוכן הנכון.",
   "automation_builder_template_note": "תבניות ברירת המחדל מגיעות עם תוכן מוכן. שכפל, עדכן או צור תבנית חדשה וקשר אותה לאוטומציה המתאימה.",
   "automation_followup_story": "אם מטופל לא קבע תור אחרי שבועיים, אוטומציה יכולה לשלוח תזכורת תבניתית, לעדכן את סטטוס הליד ולתעד את האינטראקציה אוטומטית.",
@@ -1190,12 +1188,10 @@
   "automation_alerts_desc": "קבל התראה אם אוטומציה נעצרת, נכשלה או הושלמה.",
   "delivery_status": "סטטוס משלוח",
   "queued": "בתור",
-  "failed": "נכשל",
   "quiet_hours": "שעות שקטות",
   "start": "התחלה",
   "end": "סיום",
   "saving": "שומר...",
-  "save": "שמור",
   "whatsapp_issue_title": "זוהו בעיות משלוח ב-WhatsApp",
   "view_logs": "צפה בלוגים",
   "available_integrations": "אינטגרציות זמינות",
@@ -1255,14 +1251,11 @@
   "profile_updated_success": "הפרופיל נשמר בהצלחה",
   "push_notifications": "התראות דחיפה",
   "push_notifications_desc": "הפעילו התראות בתוך האפליקציה כאשר יש עדכונים.",
-  "desktop_notifications": "התראות דפדפן",
   "desktop_notifications_desc": "לאפשר התראות בדפדפן במחשב הנוכחי.",
-  "sound_alerts": "צליל התראה",
   "sound_alerts_desc": "נגן צליל בכל פעם שמגיעה התראה.",
   "retention_days": "ימי אחסון",
   "role": "תפקיד",
   "save_preferences": "שמור העדפות",
-  "saving": "שומר...",
   "status_updated": "הסטטוס עודכן",
   "team_tab_title": "צוות המרפאה ותפקידים",
   "team_tab_description": "הזמינו, ערכו או הסירו אנשי צוות מרפאה, נהל הרשאות ונתרו פעילות.",
@@ -1399,9 +1392,10 @@
   "whatsapp_???_provisioning_title": "הגדרות ???",
   "whatsapp_???_provisioning_description": "שמרו את אישורי ??? של כל קליניקה כדי שהודעות WhatsApp יישלחו מהחשבון הנכון.",
   "whatsapp_faq_answer_twilio": "אנחנו משתמשים כעת בחיבור WhatsApp Web מתמשך (שרת bridge) כך שהודעות יוצאות ממספר המרפאה בלי להסתמך על APIs חיצוניים.",
-  "whatsapp_faq_answer_templates": "כל אוטומציה משתמשת בתבנית שבחרתם ונשלחת דרך גשר WhatsApp Web."
+  "whatsapp_faq_answer_templates": "כל אוטומציה משתמשת בתבנית שבחרתם ונשלחת דרך גשר WhatsApp Web.",
+  "settings_unsaved_warning": "יש שינויים שלא נשמרו. לצאת בכל זאת?",
+  "variable_name": "שם",
+  "variable_service": "שירות",
+  "variable_appointment_date": "תאריך תור",
+  "variable_phone": "טלפון"
 }
-
-
-
-

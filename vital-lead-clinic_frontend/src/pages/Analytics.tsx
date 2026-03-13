@@ -40,10 +40,17 @@ const statusColors = {
 };
 
 const sourceColors: Record<string, string> = {
+  'WhatsApp': '#25D366',
   'וואטסאפ': '#25D366',
+  'Facebook': '#1877F2',
   'פייסבוק': '#1877F2',
+  'Instagram': '#E4405F',
   'אינסטגרם': '#E4405F',
+  'Website': '#8B5CF6',
   'המלצות': '#8B5CF6',
+  'Google Ads': '#F4B400',
+  'Referral': '#F59E0B',
+  'Other': '#6B7280',
   'אחר': '#6B7280'
 };
 
@@ -152,13 +159,22 @@ export default function Analytics() {
       return [];
     }
 
-    const totalLeads = sourcePerformance.reduce((sum, item) => sum + (item.count || 0), 0);
-
-    return sourcePerformance.map(item => ({
+    // Normalize numeric values to avoid string concatenation from DB count results
+    const normalizedSources = sourcePerformance.map(item => ({
       name: item.source || t("other"),
-      value: totalLeads > 0 ? Math.round((item.count / totalLeads) * 100) : 0,
-      conversion: Math.round((item.count / totalLeads) * 100) || 0,
-      color: sourceColors[item.source || t("other")] || sourceColors['אחר']
+      count: Number(item.count) || 0
+    }));
+
+    const totalLeads = normalizedSources.reduce((sum, item) => sum + item.count, 0);
+    if (totalLeads === 0) return [];
+
+    const fallbackColor = sourceColors['אחר'] || '#6B7280';
+
+    return normalizedSources.map(item => ({
+      name: item.name,
+      value: Math.round((item.count / totalLeads) * 100),
+      conversion: Math.round((item.count / totalLeads) * 100),
+      color: sourceColors[item.name] || fallbackColor
     }));
   };
 
@@ -622,17 +638,21 @@ export default function Analytics() {
                 <CardDescription>{t("quality_by_source")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={sourceChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="value" name={t("leads")} fill="#3B82F6" radius={[8, 8, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                {sourceChartData.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6">{t("no_data")}</p>
+                ) : (
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={sourceChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="value" name={t("leads")} fill="#3B82F6" radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -642,25 +662,29 @@ export default function Analytics() {
                 <CardDescription>{t("quality_by_source")}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {sourceChartData.map((source) => (
-                    <div key={source.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${source.color}20` }}>
-                          <MessageSquare className="h-4 w-4" style={{ color: source.color }} />
+                {sourceChartData.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6">{t("no_data")}</p>
+                ) : (
+                  <div className="space-y-4">
+                    {sourceChartData.map((source) => (
+                      <div key={source.name} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: `${source.color}20` }}>
+                            <MessageSquare className="h-4 w-4" style={{ color: source.color }} />
+                          </div>
+                          <div>
+                            <p className="font-medium">{source.name}</p>
+                            <p className="text-xs text-muted-foreground">{t("value")}: ₪{(source.value * 50).toFixed(0)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{source.name}</p>
-                          <p className="text-xs text-muted-foreground">{t("value")}: ₪{(source.value * 50).toFixed(0)}</p>
+                        <div className={language === 'he' ? 'text-left' : 'text-right'}>
+                          <p className="font-bold text-success">₪{(source.value * 200).toFixed(0)}</p>
+                          <p className="text-xs text-muted-foreground">ROI: {source.value * 4}%</p>
                         </div>
                       </div>
-                      <div className={language === 'he' ? 'text-left' : 'text-right'}>
-                        <p className="font-bold text-success">₪{(source.value * 200).toFixed(0)}</p>
-                        <p className="text-xs text-muted-foreground">ROI: {source.value * 4}%</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

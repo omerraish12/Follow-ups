@@ -1,10 +1,8 @@
 const crypto = require('crypto');
+const { config } = require('./config');
 
 const getEncryptionKey = () => {
-  const rawSecret = String(process.env.WA_WEB_AUTH_SECRET || '').trim();
-  if (!rawSecret) {
-    throw new Error('WA_WEB_AUTH_SECRET is required');
-  }
+  const rawSecret = config.authSecret;
   return crypto.createHash('sha256').update(rawSecret).digest();
 };
 

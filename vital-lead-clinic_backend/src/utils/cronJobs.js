@@ -305,7 +305,7 @@ class CronJobs {
                     leads = await query(
                         `SELECT l.*
              FROM leads l
-             WHERE l.clinic_id = $1
+             WHERE l.clinic_id = $1::int
                AND l.next_follow_up IS NOT NULL
                AND l.next_follow_up >= $2
                AND l.next_follow_up <= $3
@@ -325,7 +325,7 @@ class CronJobs {
                     leads = await query(
                         `SELECT l.* 
            FROM leads l
-           WHERE l.clinic_id = $1 
+           WHERE l.clinic_id = $1::int 
              AND ($2::lead_status IS NULL OR l.status = $2::lead_status)
              AND COALESCE(l.last_contacted, l.created_at) <= $3
              AND NOT EXISTS (
