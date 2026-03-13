@@ -279,17 +279,23 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
       const isQrTimeout =
         statusCode === DisconnectReason.timedOut ||
         /qr refs attempts ended/i.test(message || '');
+      const isStreamRestart =
+        statusCode === 515 ||
+        /restart required/i.test(message || '') ||
+        /stream errored/i.test(message || '');
       const isDeviceRemoved =
         statusCode === 401 ||
         statusCode === DisconnectReason.loggedOut ||
         /device_removed|logged\s*out|conflict/i.test(message || '');
       const shouldReconnect =
-        isQrTimeout || (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut);
+        isQrTimeout ||
+        isStreamRestart ||
+        (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut);
 
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
-        status: isQrTimeout ? 'connecting' : 'disconnected',
-        lastError: isQrTimeout ? null : message,
+        status: isQrTimeout || isStreamRestart ? 'connecting' : 'disconnected',
+        lastError: isQrTimeout || isStreamRestart ? null : message,
         qrCode: null
       });
 
@@ -301,9 +307,12 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         return;
       }
 
-      const reconnectDelayMs = isQrTimeout ? 500 : 3000;
+      const reconnectDelayMs = isQrTimeout ? 500 : isStreamRestart ? 1000 : 3000;
       if (isQrTimeout) {
         logger.info({ clinicId }, 'QR expired before scan; regenerating a fresh code');
+      }
+      if (isStreamRestart) {
+        logger.info({ clinicId }, 'Stream restart requested by WhatsApp; reconnecting with saved auth');
       }
 
       setTimeout(() => {
