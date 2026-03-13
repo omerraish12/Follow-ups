@@ -20,6 +20,7 @@ const sessionTempDirs = new Map();
 // Default to warn to reduce Baileys verbose session logs (can override via LOG_LEVEL).
 const logger = P({ level: config.logLevel });
 const activeSessions = new Map();
+const reconnectFailures = new Map(); // consecutive close events per clinic
 let sessionDirMapCache = null;
 
 const ensureDir = async (dir) => {
@@ -258,6 +259,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
     }
 
     if (connection === 'open') {
+      reconnectFailures.delete(String(clinicId));
       await persistAuthState(clinicId, authDir);
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
@@ -270,6 +272,9 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
     }
 
     if (connection === 'close') {
+      const failureCount = (reconnectFailures.get(String(clinicId)) || 0) + 1;
+      reconnectFailures.set(String(clinicId), failureCount);
+
       const statusCode =
         lastDisconnect?.error?.output?.statusCode ||
         lastDisconnect?.error?.statusCode ||
@@ -283,6 +288,10 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         statusCode === 515 ||
         /restart required/i.test(message || '') ||
         /stream errored/i.test(message || '');
+      const isConnectionTerminated =
+        statusCode === DisconnectReason.connectionClosed ||
+        /connection terminated/i.test(message || '');
+      const isKeepAliveTimeout = /Timed Out/i.test(message || '');
       const isDeviceRemoved =
         statusCode === 401 ||
         statusCode === DisconnectReason.loggedOut ||
@@ -290,29 +299,46 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
       const shouldReconnect =
         isQrTimeout ||
         isStreamRestart ||
+        isConnectionTerminated ||
         (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut);
+      // force a clean slate when WA kicks us before QR or after repeated keep-alive failures
+      const shouldResetAuth =
+        isDeviceRemoved ||
+        isConnectionTerminated ||
+        isStreamRestart ||
+        (isKeepAliveTimeout && failureCount >= 2);
 
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
-        status: isQrTimeout || isStreamRestart ? 'connecting' : 'disconnected',
-        lastError: isQrTimeout || isStreamRestart ? null : message,
-        qrCode: null
+        status: isQrTimeout || isStreamRestart || isConnectionTerminated ? 'connecting' : 'disconnected',
+        lastError: isQrTimeout || isStreamRestart || isConnectionTerminated ? null : message,
+        qrCode: null,
+        authStateEncrypted: shouldResetAuth ? null : undefined
       });
 
       // Drop the stale socket so a fresh connection (manual or auto) will create a new QR.
       activeSessions.delete(String(clinicId));
+
+      if (shouldResetAuth) {
+        await removeDir(authDir);
+        sessionTempDirs.delete(String(clinicId));
+        reconnectFailures.set(String(clinicId), 0);
+      }
 
       if (!shouldReconnect) {
         await removeDir(authDir);
         return;
       }
 
-      const reconnectDelayMs = isQrTimeout ? 500 : isStreamRestart ? 1000 : 3000;
+      const reconnectDelayMs = isQrTimeout ? 500 : isStreamRestart ? 1000 : 1500;
       if (isQrTimeout) {
         logger.info({ clinicId }, 'QR expired before scan; regenerating a fresh code');
       }
       if (isStreamRestart) {
         logger.info({ clinicId }, 'Stream restart requested by WhatsApp; reconnecting with saved auth');
+      }
+      if (shouldResetAuth && !isDeviceRemoved) {
+        logger.info({ clinicId }, 'Auth reset after server termination/timeout; new QR will be generated');
       }
 
       setTimeout(() => {
