@@ -143,7 +143,7 @@ export default function Analytics() {
       returned: 0
     }));
 
-    weeklyActivity.forEach(item => {
+    (Array.isArray(weeklyActivity) ? weeklyActivity : []).forEach(item => {
       const index = daysMap[item.day];
       if (index !== undefined) {
         fullWeek[index].leads = item.leads || 0;

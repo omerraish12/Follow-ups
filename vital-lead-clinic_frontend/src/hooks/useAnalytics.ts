@@ -76,10 +76,10 @@ export const useAnalytics = (initialPeriod: string = 'month') => {
             ]);
 
             setKpi(kpiData);
-            setStatusDistribution(statusData);
-            setSourcePerformance(sourceData);
-            setWeeklyActivity(weeklyData);
-            setTeamPerformance(teamData);
+            setStatusDistribution(Array.isArray(statusData) ? statusData : []);
+            setSourcePerformance(Array.isArray(sourceData) ? sourceData : []);
+            setWeeklyActivity(Array.isArray(weeklyData) ? weeklyData : []);
+            setTeamPerformance(Array.isArray(teamData) ? teamData : []);
         } catch (error: ErrorResponse) {
             setError(error.response?.data?.message || 'Unable to load analytics.');
             console.error('Error fetching analytics:', error);

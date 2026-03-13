@@ -294,7 +294,7 @@ export default function Dashboard() {
       LOST: 0
     };
 
-    statusDistribution?.forEach(item => {
+    (Array.isArray(statusDistribution) ? statusDistribution : []).forEach(item => {
       const key = (item.status || "").toUpperCase();
       const count = typeof item.count === "string" ? parseInt(item.count, 10) : item.count || 0;
       distributionMap[key] = Math.max(distributionMap[key] || 0, count || 0);
@@ -411,7 +411,7 @@ export default function Dashboard() {
 
     const fullWeek = baseDays.map(({ label }) => ({ day: label, leads: 0 }));
 
-    weeklyActivity.forEach(item => {
+    (Array.isArray(weeklyActivity) ? weeklyActivity : []).forEach(item => {
       const key = normalizeDay(item.day);
       const index = baseDays.findIndex(d => d.key === key);
       if (index !== -1) {
