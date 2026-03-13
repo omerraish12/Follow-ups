@@ -72,10 +72,17 @@ export default function WhatsAppIntegration() {
     const response = await whatsappService.getSessionStatus();
     setSession(response.session);
     if (response.session?.qr_code) {
-      setQrSecondsRemaining(60);
+      setQrSecondsRemaining((prev) => {
+        const sameCode = response.session?.qr_code === session?.qr_code;
+        // only reset timer when a new QR arrives or timer isn't running
+        if (!sameCode || prev === null || prev <= 0) {
+          return 60;
+        }
+        return prev;
+      });
     }
     return response.session;
-  }, []);
+  }, [session?.qr_code]);
 
   const loadPage = useCallback(async () => {
     setIsLoading(true);
