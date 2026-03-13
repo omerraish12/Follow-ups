@@ -276,16 +276,20 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         lastDisconnect?.error?.data?.statusCode ||
         null;
       const message = lastDisconnect?.error?.message || 'WhatsApp Web session disconnected';
+      const isQrTimeout =
+        statusCode === DisconnectReason.timedOut ||
+        /qr refs attempts ended/i.test(message || '');
       const isDeviceRemoved =
         statusCode === 401 ||
         statusCode === DisconnectReason.loggedOut ||
         /device_removed|logged\s*out|conflict/i.test(message || '');
-      const shouldReconnect = !isDeviceRemoved && statusCode !== DisconnectReason.loggedOut;
+      const shouldReconnect =
+        isQrTimeout || (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut);
 
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
-        status: 'disconnected',
-        lastError: message,
+        status: isQrTimeout ? 'connecting' : 'disconnected',
+        lastError: isQrTimeout ? null : message,
         qrCode: null
       });
 
@@ -297,11 +301,16 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         return;
       }
 
+      const reconnectDelayMs = isQrTimeout ? 500 : 3000;
+      if (isQrTimeout) {
+        logger.info({ clinicId }, 'QR expired before scan; regenerating a fresh code');
+      }
+
       setTimeout(() => {
         connectSession(clinicId).catch((error) => {
           logger.error({ clinicId, error }, 'Failed to auto-reconnect WhatsApp session');
         });
-      }, 3000);
+      }, reconnectDelayMs);
     }
   });
 
@@ -417,6 +426,7 @@ const connectSession = async (clinicId) => {
     auth: state,
     logger,
     printQRInTerminal: false,
+    qrTimeout: config.qrTimeoutMs,
     browser: ['Clinic Follow-ups', 'Chrome', '1.0.0']
   });
 

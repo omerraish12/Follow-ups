@@ -19,7 +19,7 @@ Set these in the bridge container/VM:
 - `WA_WEB_BACKEND_SHARED_SECRET` — sent as `x-bridge-secret` to `/api/whatsapp/bridge/events` and must match the backend.
 - `WA_WEB_SESSIONS_DIR` — where Baileys auth files live; absolute path or relative to repo. Defaults to `./data/sessions`.
 - `POSTGRES_URL`/`SUPABASE_DB_URL` (or `POSTGRES_*`) — same database the backend uses so `whatsapp_sessions` stays in sync. Use your Supabase pooled URL here.
-- Optional: `LOG_LEVEL` (default `info`), `WA_WEB_BRIDGE_TIMEOUT_MS` if your network is slow.
+- Optional: `LOG_LEVEL` (default `info`), `WA_WEB_BRIDGE_TIMEOUT_MS` if your network is slow, `WA_WEB_QR_TIMEOUT_MS` (ms, default `180000`) to keep QR codes alive longer before Baileys rotates them.
 
 Backend-side env (already wired):
 

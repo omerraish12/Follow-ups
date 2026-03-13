@@ -24,6 +24,7 @@ const schema = z.object({
   WA_WEB_SESSIONS_DIR: z.string().optional(),
   WA_WEB_SINGLE_AUTH_DIR: z.string().optional(),
   WA_WEB_AUTO_ACK_TEXT: z.string().optional(),
+  WA_WEB_QR_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
   WA_WEB_BRIDGE_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
 
   SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid URL'),
@@ -44,6 +45,7 @@ const config = Object.freeze({
   sessionsDir: raw.WA_WEB_SESSIONS_DIR || null,
   singleAuthDir: raw.WA_WEB_SINGLE_AUTH_DIR || null,
   autoAckText: raw.WA_WEB_AUTO_ACK_TEXT || null,
+  qrTimeoutMs: raw.WA_WEB_QR_TIMEOUT_MS || 180000,
   bridgeTimeoutMs: raw.WA_WEB_BRIDGE_TIMEOUT_MS || 15000,
   supabase: {
     url: raw.SUPABASE_URL,

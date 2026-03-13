@@ -63,6 +63,7 @@ const startBridge = async () => {
       printQRInTerminal: false,
       auth: authState,
       logger,
+      qrTimeout: config.qrTimeoutMs,
       browser: ['Clinic Follow-ups', 'Chrome', '1.0.0']
     });
 
