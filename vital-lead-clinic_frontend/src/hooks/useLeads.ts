@@ -26,7 +26,7 @@ export const useLeads = (initialFilters: Filters = {}) => {
     setError(null);
     try {
       const data = await leadService.getLeads(filters);
-      setLeads(data);
+      setLeads(Array.isArray(data) ? data : []);
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || 'Unable to load leads.';
       setError(msg);
@@ -167,7 +167,8 @@ export const useLeads = (initialFilters: Filters = {}) => {
 
   const getFollowupNeeded = async (): Promise<Lead[]> => {
     try {
-      return await leadService.getFollowupNeeded();
+      const data = await leadService.getFollowupNeeded();
+      return Array.isArray(data) ? data : [];
     } catch (err: ErrorResponse) {
       const msg = err.response?.data?.message || 'Unable to load follow-up leads.';
       toast({ title: "Error", description: msg, variant: "destructive" });

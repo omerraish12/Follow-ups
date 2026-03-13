@@ -173,7 +173,7 @@ export default function Dashboard() {
   const loadFollowupLeads = useCallback(async () => {
     try {
       const data = await getFollowupNeeded();
-      setFollowupLeads(data);
+      setFollowupLeads(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error loading followup leads:', error);
     }
@@ -187,15 +187,18 @@ export default function Dashboard() {
   const normalizedStatusFilter = statusFilter === "followup" ? "followup" : statusFilter?.toUpperCase();
 
   const displayLeads = useMemo(() => {
+    const safeLeads = Array.isArray(leads) ? leads : [];
+    const safeFollowups = Array.isArray(followupLeads) ? followupLeads : [];
+
     if (normalizedStatusFilter === "followup") {
-      return followupLeads;
+      return safeFollowups;
     }
 
     if (!normalizedStatusFilter || normalizedStatusFilter === "ALL") {
-      return leads;
+      return safeLeads;
     }
 
-    return leads.filter((lead) => (lead.status || "").toUpperCase() === normalizedStatusFilter);
+    return safeLeads.filter((lead) => (lead.status || "").toUpperCase() === normalizedStatusFilter);
   }, [normalizedStatusFilter, followupLeads, leads]);
 
   useEffect(() => {
@@ -206,7 +209,7 @@ export default function Dashboard() {
 
   // Generate recent activity from leads data
   useEffect(() => {
-    if (displayLeads?.length) {
+    if (Array.isArray(displayLeads) && displayLeads.length) {
       const descriptionSets = language === "he"
         ? [
             "ליד חדש נוסף למערכת",
