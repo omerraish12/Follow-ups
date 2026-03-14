@@ -12,16 +12,14 @@ const {
   jidNormalizedUser,
   makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys');
-const { supabase } = require('./db');
 const { encrypt, decrypt } = require('./crypto');
 const { config } = require('./config');
 
-// Runtime-only temp directories per clinic; long-term state persisted locally or in Supabase.
+// Runtime-only temp directories per clinic; long-term state persisted locally.
 const sessionTempDirs = new Map();
 const LOCAL_SESSIONS_ROOT = config.sessionsDir
   ? path.resolve(__dirname, '..', config.sessionsDir)
   : path.join(__dirname, '..', 'db', 'sessions');
-const useLocalStore = config.sessionStore === 'local';
 // Default to warn to reduce Baileys verbose session logs (can override via LOG_LEVEL).
 const logger = P({ level: config.logLevel });
 const activeSessions = new Map();
@@ -39,7 +37,6 @@ const removeDir = async (dir) => {
 };
 
 const ensureLocalStoreDir = async () => {
-  if (!useLocalStore) return;
   await fs.promises.mkdir(LOCAL_SESSIONS_ROOT, { recursive: true });
 };
 
@@ -64,7 +61,6 @@ const getKnownSessionDir = async (clinicId) => {
 const localSessionPath = (clinicId) => path.join(LOCAL_SESSIONS_ROOT, `${clinicId}.json`);
 
 const deleteLocalSessionRecord = async (clinicId) => {
-  if (!useLocalStore) return;
   await ensureLocalStoreDir();
   const file = localSessionPath(clinicId);
   if (fs.existsSync(file)) {
@@ -73,22 +69,11 @@ const deleteLocalSessionRecord = async (clinicId) => {
 };
 
 const getSessionRecord = async (clinicId) => {
-  if (useLocalStore) {
-    await ensureLocalStoreDir();
-    const file = localSessionPath(clinicId);
-    if (!fs.existsSync(file)) return null;
-    const raw = await fs.promises.readFile(file, 'utf8');
-    return JSON.parse(raw);
-  }
-
-  const { data, error } = await supabase
-    .from('whatsapp_sessions')
-    .select('*')
-    .eq('clinic_id', clinicId)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data || null;
+  await ensureLocalStoreDir();
+  const file = localSessionPath(clinicId);
+  if (!fs.existsSync(file)) return null;
+  const raw = await fs.promises.readFile(file, 'utf8');
+  return JSON.parse(raw);
 };
 
 const upsertSessionRecord = async (clinicId, patch = {}) => {
@@ -104,50 +89,31 @@ const upsertSessionRecord = async (clinicId, patch = {}) => {
     updated_at: new Date().toISOString()
   };
 
-  if (useLocalStore) {
-    await ensureLocalStoreDir();
-    const file = localSessionPath(clinicId);
-    const existing = fs.existsSync(file) ? JSON.parse(await fs.promises.readFile(file, 'utf8')) : {};
-    const merged = { ...existing, ...base };
-    await fs.promises.writeFile(file, JSON.stringify(merged, null, 2), 'utf8');
-    return merged;
-  }
-
-  const { data, error } = await supabase
-    .from('whatsapp_sessions')
-    .upsert(base, { onConflict: 'clinic_id' })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data;
+  await ensureLocalStoreDir();
+  const file = localSessionPath(clinicId);
+  const existing = fs.existsSync(file) ? JSON.parse(await fs.promises.readFile(file, 'utf8')) : {};
+  const merged = { ...existing, ...base };
+  await fs.promises.writeFile(file, JSON.stringify(merged, null, 2), 'utf8');
+  return merged;
 };
 
 const listPersistedSessionIds = async () => {
-  if (useLocalStore) {
-    await ensureLocalStoreDir();
-    const files = await fs.promises.readdir(LOCAL_SESSIONS_ROOT);
-    const candidates = files.filter((f) => f.endsWith('.json'));
-    const result = [];
-    for (const file of candidates) {
-      try {
-        const full = path.join(LOCAL_SESSIONS_ROOT, file);
-        const parsed = JSON.parse(await fs.promises.readFile(full, 'utf8'));
-        if (parsed?.auth_state_encrypted) {
-          result.push(path.basename(file, '.json'));
-        }
-      } catch (_err) {
-        // Skip unreadable files but continue processing others.
+  await ensureLocalStoreDir();
+  const files = await fs.promises.readdir(LOCAL_SESSIONS_ROOT);
+  const candidates = files.filter((f) => f.endsWith('.json'));
+  const result = [];
+  for (const file of candidates) {
+    try {
+      const full = path.join(LOCAL_SESSIONS_ROOT, file);
+      const parsed = JSON.parse(await fs.promises.readFile(full, 'utf8'));
+      if (parsed?.auth_state_encrypted) {
+        result.push(path.basename(file, '.json'));
       }
+    } catch (_err) {
+      // Skip unreadable files but continue processing others.
     }
-    return result;
   }
-  const { data, error } = await supabase
-    .from('whatsapp_sessions')
-    .select('clinic_id')
-    .eq('provider', 'wa_web')
-    .not('auth_state_encrypted', 'is', null);
-  if (error) throw error;
-  return (data || []).map((row) => row.clinic_id);
+  return result;
 };
 
 const serializeDirectory = async (dir) => {
@@ -519,7 +485,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
 const connectSession = async (clinicId) => {
   const existing = activeSessions.get(String(clinicId));
   if (existing?.socket) {
-    console.log("existing___: ", clinicId)
+    logger.info({ clinicId }, 'WhatsApp session already active; reusing socket');
     const record = await getSessionRecord(clinicId);
     return {
       provider: 'wa_web',
@@ -535,6 +501,8 @@ const connectSession = async (clinicId) => {
   await restoreAuthState(clinicId, authDir);
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion();
+
+  logger.info({ clinicId }, 'Connecting WhatsApp session');
 
   const socket = makeWASocket({
     version,
@@ -564,6 +532,7 @@ const connectSession = async (clinicId) => {
   });
 
   const record = await getSessionRecord(clinicId);
+  logger.info({ clinicId, status: record?.status || 'connecting', deviceJid: record?.device_jid || null }, 'WhatsApp session connected or awaiting QR');
   return {
     provider: 'wa_web',
     status: record?.status || 'connecting',
@@ -614,6 +583,7 @@ const disconnectSession = async (clinicId) => {
     lastError: null
   });
 
+  logger.info({ clinicId }, 'WhatsApp session disconnected and cleared');
   return { success: true };
 };
 
@@ -654,6 +624,7 @@ const sendMessage = async ({ clinicId, to, toJid, toPn, body, mediaUrl, template
   };
 
   const response = await runQueued(() => active.socket.sendMessage(jid, message));
+  logger.info({ clinicId, to: jid, messageId: response?.key?.id || null, media: Boolean(mediaUrl) }, 'WhatsApp message sent');
   return {
     messageId: response?.key?.id || null,
     status: 'sent'
@@ -663,18 +634,16 @@ const sendMessage = async ({ clinicId, to, toJid, toPn, body, mediaUrl, template
 const restoreExistingSessions = async () => {
   try {
     const clinicIds = await listPersistedSessionIds();
+    logger.info({ count: clinicIds.length }, 'Restoring WhatsApp sessions from disk');
     for (const clinicId of clinicIds) {
       connectSession(clinicId).catch((err) => {
         logger.error({ clinicId, error: err }, 'Failed to restore WhatsApp session');
       });
     }
   } catch (err) {
-    // If Supabase schema cache is stale or local read fails, log and continue without crash.
+    // Log and continue without crash if restore fails.
     logger.error({ error: err }, 'Failed to fetch existing WhatsApp sessions');
     return;
-  }
-};
-    });
   }
 };
 
