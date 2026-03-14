@@ -410,7 +410,8 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
     }
   });
 
-  socket.ev.on('messages.upsert', async ({ messages }) => {
+  socket.ev.on('messages.upsert', async ({ messages, type }) => {
+    const history = type && type !== 'notify';
     for (const message of messages || []) {
       if (!message?.message || message.key?.fromMe) {
         continue;
@@ -459,16 +460,6 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
       const fromId = normalizedJid ? normalizedJid.split('@')[0] : '';
       const from = fromId ? (fromId.startsWith('+') ? fromId : `+${fromId}`) : '';
 
-      // Immediate auto-ack from the bridge socket (mirrors frontend/manual sends)
-      if (normalizedJid && !message.key.fromMe) {
-        const autoAckText = config.autoAckText || 'I got your message. I will respond asap!!!';
-        try {
-          await socket.sendMessage(normalizedJid, { text: autoAckText });
-          logger.info({ clinicId, to: normalizedJid, autoAck: true }, 'Bridge auto-ack sent');
-        } catch (err) {
-          logger.warn({ clinicId, to: normalizedJid, err }, 'Bridge auto-ack failed');
-        }
-      }
       // return;
       const payload = extractMessageText(message);
       const contactName =
@@ -489,7 +480,9 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
           senderPn: message.key?.senderPn || message .senderPn || null,
           text: payload.text,
           metadata: payload.metadata,
-          messageId: message.key?.id || null
+          messageId: message.key?.id || null,
+          timestamp: message.messageTimestamp || null,
+          history
         });
       } catch (error) {
         logger.error({ clinicId, error }, 'Failed to forward inbound WhatsApp message to backend');
@@ -530,8 +523,8 @@ const connectSession = async (clinicId) => {
     generateHighQualityLinkPreview: true,
     markOnlineOnConnect: false,
     emitOwnEvents: false,
-    syncFullHistory: false,
-    shouldSyncHistoryMessage: () => false,
+    syncFullHistory: true,
+    shouldSyncHistoryMessage: () => true,
     getMessage: async () => undefined,
     logger,
     printQRInTerminal: false,

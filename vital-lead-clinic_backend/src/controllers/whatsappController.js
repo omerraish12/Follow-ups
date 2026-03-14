@@ -210,7 +210,7 @@ const sendWelcomeForLead = async ({ lead, clinicId, greetingName, adminId }) => 
   }
 };
 
-const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, contactName = null) => {
+const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, contactName = null, history = false, timestamp = null) => {
   const normalizedFrom = normalizePhone(rawFrom);
   const from = normalizedFrom || String(rawFrom || '').trim();
   const text = rawText?.trim() || '';
@@ -250,7 +250,7 @@ const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, 
       phone: from,
       service: 'WhatsApp inquiry',
       status: 'NEW',
-      source: 'whatsapp_inbound',
+      source: history ? 'whatsapp_history' : 'whatsapp_inbound',
       notes: text ? `First message: ${text}` : 'First WhatsApp message',
       clinicId,
       assignedToId: adminId
@@ -278,54 +278,56 @@ const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, 
 
   console.info('Inbound WhatsApp message', { from, clinicId, text: messagePreview, receivedAt: new Date().toISOString() });
 
-  // Auto-acknowledge every incoming message AND persist it to history
-  const ackText = 'I got your message. I will respond asap!!!';
-  try {
-    const ackResp = await sendWhatsAppMessage({
-      to: from,
-      body: ackText,
-      clinicId
-    });
-    const providerMessageId = extractProviderMessageId(ackResp);
-    await Message.create({
-      content: ackText,
-      type: 'SENT',
-      isBusiness: true,
-      leadId: lead.id,
-      deliveryStatus: 'sent',
-      messageOrigin: 'automation',
-      providerMessageId,
-      metadata: {
-        automation: 'auto_ack',
-        providerResponse: ackResp
-      }
-    });
-    console.log('Auto-ack sent', { clinicId, to: from, providerResponse: ackResp });
-  } catch (ackError) {
-    console.error('Auto-ack send failed', ackError?.response?.data || ackError.message);
-    await Message.create({
-      content: ackText,
-      type: 'SENT',
-      isBusiness: true,
-      leadId: lead.id,
-      deliveryStatus: 'failed',
-      messageOrigin: 'automation',
-      deliveryError: ackError?.response?.data || ackError.message,
-      metadata: {
-        automation: 'auto_ack',
-        providerError: ackError?.response?.data || ackError.message
-      }
-    });
-    await IntegrationLog.create({
-      type: 'whatsapp_send',
-      message: 'Auto-ack send failed',
-      clinicId,
-      metadata: {
+  // Auto-acknowledge only live traffic (not history imports)
+  if (!history) {
+    const ackText = 'I got your message. I will respond asap!!!';
+    try {
+      const ackResp = await sendWhatsAppMessage({
         to: from,
+        body: ackText,
+        clinicId
+      });
+      const providerMessageId = extractProviderMessageId(ackResp);
+      await Message.create({
+        content: ackText,
+        type: 'SENT',
+        isBusiness: true,
         leadId: lead.id,
-        error: ackError?.response?.data || ackError.message
-      }
-    });
+        deliveryStatus: 'sent',
+        messageOrigin: 'automation',
+        providerMessageId,
+        metadata: {
+          automation: 'auto_ack',
+          providerResponse: ackResp
+        }
+      });
+      console.log('Auto-ack sent', { clinicId, to: from, providerResponse: ackResp });
+    } catch (ackError) {
+      console.error('Auto-ack send failed', ackError?.response?.data || ackError.message);
+      await Message.create({
+        content: ackText,
+        type: 'SENT',
+        isBusiness: true,
+        leadId: lead.id,
+        deliveryStatus: 'failed',
+        messageOrigin: 'automation',
+        deliveryError: ackError?.response?.data || ackError.message,
+        metadata: {
+          automation: 'auto_ack',
+          providerError: ackError?.response?.data || ackError.message
+        }
+      });
+      await IntegrationLog.create({
+        type: 'whatsapp_send',
+        message: 'Auto-ack send failed',
+        clinicId,
+        metadata: {
+          to: from,
+          leadId: lead.id,
+          error: ackError?.response?.data || ackError.message
+        }
+      });
+    }
   }
 
   const lower = text.toLowerCase();
@@ -337,56 +339,63 @@ const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, 
     isBusiness: false,
     leadId: lead.id,
     deliveryStatus: 'received',
-    messageOrigin: 'patient',
-    metadata
+    messageOrigin: history ? 'history' : 'patient',
+    metadata: {
+      ...(metadata || {}),
+      history: Boolean(history)
+    },
+    timestamp: timestamp ? new Date(Number(timestamp) * 1000) : undefined
   });
 
-  const pendingExecution = await Execution.findPendingByLead(lead.id);
-  if (!pendingExecution?.id) {
-    await Lead.update(lead.id, lead.clinic_id, {
-      lastContacted: new Date(),
-      lastInboundMessageAt: new Date()
-    });
-  } else {
-    await Execution.markReplied(pendingExecution.id);
-    await Automation.incrementReplyCount(pendingExecution.automation_id);
-    await Automation.updateSuccessRate(pendingExecution.automation_id);
+  // For history imports, do not trigger automations or welcomes
+  if (!history) {
+    const pendingExecution = await Execution.findPendingByLead(lead.id);
+    if (!pendingExecution?.id) {
+      await Lead.update(lead.id, lead.clinic_id, {
+        lastContacted: new Date(),
+        lastInboundMessageAt: new Date()
+      });
+    } else {
+      await Execution.markReplied(pendingExecution.id);
+      await Automation.incrementReplyCount(pendingExecution.automation_id);
+      await Automation.updateSuccessRate(pendingExecution.automation_id);
 
-    await Lead.update(lead.id, lead.clinic_id, {
-      status: 'HOT',
-      lastContacted: new Date(),
-      lastInboundMessageAt: new Date()
-    });
-    await Notification.create({
-      type: 'lead',
-      title: 'WhatsApp reply received',
-      message: `${lead.name} replied to your automation.`,
-      priority: 'high',
-      actionLabel: 'View lead',
-      actionLink: `/leads/${lead.id}`,
-      metadata: {
-        leadId: lead.id,
-        automationId: pendingExecution.automation_id
-      },
-      userId: adminId,
-      clinicId: lead.clinic_id
-    });
-    await Activity.create({
-      type: 'MESSAGE_RECEIVED',
-      description: `Reply from ${lead.name}: ${messagePreview.substring(0, 80)}`,
-      userId: adminId,
-      leadId: lead.id
-    });
-  }
+      await Lead.update(lead.id, lead.clinic_id, {
+        status: 'HOT',
+        lastContacted: new Date(),
+        lastInboundMessageAt: new Date()
+      });
+      await Notification.create({
+        type: 'lead',
+        title: 'WhatsApp reply received',
+        message: `${lead.name} replied to your automation.`,
+        priority: 'high',
+        actionLabel: 'View lead',
+        actionLink: `/leads/${lead.id}`,
+        metadata: {
+          leadId: lead.id,
+          automationId: pendingExecution.automation_id
+        },
+        userId: adminId,
+        clinicId: lead.clinic_id
+      });
+      await Activity.create({
+        type: 'MESSAGE_RECEIVED',
+        description: `Reply from ${lead.name}: ${messagePreview.substring(0, 80)}`,
+        userId: adminId,
+        leadId: lead.id
+      });
+    }
 
-  if (leadWasCreated) {
-    const greetingName = firstNameOrDefault(contactName || lead.name || from);
-    await sendWelcomeForLead({
-      lead,
-      clinicId,
-      greetingName,
-      adminId
-    });
+    if (leadWasCreated) {
+      const greetingName = firstNameOrDefault(contactName || lead.name || from);
+      await sendWelcomeForLead({
+        lead,
+        clinicId,
+        greetingName,
+        adminId
+      });
+    }
   }
 };
 
@@ -456,7 +465,9 @@ const handleBridgeEvent = async (req, res) => {
         req.body?.text,
         req.body?.metadata || {},
         req.body?.clinicId,
-        req.body?.contactName || null
+        req.body?.contactName || null,
+        Boolean(req.body?.history),
+        req.body?.timestamp || null
       );
     } else if (eventType === 'message.status') {
       await processDeliveryStatus({
@@ -616,7 +627,7 @@ const sendTemplate = async (req, res) => {
 const backfillFollowups = async (req, res) => {
   try {
     const clinicId = req.user.clinic_id;
-    const adminId = await getClinicAdminId(clinicId);
+    const adminId = (await getClinicAdminId(clinicId)) || req.user.id || null;
     const contacts = Array.isArray(req.body?.contacts) ? req.body.contacts : [];
     const rawStatus = req.body?.status;
     const desiredStatus = normalizeLeadStatus(rawStatus) || 'NEW';
@@ -660,7 +671,7 @@ const backfillFollowups = async (req, res) => {
       }
 
       const greetingName = firstNameOrDefault(name);
-      const fallbackMessage = `Hi ${greetingName}, we’re following up to see if you still need help with ${service}. Reply here and we’ll take care of you.`;
+      const fallbackMessage = `Hi ${greetingName}, we're following up to see if you still need help with ${service}. Reply here and we'll take care of you.`;
       const messageBody = rawMessage || fallbackMessage;
 
       try {
@@ -886,3 +897,4 @@ module.exports = {
   getFAQ,
   backfillFollowups
 };
+

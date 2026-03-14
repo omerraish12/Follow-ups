@@ -11,6 +11,7 @@ export interface SettingsResponse {
     language: string;
     currency: string;
     logo?: string | null;
+    whatsappNumber?: string | null;
   };
   profile: {
     id: string;

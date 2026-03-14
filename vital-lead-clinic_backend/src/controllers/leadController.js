@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const { DateTime } = require('luxon');
 const Lead = require('../models/Lead');
 const Message = require('../models/Message');
 const Activity = require('../models/Activity');
@@ -37,6 +38,24 @@ const normalizeLeadStatus = (status) => {
     if (!status || typeof status !== 'string') return undefined;
     const normalized = status.trim().toUpperCase();
     return ALLOWED_LEAD_STATUSES.has(normalized) ? normalized : undefined;
+};
+
+const normalizeDateInput = (value) => {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.toISOString().split('T')[0];
+    }
+    const str = String(value).trim();
+    if (!str) return null;
+    // Try ISO first
+    const iso = DateTime.fromISO(str, { zone: 'utc' });
+    if (iso.isValid) return iso.toISODate();
+    // Then common day/month/year formats
+    const dmy = DateTime.fromFormat(str, 'dd/MM/yyyy', { zone: 'utc' });
+    if (dmy.isValid) return dmy.toISODate();
+    const dmyDash = DateTime.fromFormat(str, 'dd-MM-yyyy', { zone: 'utc' });
+    if (dmyDash.isValid) return dmyDash.toISODate();
+    return null;
 };
 
 const normalizeEntryCode = (value) => {
@@ -226,6 +245,7 @@ const createLead = async (req, res) => {
         const normalizedStatus = normalizeLeadStatus(status) || 'NEW';
 
         const sanitizedEntryCode = normalizeEntryCode(entryCode);
+        const normalizedNextFollowUp = normalizeDateInput(nextFollowUp);
 
         const lead = await Lead.create({
             name,
@@ -237,7 +257,7 @@ const createLead = async (req, res) => {
             value: parseFloat(value) || 0,
             notes,
             entryCode: sanitizedEntryCode === undefined ? null : sanitizedEntryCode,
-            nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
+            nextFollowUp: normalizedNextFollowUp,
             assignedToId,
             clinicId: req.user.clinic_id
         });
@@ -350,11 +370,7 @@ const updateLead = async (req, res) => {
         }
 
         const normalizedStatus = normalizeLeadStatus(status);
-        const parsedVisitDate = lastVisitDate ? new Date(lastVisitDate) : null;
-        const normalizedVisitDate =
-            parsedVisitDate && !Number.isNaN(parsedVisitDate.getTime())
-                ? parsedVisitDate.toISOString().split('T')[0]
-                : null;
+        const normalizedVisitDate = normalizeDateInput(lastVisitDate);
         const visitDateValue = normalizedVisitDate || (normalizedStatus === 'CLOSED' ? new Date().toISOString().split('T')[0] : null);
 
         const updatePayload = {
@@ -366,7 +382,7 @@ const updateLead = async (req, res) => {
             source,
             value: value !== undefined && value !== null ? parseFloat(value) : undefined,
             notes,
-            nextFollowUp: nextFollowUp === '' ? null : nextFollowUp,
+            nextFollowUp: normalizeDateInput(nextFollowUp),
             assignedToId
         };
 
