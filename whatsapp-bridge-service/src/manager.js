@@ -77,24 +77,38 @@ const getSessionRecord = async (clinicId) => {
 };
 
 const upsertSessionRecord = async (clinicId, patch = {}) => {
-  const base = {
-    clinic_id: clinicId,
-    provider: patch.provider || 'wa_web',
-    status: patch.status || 'disconnected',
-    auth_state_encrypted: patch.authStateEncrypted ?? null,
-    qr_code: patch.qrCode ?? null,
-    device_jid: patch.deviceJid ?? null,
-    last_connected_at: patch.lastConnectedAt ?? null,
-    last_error: patch.lastError ?? null,
-    updated_at: new Date().toISOString()
-  };
-
   await ensureLocalStoreDir();
   const file = localSessionPath(clinicId);
   const existing = fs.existsSync(file) ? JSON.parse(await fs.promises.readFile(file, 'utf8')) : {};
-  const merged = { ...existing, ...base };
-  await fs.promises.writeFile(file, JSON.stringify(merged, null, 2), 'utf8');
-  return merged;
+
+  const base = {
+    clinic_id: clinicId,
+    provider: patch.provider || existing.provider || 'wa_web',
+    status: patch.status ?? existing.status ?? 'disconnected',
+    auth_state_encrypted:
+      patch.authStateEncrypted !== undefined
+        ? patch.authStateEncrypted
+        : existing.auth_state_encrypted ?? null,
+    qr_code:
+      patch.qrCode !== undefined
+        ? patch.qrCode
+        : existing.qr_code ?? null,
+    device_jid:
+      patch.deviceJid !== undefined
+        ? patch.deviceJid
+        : existing.device_jid ?? null,
+    last_connected_at:
+      patch.lastConnectedAt !== undefined
+        ? patch.lastConnectedAt
+        : existing.last_connected_at ?? null,
+    last_error:
+      patch.lastError !== undefined
+        ? patch.lastError
+        : existing.last_error ?? null,
+    updated_at: new Date().toISOString()
+  };
+  await fs.promises.writeFile(file, JSON.stringify(base, null, 2), 'utf8');
+  return base;
 };
 
 const listPersistedSessionIds = async () => {
