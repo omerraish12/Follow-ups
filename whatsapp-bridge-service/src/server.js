@@ -119,7 +119,6 @@ app.post('/sessions/:clinicId/connect', async (req, res) => {
 app.get('/sessions/:clinicId', async (req, res) => {
   try {
     const response = await getSessionStatus(req.params.clinicId);
-    console.log("result: ")
     res.json(response);
   } catch (error) {
     sendError(res, 500, error.message || 'Unable to fetch WhatsApp session');

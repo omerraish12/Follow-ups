@@ -283,6 +283,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      logger.info({ clinicId }, 'QR generated for WhatsApp session; awaiting scan');
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
         status: 'connecting',
@@ -302,6 +303,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         lastConnectedAt: new Date().toISOString(),
         lastError: null
       });
+      logger.info({ clinicId, deviceJid: socket.user?.id || null }, 'WhatsApp session connected');
     }
 
     if (connection === 'close') {
