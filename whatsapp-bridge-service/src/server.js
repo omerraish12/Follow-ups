@@ -53,6 +53,7 @@ app.use((req, res, next) => {
 });
 
 app.get('/health', (_req, res) => {
+  console.log("_____/health____");
   healthCheck()
     .then(() => {
       res.json({
@@ -74,10 +75,12 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/bridge/state', (_req, res) => {
+  console.log("_____/bridge/state____");
   res.json(getBridgeState());
 });
 
 app.post('/bridge/start', async (_req, res) => {
+  console.log("_____/bridge/start____");
   try {
     await ensureBridge();
     res.json(getBridgeState());
@@ -87,6 +90,7 @@ app.post('/bridge/start', async (_req, res) => {
 });
 
 app.post('/bridge/welcome', async (req, res) => {
+  console.log("_____/bridge/welcome____");
   const { phone, name } = req.body || {};
   if (!phone) {
     res.status(400).json({ message: 'phone is required' });
@@ -102,6 +106,7 @@ app.post('/bridge/welcome', async (req, res) => {
 });
 
 app.post('/sessions/:clinicId/connect', async (req, res) => {
+  console.log("_____/sessions/:clinicId/connect____");
   try {
     console.log("trying to connect to: ", req.params.clinicId);
     const response = await connectSession(req.params.clinicId);
@@ -113,6 +118,7 @@ app.post('/sessions/:clinicId/connect', async (req, res) => {
 });
 
 app.get('/sessions/:clinicId', async (req, res) => {
+  console.log("_____/sessions/:clinicId____");
   try {
     const response = await getSessionStatus(req.params.clinicId);
     res.json(response);
@@ -122,6 +128,7 @@ app.get('/sessions/:clinicId', async (req, res) => {
 });
 
 app.post('/sessions/:clinicId/disconnect', async (req, res) => {
+  console.log("_____/sessions/:clinicId/disconnect____");
   try {
     const response = await disconnectSession(req.params.clinicId);
     console.log("One session is disconnected: ", req.params.clinicId, response);
@@ -132,6 +139,7 @@ app.post('/sessions/:clinicId/disconnect', async (req, res) => {
 });
 
 app.post('/messages/send', async (req, res) => {
+  console.log("_____/messages/send____");
   try {
     const response = await sendMessage(req.body || {});
     console.log("One session sent message: ", req.body, response);

@@ -9,7 +9,8 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
-  jidNormalizedUser
+  jidNormalizedUser,
+  makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys');
 const { supabase } = require('./db');
 const { encrypt, decrypt } = require('./crypto');
@@ -21,6 +22,8 @@ const sessionTempDirs = new Map();
 const logger = P({ level: config.logLevel });
 const activeSessions = new Map();
 const reconnectFailures = new Map(); // consecutive close events per clinic
+const msgRetryCache = new Map(); // shared Baileys retry cache across reconnects
+const sendQueues = new Map(); // per-clinic outbound throttling
 let sessionDirMapCache = null;
 
 const ensureDir = async (dir) => {
@@ -131,7 +134,6 @@ const notifyBackend = async (payload) => {
     const serialized = JSON.stringify(body);
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(`${timestamp}.${serialized}`);
-    headers['x-bridge-secret'] = secret;
     headers['x-bridge-signature'] = hmac.digest('hex');
   }
 
@@ -292,26 +294,30 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         statusCode === DisconnectReason.connectionClosed ||
         /connection terminated/i.test(message || '');
       const isKeepAliveTimeout = /Timed Out/i.test(message || '');
+      const isIntentionalLogout = /Intentional Logout/i.test(message || '');
       const isDeviceRemoved =
         statusCode === 401 ||
         statusCode === DisconnectReason.loggedOut ||
         /device_removed|logged\s*out|conflict/i.test(message || '');
       const shouldReconnect =
-        isQrTimeout ||
-        isStreamRestart ||
-        isConnectionTerminated ||
-        (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut);
-      // force a clean slate when WA kicks us before QR or after repeated keep-alive failures
+        !isIntentionalLogout && (
+          isQrTimeout ||
+          isStreamRestart ||
+          isConnectionTerminated ||
+          (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut)
+        );
+      // force a clean slate only on real logout/device removal or repeated timeouts
       const shouldResetAuth =
         isDeviceRemoved ||
-        isConnectionTerminated ||
-        isStreamRestart ||
-        (isKeepAliveTimeout && failureCount >= 2);
+        (isKeepAliveTimeout && failureCount >= 3) ||
+        (isConnectionTerminated && failureCount >= 3);
 
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
-        status: isQrTimeout || isStreamRestart || isConnectionTerminated ? 'connecting' : 'disconnected',
-        lastError: isQrTimeout || isStreamRestart || isConnectionTerminated ? null : message,
+        status: isIntentionalLogout
+          ? 'disconnected'
+          : (isQrTimeout || isStreamRestart || isConnectionTerminated ? 'connecting' : 'disconnected'),
+        lastError: (isQrTimeout || isStreamRestart || isConnectionTerminated || isIntentionalLogout) ? null : message,
         qrCode: null,
         authStateEncrypted: shouldResetAuth ? null : undefined
       });
@@ -331,6 +337,10 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
       }
 
       const reconnectDelayMs = isQrTimeout ? 500 : isStreamRestart ? 1000 : 1500;
+      // Add modest exponential backoff for repeated failures (except QR renewals)
+      const baseDelay = isQrTimeout ? reconnectDelayMs : Math.min(1000 * (2 ** Math.max(0, failureCount - 1)), 10000);
+      const jitter = isQrTimeout ? 0 : Math.floor(Math.random() * 250);
+      const effectiveDelay = isQrTimeout ? reconnectDelayMs : baseDelay + jitter;
       if (isQrTimeout) {
         logger.info({ clinicId }, 'QR expired before scan; regenerating a fresh code');
       }
@@ -338,14 +348,14 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         logger.info({ clinicId }, 'Stream restart requested by WhatsApp; reconnecting with saved auth');
       }
       if (shouldResetAuth && !isDeviceRemoved) {
-        logger.info({ clinicId }, 'Auth reset after server termination/timeout; new QR will be generated');
+        logger.info({ clinicId }, 'Auth reset after repeated timeouts; new QR will be generated');
       }
 
       setTimeout(() => {
         connectSession(clinicId).catch((error) => {
           logger.error({ clinicId, error }, 'Failed to auto-reconnect WhatsApp session');
         });
-      }, reconnectDelayMs);
+      }, effectiveDelay);
     }
   });
 
@@ -458,7 +468,17 @@ const connectSession = async (clinicId) => {
 
   const socket = makeWASocket({
     version,
-    auth: state,
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, logger)
+    },
+    msgRetryCounterCache: msgRetryCache,
+    generateHighQualityLinkPreview: true,
+    markOnlineOnConnect: false,
+    emitOwnEvents: false,
+    syncFullHistory: false,
+    shouldSyncHistoryMessage: () => false,
+    getMessage: async () => undefined,
     logger,
     printQRInTerminal: false,
     qrTimeout: config.qrTimeoutMs,
@@ -512,6 +532,8 @@ const disconnectSession = async (clinicId) => {
     await getKnownSessionDir(clinicId);
   await removeDir(authDir);
   sessionTempDirs.delete(String(clinicId));
+  reconnectFailures.delete(String(clinicId));
+  sendQueues.delete(String(clinicId));
   await upsertSessionRecord(clinicId, {
     provider: 'wa_web',
     status: 'disconnected',
@@ -551,7 +573,16 @@ const sendMessage = async ({ clinicId, to, toJid, toPn, body, mediaUrl, template
     ? inferMediaMessage(mediaUrl, renderedBody)
     : { text: renderedBody };
 
-  const response = await active.socket.sendMessage(jid, message);
+  const runQueued = (fn) => {
+    const key = String(clinicId);
+    const prior = sendQueues.get(key) || Promise.resolve();
+    const next = prior.catch(() => {}).then(() => fn());
+    // store a silent tail to keep the chain alive but avoid unhandled rejections
+    sendQueues.set(key, next.catch(() => {}));
+    return next;
+  };
+
+  const response = await runQueued(() => active.socket.sendMessage(jid, message));
   return {
     messageId: response?.key?.id || null,
     status: 'sent'

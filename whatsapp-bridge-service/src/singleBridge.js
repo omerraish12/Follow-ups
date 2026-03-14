@@ -5,7 +5,8 @@ const {
   default: makeWASocket,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  useMultiFileAuthState
+  useMultiFileAuthState,
+  makeCacheableSignalKeyStore
 } = require('@whiskeysockets/baileys');
 const QRCode = require('qrcode');
 const { config } = require('./config');
@@ -18,6 +19,8 @@ const state = {
 
 let socket = null;
 let starting = false;
+const reconnectFailures = new Map(); // track consecutive closes for backoff/reset
+const msgRetryCache = new Map(); // shared across reconnects
 
 const resolveAuthDir = () => {
   const custom = config.singleAuthDir ? String(config.singleAuthDir).trim() : '';
@@ -35,6 +38,8 @@ const logger = pino({ level: config.logLevel });
 const resetAuthDir = async () => {
   await fs.promises.rm(AUTH_DIR, { recursive: true, force: true });
   await fs.promises.mkdir(AUTH_DIR, { recursive: true });
+  state.qrImage = null;
+  state.lastError = null;
 };
 
 const phoneToJid = (phone) => {
@@ -61,7 +66,17 @@ const startBridge = async () => {
     const sock = makeWASocket({
       version,
       printQRInTerminal: false,
-      auth: authState,
+      auth: {
+        creds: authState.creds,
+        keys: makeCacheableSignalKeyStore(authState.keys, logger)
+      },
+      msgRetryCounterCache: msgRetryCache,
+      generateHighQualityLinkPreview: true,
+      markOnlineOnConnect: false,
+      emitOwnEvents: false,
+      syncFullHistory: false,
+      shouldSyncHistoryMessage: () => false,
+      getMessage: async () => undefined,
       logger,
       qrTimeout: config.qrTimeoutMs,
       browser: ['Clinic Follow-ups', 'Chrome', '1.0.0']
@@ -82,36 +97,76 @@ const startBridge = async () => {
           state.qrImage = null;
         }
         state.status = 'qr';
+        state.lastError = null;
       }
 
       if (connection === 'open') {
+        reconnectFailures.delete('single');
         state.status = 'ready';
         state.qrImage = null;
+        state.lastError = null;
       }
 
       if (connection === 'close') {
+        const failures = (reconnectFailures.get('single') || 0) + 1;
+        reconnectFailures.set('single', failures);
+
         const statusCode =
           lastDisconnect?.error?.output?.statusCode ||
           lastDisconnect?.error?.statusCode ||
           lastDisconnect?.error?.data?.statusCode ||
           null;
         const message = lastDisconnect?.error?.message || 'Disconnected';
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const isIntentionalLogout = /Intentional Logout/i.test(message || '');
+        const isStreamRestart =
+          statusCode === 515 ||
+          /restart required/i.test(message || '') ||
+          /stream errored/i.test(message || '');
+        const isConnectionTerminated =
+          statusCode === DisconnectReason.connectionClosed ||
+          /connection terminated/i.test(message || '');
+        const isKeepAliveTimeout = /Timed Out/i.test(message || '');
+        const isDeviceRemoved =
+          statusCode === 401 ||
+          statusCode === DisconnectReason.loggedOut ||
+          /device_removed|logged\s*out|conflict/i.test(message || '');
 
-        state.lastError = message;
+        const shouldReconnect =
+          !isIntentionalLogout && (
+            isStreamRestart ||
+            isConnectionTerminated ||
+            (!isDeviceRemoved && statusCode !== DisconnectReason.loggedOut)
+          );
+
+        const shouldResetAuth =
+          isDeviceRemoved ||
+          (isKeepAliveTimeout && failures >= 3) ||
+          (isConnectionTerminated && failures >= 3);
+
+        state.lastError = (isStreamRestart || isConnectionTerminated || isIntentionalLogout) ? null : message;
         socket = null;
         starting = false;
 
+        if (shouldResetAuth) {
+          await resetAuthDir();
+          reconnectFailures.set('single', 0);
+        }
+
         if (shouldReconnect) {
           state.status = 'reconnecting';
+          const baseDelay = Math.min(1000 * (2 ** Math.max(0, failures - 1)), 8000);
+          const jitter = Math.floor(Math.random() * 250);
+          const delay = isStreamRestart ? 1000 : baseDelay + jitter;
           setTimeout(() => {
             startBridge().catch((err) => {
               logger.error({ err }, 'Failed to auto-restart single bridge');
             });
-          }, 2000);
+          }, delay);
         } else {
-          state.status = 'error';
-          await resetAuthDir();
+          state.status = isIntentionalLogout ? 'idle' : 'error';
+          if (isIntentionalLogout) {
+            state.qrImage = null;
+          }
         }
       }
     });
