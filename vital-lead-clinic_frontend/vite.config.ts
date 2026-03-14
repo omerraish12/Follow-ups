@@ -6,7 +6,8 @@ import { componentTagger } from "lovable-tagger";
 const DEV_HOST = process.env.VITE_DEV_SERVER_HOST || "0.0.0.0";
 const DEV_PORT = Number(process.env.VITE_DEV_SERVER_PORT ?? 8080);
 const HMR_PROTOCOL = process.env.VITE_HMR_PROTOCOL || "ws";
-const HMR_HOST = process.env.VITE_HMR_HOST || "localhost";
+// If VITE_HMR_HOST is unset, let Vite use the page's origin instead of forcing localhost
+const HMR_HOST = (process.env.VITE_HMR_HOST || "").trim() || undefined;
 const HMR_PORT = Number(process.env.VITE_HMR_PORT ?? DEV_PORT);
 const HMR_CLIENT_PORT = Number(process.env.VITE_HMR_CLIENT_PORT ?? HMR_PORT);
 
@@ -18,7 +19,7 @@ export default defineConfig(({ mode }) => ({
     strictPort: true,
     hmr: {
       protocol: HMR_PROTOCOL,
-      host: HMR_HOST,
+      ...(HMR_HOST ? { host: HMR_HOST } : {}),
       port: HMR_PORT,
       clientPort: HMR_CLIENT_PORT,
       overlay: false,

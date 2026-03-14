@@ -9,6 +9,9 @@ const schema = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().int().positive().default(5050),
   LOG_LEVEL: z.string().default('warn'),
+  WA_WEB_SESSION_STORE: z
+    .enum(['local', 'supabase'])
+    .default('local'),
 
   WA_WEB_BRIDGE_API_KEY: z.string().min(1, 'WA_WEB_BRIDGE_API_KEY is required'),
   WA_WEB_BACKEND_SHARED_SECRET: z
@@ -38,6 +41,7 @@ const config = Object.freeze({
   env: raw.NODE_ENV,
   port: raw.PORT,
   logLevel: raw.LOG_LEVEL,
+  sessionStore: raw.WA_WEB_SESSION_STORE,
   bridgeApiKey: raw.WA_WEB_BRIDGE_API_KEY,
   backendUrl: raw.WA_BACKEND_URL.replace(/\/$/, ''),
   backendSharedSecret: raw.WA_WEB_BACKEND_SHARED_SECRET,

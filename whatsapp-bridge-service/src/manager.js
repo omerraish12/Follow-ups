@@ -16,8 +16,12 @@ const { supabase } = require('./db');
 const { encrypt, decrypt } = require('./crypto');
 const { config } = require('./config');
 
-// Runtime-only temp directories per clinic; state is persisted in Supabase.
+// Runtime-only temp directories per clinic; long-term state persisted locally or in Supabase.
 const sessionTempDirs = new Map();
+const LOCAL_SESSIONS_ROOT = config.sessionsDir
+  ? path.resolve(__dirname, '..', config.sessionsDir)
+  : path.join(__dirname, '..', 'db', 'sessions');
+const useLocalStore = config.sessionStore === 'local';
 // Default to warn to reduce Baileys verbose session logs (can override via LOG_LEVEL).
 const logger = P({ level: config.logLevel });
 const activeSessions = new Map();
@@ -32,6 +36,11 @@ const ensureDir = async (dir) => {
 
 const removeDir = async (dir) => {
   await fs.promises.rm(dir, { recursive: true, force: true });
+};
+
+const ensureLocalStoreDir = async () => {
+  if (!useLocalStore) return;
+  await fs.promises.mkdir(LOCAL_SESSIONS_ROOT, { recursive: true });
 };
 
 const getOrCreateSessionDir = async (clinicId) => {
@@ -50,6 +59,95 @@ const getKnownSessionDir = async (clinicId) => {
     return sessionTempDirs.get(key);
   }
   return getOrCreateSessionDir(key);
+};
+
+const localSessionPath = (clinicId) => path.join(LOCAL_SESSIONS_ROOT, `${clinicId}.json`);
+
+const deleteLocalSessionRecord = async (clinicId) => {
+  if (!useLocalStore) return;
+  await ensureLocalStoreDir();
+  const file = localSessionPath(clinicId);
+  if (fs.existsSync(file)) {
+    await fs.promises.rm(file, { force: true });
+  }
+};
+
+const getSessionRecord = async (clinicId) => {
+  if (useLocalStore) {
+    await ensureLocalStoreDir();
+    const file = localSessionPath(clinicId);
+    if (!fs.existsSync(file)) return null;
+    const raw = await fs.promises.readFile(file, 'utf8');
+    return JSON.parse(raw);
+  }
+
+  const { data, error } = await supabase
+    .from('whatsapp_sessions')
+    .select('*')
+    .eq('clinic_id', clinicId)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+};
+
+const upsertSessionRecord = async (clinicId, patch = {}) => {
+  const base = {
+    clinic_id: clinicId,
+    provider: patch.provider || 'wa_web',
+    status: patch.status || 'disconnected',
+    auth_state_encrypted: patch.authStateEncrypted ?? null,
+    qr_code: patch.qrCode ?? null,
+    device_jid: patch.deviceJid ?? null,
+    last_connected_at: patch.lastConnectedAt ?? null,
+    last_error: patch.lastError ?? null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (useLocalStore) {
+    await ensureLocalStoreDir();
+    const file = localSessionPath(clinicId);
+    const existing = fs.existsSync(file) ? JSON.parse(await fs.promises.readFile(file, 'utf8')) : {};
+    const merged = { ...existing, ...base };
+    await fs.promises.writeFile(file, JSON.stringify(merged, null, 2), 'utf8');
+    return merged;
+  }
+
+  const { data, error } = await supabase
+    .from('whatsapp_sessions')
+    .upsert(base, { onConflict: 'clinic_id' })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+const listPersistedSessionIds = async () => {
+  if (useLocalStore) {
+    await ensureLocalStoreDir();
+    const files = await fs.promises.readdir(LOCAL_SESSIONS_ROOT);
+    const candidates = files.filter((f) => f.endsWith('.json'));
+    const result = [];
+    for (const file of candidates) {
+      try {
+        const full = path.join(LOCAL_SESSIONS_ROOT, file);
+        const parsed = JSON.parse(await fs.promises.readFile(full, 'utf8'));
+        if (parsed?.auth_state_encrypted) {
+          result.push(path.basename(file, '.json'));
+        }
+      } catch (_err) {
+        // Skip unreadable files but continue processing others.
+      }
+    }
+    return result;
+  }
+  const { data, error } = await supabase
+    .from('whatsapp_sessions')
+    .select('clinic_id')
+    .eq('provider', 'wa_web')
+    .not('auth_state_encrypted', 'is', null);
+  if (error) throw error;
+  return (data || []).map((row) => row.clinic_id);
 };
 
 const serializeDirectory = async (dir) => {
@@ -85,39 +183,6 @@ const restoreDirectory = async (dir, files = {}) => {
     await ensureDir(path.dirname(fullPath));
     await fs.promises.writeFile(fullPath, Buffer.from(base64, 'base64'));
   }
-};
-
-const getSessionRecord = async (clinicId) => {
-  const { data, error } = await supabase
-    .from('whatsapp_sessions')
-    .select('*')
-    .eq('clinic_id', clinicId)
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data || null;
-};
-
-const upsertSessionRecord = async (clinicId, patch = {}) => {
-  const base = {
-    clinic_id: clinicId,
-    provider: patch.provider || 'wa_web',
-    status: patch.status || 'disconnected',
-    auth_state_encrypted: patch.authStateEncrypted ?? null,
-    qr_code: patch.qrCode ?? null,
-    device_jid: patch.deviceJid ?? null,
-    last_connected_at: patch.lastConnectedAt ?? null,
-    last_error: patch.lastError ?? null,
-    updated_at: new Date().toISOString()
-  };
-
-  const { data, error } = await supabase
-    .from('whatsapp_sessions')
-    .upsert(base, { onConflict: 'clinic_id' })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data;
 };
 
 const notifyBackend = async (payload) => {
@@ -312,6 +377,10 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
         (isKeepAliveTimeout && failureCount >= 3) ||
         (isConnectionTerminated && failureCount >= 3);
 
+      if (shouldResetAuth) {
+        await deleteLocalSessionRecord(clinicId);
+      }
+
       await upsertSessionRecord(clinicId, {
         provider: 'wa_web',
         status: isIntentionalLogout
@@ -450,6 +519,7 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
 const connectSession = async (clinicId) => {
   const existing = activeSessions.get(String(clinicId));
   if (existing?.socket) {
+    console.log("existing___: ", clinicId)
     const record = await getSessionRecord(clinicId);
     return {
       provider: 'wa_web',
@@ -534,6 +604,7 @@ const disconnectSession = async (clinicId) => {
   sessionTempDirs.delete(String(clinicId));
   reconnectFailures.delete(String(clinicId));
   sendQueues.delete(String(clinicId));
+  await deleteLocalSessionRecord(clinicId);
   await upsertSessionRecord(clinicId, {
     provider: 'wa_web',
     status: 'disconnected',
@@ -590,31 +661,19 @@ const sendMessage = async ({ clinicId, to, toJid, toPn, body, mediaUrl, template
 };
 
 const restoreExistingSessions = async () => {
-  let rows = [];
   try {
-    const { data, error } = await supabase
-      .from('whatsapp_sessions')
-      .select('clinic_id')
-      .eq('provider', 'wa_web')
-      .not('auth_state_encrypted', 'is', null);
-
-    if (error) {
-      // If PostgREST schema cache is stale, log and continue without hard crash.
-      if (error.code === 'PGRST205') {
-        logger.warn('whatsapp_sessions table not in schema cache yet; skipping restore this boot');
-        return;
-      }
-      throw error;
+    const clinicIds = await listPersistedSessionIds();
+    for (const clinicId of clinicIds) {
+      connectSession(clinicId).catch((err) => {
+        logger.error({ clinicId, error: err }, 'Failed to restore WhatsApp session');
+      });
     }
-    rows = data || [];
   } catch (err) {
+    // If Supabase schema cache is stale or local read fails, log and continue without crash.
     logger.error({ error: err }, 'Failed to fetch existing WhatsApp sessions');
     return;
   }
-
-  for (const row of rows) {
-    connectSession(row.clinic_id).catch((err) => {
-      logger.error({ clinicId: row.clinic_id, error: err }, 'Failed to restore WhatsApp session');
+};
     });
   }
 };

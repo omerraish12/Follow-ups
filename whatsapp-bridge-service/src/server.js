@@ -106,11 +106,10 @@ app.post('/bridge/welcome', async (req, res) => {
 });
 
 app.post('/sessions/:clinicId/connect', async (req, res) => {
-  console.log("_____/sessions/:clinicId/connect____");
   try {
     console.log("trying to connect to: ", req.params.clinicId);
     const response = await connectSession(req.params.clinicId);
-    console.log("One session is connecting: ", req.params.clinicId, response);
+    console.log("_____One session is connecting: ", req.params.clinicId, response);
     res.json(response);
   } catch (error) {
     sendError(res, 500, error.message || 'Unable to connect WhatsApp session');
@@ -118,9 +117,9 @@ app.post('/sessions/:clinicId/connect', async (req, res) => {
 });
 
 app.get('/sessions/:clinicId', async (req, res) => {
-  console.log("_____/sessions/:clinicId____");
   try {
     const response = await getSessionStatus(req.params.clinicId);
+    console.log("result: ")
     res.json(response);
   } catch (error) {
     sendError(res, 500, error.message || 'Unable to fetch WhatsApp session');
