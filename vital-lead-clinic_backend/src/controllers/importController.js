@@ -16,6 +16,9 @@ const getImportStatus = async (req, res) => {
 
         const result = await query(sql, [clinicId]);
         const row = result.rows?.[0] || {};
+        if (process.env.NODE_ENV !== 'production') {
+            console.info('[imports] status', { clinicId, row });
+        }
 
         res.json({
             contracts: {
@@ -35,5 +38,23 @@ const getImportStatus = async (req, res) => {
 };
 
 module.exports = {
-    getImportStatus
+    getImportStatus,
+    runImports: async (req, res) => {
+        try {
+            const clinicId = req.user.clinic_id;
+            // No external pull is possible here; we mark intent and let bridge/webhooks handle actual ingestion.
+            await query(
+                `INSERT INTO integration_logs (type, level, message, metadata, clinic_id)
+                 VALUES ('manual_import_trigger', 'info', 'User requested import of contracts and whatsapp history', $1::jsonb, $2::int)`,
+                [{ userId: req.user.id }, clinicId]
+            );
+            if (process.env.NODE_ENV !== 'production') {
+                console.info('[imports] manual trigger', { clinicId, userId: req.user.id });
+            }
+            return res.json({ success: true, message: 'Import trigger recorded; background services will continue syncing.' });
+        } catch (error) {
+            console.error('Import run error:', error);
+            return res.status(500).json({ message: 'Unable to trigger import' });
+        }
+    }
 };

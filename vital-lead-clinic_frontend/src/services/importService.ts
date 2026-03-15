@@ -14,5 +14,8 @@ export interface ImportStatus {
 
 export const getImportStatus = async (): Promise<ImportStatus> => {
   const { data } = await api.get("/imports/status");
+  if (import.meta.env.DEV) {
+    console.debug("[imports] api response", data);
+  }
   return data;
 };

@@ -142,6 +142,9 @@ const handleContractWebhook = async (req, res) => {
           metadata: { leadId: lead.id, status: lead.status }
         });
 
+        if (process.env.NODE_ENV !== 'production') {
+          console.info('[contract_webhook] upsert lead', { clinicId, leadId: lead.id, created: isNew });
+        }
         results.push({ success: true, leadId: lead.id, created: isNew });
       } catch (error) {
         await IntegrationLog.create({
@@ -151,6 +154,9 @@ const handleContractWebhook = async (req, res) => {
           clinicId,
           metadata: { error: error.stack || error.message, contract: raw }
         });
+        if (process.env.NODE_ENV !== 'production') {
+          console.error('[contract_webhook] failed', { clinicId, error: error.message });
+        }
         results.push({ success: false, error: error.message || 'Failed', contract: raw });
       }
     }

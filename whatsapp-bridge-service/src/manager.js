@@ -193,6 +193,9 @@ const notifyBackend = async (payload) => {
       headers
     }
   );
+  if (config.env !== 'production') {
+    console.info('[bridge->backend] event sent', { type: body?.type, clinicId: body?.clinicId, history: body?.history, messageId: body?.messageId || body?.id || null });
+  }
 };
 
 const extractMessageText = (message) => {
@@ -724,6 +727,9 @@ const backfillChatHistory = async ({ clinicId, socket, jid }) => {
   }
   backfillInFlight.add(backfillKey);
   try {
+    if (config.env !== 'production') {
+      console.info('[backfill] start', { clinicId, jid });
+    }
     let cursor = null;
     let fetched = 0;
     const maxPerChat = config.historyBackfillMaxPerChat;
@@ -775,6 +781,9 @@ const backfillChatHistory = async ({ clinicId, socket, jid }) => {
     }
 
     logger.info({ clinicId, jid, fetched }, 'Backfill complete');
+    if (config.env !== 'production') {
+      console.info('[backfill] complete', { clinicId, jid, fetched });
+    }
   } finally {
     backfillInFlight.delete(backfillKey);
   }
