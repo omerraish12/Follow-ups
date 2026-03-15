@@ -346,6 +346,15 @@ const processInboundMessage = async (rawFrom, rawText, metadata = {}, clinicId, 
     },
     timestamp: timestamp ? new Date(Number(timestamp) * 1000) : undefined
   });
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[whatsapp][inbound]', {
+      clinicId,
+      from,
+      leadId: lead?.id || null,
+      history: Boolean(history),
+      preview: messagePreview.substring(0, 60)
+    });
+  }
 
   // For history imports, do not trigger automations or welcomes
   if (!history) {
