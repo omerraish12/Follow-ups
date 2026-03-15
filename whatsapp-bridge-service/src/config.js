@@ -25,7 +25,11 @@ const schema = z.object({
   WA_WEB_SINGLE_AUTH_DIR: z.string().optional(),
   WA_WEB_AUTO_ACK_TEXT: z.string().optional(),
   WA_WEB_QR_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
-  WA_WEB_BRIDGE_TIMEOUT_MS: z.coerce.number().int().positive().optional()
+  WA_WEB_BRIDGE_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+  HISTORY_BACKFILL_ENABLED: z.string().optional(),
+  HISTORY_BACKFILL_MAX_PER_CHAT: z.coerce.number().int().positive().optional(),
+  HISTORY_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().optional(),
+  HISTORY_BACKFILL_DELAY_MS: z.coerce.number().int().nonnegative().optional()
 }).passthrough();
 
 const raw = schema.parse(process.env);
@@ -42,7 +46,11 @@ const config = Object.freeze({
   singleAuthDir: raw.WA_WEB_SINGLE_AUTH_DIR || null,
   autoAckText: raw.WA_WEB_AUTO_ACK_TEXT || null,
   qrTimeoutMs: raw.WA_WEB_QR_TIMEOUT_MS || 180000,
-  bridgeTimeoutMs: raw.WA_WEB_BRIDGE_TIMEOUT_MS || 15000
+  bridgeTimeoutMs: raw.WA_WEB_BRIDGE_TIMEOUT_MS || 15000,
+  historyBackfillEnabled: String(raw.HISTORY_BACKFILL_ENABLED || 'true').toLowerCase() !== 'false',
+  historyBackfillMaxPerChat: raw.HISTORY_BACKFILL_MAX_PER_CHAT || 500,
+  historyBackfillBatchSize: raw.HISTORY_BACKFILL_BATCH_SIZE || 50,
+  historyBackfillDelayMs: raw.HISTORY_BACKFILL_DELAY_MS || 250
 });
 
 module.exports = { config };

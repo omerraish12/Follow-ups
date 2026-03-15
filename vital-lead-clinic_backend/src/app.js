@@ -17,6 +17,8 @@ const logRoutes = require('./routes/logRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const calendarRoutes = require('./routes/calendarRoutes');
 const platformRoutes = require('./routes/platformRoutes');
+const contractRoutes = require('./routes/contractRoutes');
+const importRoutes = require('./routes/importRoutes');
 
 const requestLogger = require('./middleware/requestLogger');
 const app = express();
@@ -54,7 +56,18 @@ app.use(cors({
     origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'x-contract-secret',
+        'X-Contract-Secret',
+        'x-clinic-id',
+        'X-Clinic-Id',
+        'x-bridge-secret',
+        'X-Bridge-Secret',
+        'x-bridge-timestamp',
+        'x-bridge-signature'
+    ]
 }));
 app.options('*', cors());
 app.use(express.json());
@@ -86,6 +99,8 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/platform', platformRoutes);
+app.use('/api/contracts', contractRoutes);
+app.use('/api/imports', importRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

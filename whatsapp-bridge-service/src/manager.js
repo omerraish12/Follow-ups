@@ -27,6 +27,9 @@ const reconnectFailures = new Map(); // consecutive close events per clinic
 const msgRetryCache = new Map(); // shared Baileys retry cache across reconnects
 const sendQueues = new Map(); // per-clinic outbound throttling
 let sessionDirMapCache = null;
+const backfillQueues = new Map(); // per-clinic history backfill chains
+const seenJids = new Map(); // per-clinic set of jids to backfill
+const backfillInFlight = new Set(); // clinicId|jid key
 
 const ensureDir = async (dir) => {
   await fs.promises.mkdir(dir, { recursive: true });
@@ -287,6 +290,77 @@ const restoreAuthState = async (clinicId, dir) => {
   await restoreDirectory(dir, files);
 };
 
+const buildInboundPayload = (message, { clinicId, history }) => {
+  if (!message?.message || message.key?.fromMe) {
+    return null;
+  }
+
+  const preview =
+    message.message?.conversation ||
+    message.message?.extendedTextMessage?.text ||
+    message.message?.imageMessage?.caption ||
+    message.message?.videoMessage?.caption ||
+    message.message?.documentMessage?.caption ||
+    '';
+
+  // Prefer explicit phone-normalized fields (senderPn / participantPn). Fallback to sender/remote only if absent.
+  let pickJid = null;
+  if (message.key?.senderPn) {
+    pickJid = message.key.senderPn;
+  } else if (message.senderPn) {
+    pickJid = message.senderPn;
+  } else if (message.key?.participantPn) {
+    pickJid = message.key.participantPn;
+  } else if (message.participantPn) {
+    pickJid = message.participantPn;
+  } else {
+    const candidates = [
+      message.sender,
+      message.participant,
+      message.key?.sender,
+      message.key?.participant,
+      message.key?.remoteJid
+    ].filter(Boolean);
+
+    pickJid =
+      candidates.find((jid) => typeof jid === 'string' && jid.includes('@s.whatsapp.net')) ||
+      candidates.find((jid) => typeof jid === 'string' && jid.includes('@lid')) ||
+      candidates[0] ||
+      '';
+  }
+
+  const normalizedJid = pickJid ? jidNormalizedUser(pickJid) : '';
+  const fromId = normalizedJid ? normalizedJid.split('@')[0] : '';
+  const from = fromId ? (fromId.startsWith('+') ? fromId : `+${fromId}`) : '';
+
+  if (!from) {
+    return null;
+  }
+
+  const payload = extractMessageText(message);
+  const contactName =
+    message.pushName ||
+    message.message?.contactMessage?.displayName ||
+    null;
+  if (!payload.text && !payload.metadata.mediaType) {
+    return null;
+  }
+
+  return {
+    clinicId,
+    type: 'message.received',
+    from,
+    contactName,
+    fromJid: normalizedJid || null,
+    senderPn: message.key?.senderPn || message.senderPn || null,
+    text: payload.text,
+    metadata: payload.metadata,
+    messageId: message.key?.id || null,
+    timestamp: message.messageTimestamp || null,
+    history: Boolean(history)
+  };
+};
+
 const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
   socket.ev.on('creds.update', async () => {
     await saveCreds();
@@ -413,81 +487,38 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
   socket.ev.on('messages.upsert', async ({ messages, type }) => {
     const history = type && type !== 'notify';
     for (const message of messages || []) {
-      if (!message?.message || message.key?.fromMe) {
-        continue;
-      }
-
-      const preview =
-        message.message?.conversation ||
-        message.message?.extendedTextMessage?.text ||
-        message.message?.imageMessage?.caption ||
-        message.message?.videoMessage?.caption ||
-        message.message?.documentMessage?.caption ||
-        '';
-      // console.log('Incoming personal message', {
-      //   clinicId,
-      //   from: message.key?.remoteJid,
-      //   text: preview
-      // });
-
-      // Prefer explicit phone-normalized fields (senderPn / participantPn). Fallback to sender/remote only if absent.
-      let pickJid = null;
-      if (message.key?.senderPn) {
-        pickJid = message.key.senderPn;
-      } else if (message.senderPn) {
-        pickJid = message.senderPn;
-      } else if (message.key?.participantPn) {
-        pickJid = message.key.participantPn;
-      } else if (message.participantPn) {
-        pickJid = message.participantPn;
-      } else {
-        const candidates = [
-          message.sender,
-          message.participant,
-          message.key?.sender,
-          message.key?.participant,
-          message.key?.remoteJid
-        ].filter(Boolean);
-
-        pickJid =
-          candidates.find((jid) => typeof jid === 'string' && jid.includes('@s.whatsapp.net')) ||
-          candidates.find((jid) => typeof jid === 'string' && jid.includes('@lid')) ||
-          candidates[0] ||
-          '';
-      }
-
-      const normalizedJid = pickJid ? jidNormalizedUser(pickJid) : '';
-      const fromId = normalizedJid ? normalizedJid.split('@')[0] : '';
-      const from = fromId ? (fromId.startsWith('+') ? fromId : `+${fromId}`) : '';
-
-      // return;
-      const payload = extractMessageText(message);
-      const contactName =
-        message.pushName ||
-        message.message?.contactMessage?.displayName ||
-        null;
-      if (!from || (!payload.text && !payload.metadata.mediaType)) {
-        continue;
-      }
+      const inbound = buildInboundPayload(message, { clinicId, history });
+      if (!inbound) continue;
 
       try {
-        await notifyBackend({
-          clinicId,
-          type: 'message.received',
-          from,
-          contactName,
-          fromJid: normalizedJid || null,
-          senderPn: message.key?.senderPn || message .senderPn || null,
-          text: payload.text,
-          metadata: payload.metadata,
-          messageId: message.key?.id || null,
-          timestamp: message.messageTimestamp || null,
-          history
-        });
+        await notifyBackend(inbound);
+        if (inbound.fromJid) {
+          trackJidForBackfill(clinicId, inbound.fromJid);
+        }
       } catch (error) {
         logger.error({ clinicId, error }, 'Failed to forward inbound WhatsApp message to backend');
       }
     }
+  });
+
+  // Handle bulk history sync emitted right after connect (Baileys history sync)
+  socket.ev.on('messaging-history.set', async ({ messages = [], syncType }) => {
+    const history = syncType !== 'initial' ? true : true;
+    for (const message of messages) {
+      const inbound = buildInboundPayload(message, { clinicId, history });
+      if (!inbound) continue;
+      try {
+        await notifyBackend(inbound);
+        if (inbound.fromJid) {
+          trackJidForBackfill(clinicId, inbound.fromJid);
+        }
+      } catch (error) {
+        logger.error({ clinicId, error, syncType }, 'Failed to forward history WhatsApp message to backend');
+      }
+    }
+    logger.info({ clinicId, syncType, count: messages.length }, 'History batch forwarded to backend');
+    // kick off deeper backfill after initial history snapshot
+    queueBackfillForClinic(clinicId);
   });
 };
 
@@ -653,6 +684,99 @@ const restoreExistingSessions = async () => {
     // Log and continue without crash if restore fails.
     logger.error({ error: err }, 'Failed to fetch existing WhatsApp sessions');
     return;
+  }
+};
+
+// ----- History backfill helpers -----
+const trackJidForBackfill = (clinicId, jid) => {
+  if (!config.historyBackfillEnabled) return;
+  if (!jid || !jid.includes('@s.whatsapp.net')) return;
+  const key = String(clinicId);
+  const set = seenJids.get(key) || new Set();
+  set.add(jid);
+  seenJids.set(key, set);
+};
+
+const queueBackfillForClinic = (clinicId) => {
+  if (!config.historyBackfillEnabled) return;
+  const key = String(clinicId);
+  const jids = Array.from(seenJids.get(key) || []);
+  if (!jids.length) return;
+
+  const prior = backfillQueues.get(key) || Promise.resolve();
+  const next = prior.catch(() => {}).then(async () => {
+    const active = activeSessions.get(key);
+    const socket = active?.socket;
+    if (!socket) return;
+    for (const jid of jids) {
+      await backfillChatHistory({ clinicId: key, socket, jid });
+    }
+  });
+  backfillQueues.set(key, next.catch(() => {}));
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const backfillChatHistory = async ({ clinicId, socket, jid }) => {
+  const backfillKey = `${clinicId}|${jid}`;
+  if (backfillInFlight.has(backfillKey)) {
+    return;
+  }
+  backfillInFlight.add(backfillKey);
+  try {
+    let cursor = null;
+    let fetched = 0;
+    const maxPerChat = config.historyBackfillMaxPerChat;
+    const batchSize = config.historyBackfillBatchSize;
+    const delayMs = config.historyBackfillDelayMs;
+
+    while (fetched < maxPerChat) {
+      let batch = [];
+      try {
+        batch = await socket.loadMessages(jid, batchSize, cursor || undefined);
+      } catch (error) {
+        logger.error({ clinicId, jid, error }, 'Backfill loadMessages failed');
+        break;
+      }
+
+      if (!Array.isArray(batch) || !batch.length) {
+        break;
+      }
+
+      // Oldest first to push chronologically
+      const ordered = batch
+        .slice()
+        .sort((a, b) => (Number(a.messageTimestamp || 0) - Number(b.messageTimestamp || 0)));
+
+      for (const message of ordered) {
+        const inbound = buildInboundPayload(message, { clinicId, history: true });
+        if (!inbound) continue;
+        try {
+          await notifyBackend(inbound);
+        } catch (error) {
+          logger.error({ clinicId, jid, error }, 'Failed to forward backfill message to backend');
+          // continue; do not break whole chat
+        }
+      }
+
+      fetched += batch.length;
+      const oldest = ordered[0];
+      cursor = oldest?.key
+        ? { id: oldest.key.id, fromMe: oldest.key.fromMe, participant: oldest.key.participant || undefined }
+        : null;
+
+      if (!cursor || batch.length < batchSize) {
+        break;
+      }
+
+      if (delayMs > 0) {
+        await sleep(delayMs);
+      }
+    }
+
+    logger.info({ clinicId, jid, fetched }, 'Backfill complete');
+  } finally {
+    backfillInFlight.delete(backfillKey);
   }
 };
 

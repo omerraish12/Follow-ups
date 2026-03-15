@@ -53,6 +53,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "@/hooks/use-toast";
 import { translateAutomationName } from "@/lib/automationNames";
 import { getTranslatedServiceLabel } from "@/lib/serviceOptions";
+import ImportStatusCard from "@/components/ImportStatusCard";
 
 // Types
 interface Activity {
@@ -800,6 +801,11 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Import status card */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <ImportStatusCard />
+      </div>
 
       {/* Charts Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
