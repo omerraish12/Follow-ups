@@ -80,10 +80,19 @@ const getSessionRecord = async (clinicId) => {
   return JSON.parse(raw);
 };
 
+const safeReadJson = async (file) => {
+  try {
+    const raw = await fs.promises.readFile(file, 'utf8');
+    return JSON.parse(raw);
+  } catch (_err) {
+    return {};
+  }
+};
+
 const upsertSessionRecord = async (clinicId, patch = {}) => {
   await ensureLocalStoreDir();
   const file = localSessionPath(clinicId);
-  const existing = fs.existsSync(file) ? JSON.parse(await fs.promises.readFile(file, 'utf8')) : {};
+  const existing = fs.existsSync(file) ? await safeReadJson(file) : {};
 
   const base = {
     clinic_id: clinicId,
@@ -186,16 +195,29 @@ const notifyBackend = async (payload) => {
     headers['x-bridge-signature'] = hmac.digest('hex');
   }
 
-  await axios.post(
-    `${backendUrl.replace(/\/$/, '')}/api/whatsapp/bridge/events`,
-    body,
-    {
-      timeout: 10000,
-      headers
+  try {
+    await axios.post(
+      `${backendUrl.replace(/\/$/, '')}/api/whatsapp/bridge/events`,
+      body,
+      {
+        timeout: 10000,
+        headers
+      }
+    );
+    if (config.env !== 'production') {
+      console.info('[bridge->backend] event sent', { type: body?.type, clinicId: body?.clinicId, history: body?.history, messageId: body?.messageId || body?.id || null });
     }
-  );
-  if (config.env !== 'production') {
-    console.info('[bridge->backend] event sent', { type: body?.type, clinicId: body?.clinicId, history: body?.history, messageId: body?.messageId || body?.id || null });
+  } catch (error) {
+    const status = error?.response?.status;
+    const data = error?.response?.data;
+    console.error('[bridge->backend] event failed', {
+      type: body?.type,
+      clinicId: body?.clinicId,
+      status,
+      data: data && JSON.stringify(data).slice(0, 500),
+      message: error?.message
+    });
+    throw error;
   }
 };
 
@@ -691,9 +713,9 @@ const sendMessage = async ({ clinicId, to, toJid, toPn, body, mediaUrl, template
   const runQueued = (fn) => {
     const key = String(clinicId);
     const prior = sendQueues.get(key) || Promise.resolve();
-    const next = prior.catch(() => {}).then(() => fn());
+    const next = prior.catch(() => { }).then(() => fn());
     // store a silent tail to keep the chain alive but avoid unhandled rejections
-    sendQueues.set(key, next.catch(() => {}));
+    sendQueues.set(key, next.catch(() => { }));
     return next;
   };
 
@@ -741,30 +763,34 @@ const trackJidForBackfill = (clinicId, jid) => {
 
 const queueBackfillForClinic = (clinicId) => {
   if (!config.historyBackfillEnabled) return;
+  console.log("Backfill is enalbed_____");
   const key = String(clinicId);
   const jids = Array.from(seenJids.get(key) || []);
   if (!jids.length) return;
 
   const prior = backfillQueues.get(key) || Promise.resolve();
-  const next = prior.catch(() => {}).then(async () => {
+  const next = prior.catch(() => { }).then(async () => {
     const active = activeSessions.get(key);
     const socket = active?.socket;
     if (!socket) return;
     for (const jid of jids) {
+      console.log("For ", jid, "Clinic____");
       await backfillChatHistory({ clinicId: key, socket, jid });
     }
   });
-  backfillQueues.set(key, next.catch(() => {}));
+  backfillQueues.set(key, next.catch(() => { }));
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const backfillChatHistory = async ({ clinicId, socket, jid }) => {
   const backfillKey = `${clinicId}|${jid}`;
+  console.log("_________________backfill...: ");
   if (backfillInFlight.has(backfillKey)) {
     return;
   }
   backfillInFlight.add(backfillKey);
+  console.log("_________________backfill has...: ");
   try {
     if (config.env !== 'production') {
       console.info('[backfill] start', { clinicId, jid });
@@ -774,10 +800,12 @@ const backfillChatHistory = async ({ clinicId, socket, jid }) => {
     const maxPerChat = config.historyBackfillMaxPerChat;
     const batchSize = config.historyBackfillBatchSize;
     const delayMs = config.historyBackfillDelayMs;
+    console.log("_________________fetching...: ");
 
     while (fetched < maxPerChat) {
       let batch = [];
       try {
+        console.log("loadMessages: ", socket.loadMessages);
         batch = await socket.loadMessages(jid, batchSize, cursor || undefined);
       } catch (error) {
         logger.error({ clinicId, jid, error }, 'Backfill loadMessages failed');
@@ -824,7 +852,7 @@ const backfillChatHistory = async ({ clinicId, socket, jid }) => {
       console.info('[backfill] complete', { clinicId, jid, fetched });
     }
   } finally {
-  backfillInFlight.delete(backfillKey);
+    backfillInFlight.delete(backfillKey);
   }
 };
 

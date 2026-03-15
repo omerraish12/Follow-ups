@@ -1,0 +1,11 @@
+{
+  "clinic_id": "12",
+  "provider": "wa_web",
+  "status": "connected",
+  "auth_state_encrypted": null,
+  "qr_code": null,
+  "device_jid": "972557298037:32@s.whatsapp.net",
+  "last_connected_at": "2026-03-15T16:21:23.874Z",
+  "last_error": null,
+  "updated_at": "2026-03-15T16:21:23.875Z"
+}
