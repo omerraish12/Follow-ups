@@ -30,6 +30,7 @@ let sessionDirMapCache = null;
 const backfillQueues = new Map(); // per-clinic history backfill chains
 const seenJids = new Map(); // per-clinic set of jids to backfill
 const backfillInFlight = new Set(); // clinicId|jid key
+let backfillTicker = null;
 
 const ensureDir = async (dir) => {
   await fs.promises.mkdir(dir, { recursive: true });
@@ -504,6 +505,34 @@ const attachSocketHandlers = async (clinicId, socket, authDir, saveCreds) => {
     }
   });
 
+  // Capture chat list snapshots so we backfill even if no new messages arrive
+  socket.ev.on('chats.set', async ({ chats }) => {
+    if (!Array.isArray(chats)) return;
+    for (const chat of chats) {
+      if (chat.id) {
+        trackJidForBackfill(clinicId, chat.id);
+      }
+    }
+    queueBackfillForClinic(clinicId);
+  });
+
+  socket.ev.on('chats.upsert', async (chats = []) => {
+    for (const chat of chats) {
+      if (chat.id) {
+        trackJidForBackfill(clinicId, chat.id);
+      }
+    }
+    queueBackfillForClinic(clinicId);
+  });
+
+  socket.ev.on('contacts.upsert', async (contacts = []) => {
+    for (const contact of contacts) {
+      if (contact.id) {
+        trackJidForBackfill(clinicId, contact.id);
+      }
+    }
+  });
+
   // Handle bulk history sync emitted right after connect (Baileys history sync)
   socket.ev.on('messaging-history.set', async ({ messages = [], syncType }) => {
     const history = syncType !== 'initial' ? true : true;
@@ -576,6 +605,8 @@ const connectSession = async (clinicId) => {
 
   const record = await getSessionRecord(clinicId);
   logger.info({ clinicId, status: record?.status || 'connecting', deviceJid: record?.device_jid || null }, 'WhatsApp session connected or awaiting QR');
+  // kick off background backfill immediately after connect
+  queueBackfillForClinic(clinicId);
   return {
     provider: 'wa_web',
     status: record?.status || 'connecting',
@@ -683,6 +714,14 @@ const restoreExistingSessions = async () => {
         logger.error({ clinicId, error: err }, 'Failed to restore WhatsApp session');
       });
     }
+    // periodic backfill sweep
+    if (!backfillTicker && config.historyBackfillEnabled) {
+      backfillTicker = setInterval(() => {
+        for (const clinicId of activeSessions.keys()) {
+          queueBackfillForClinic(clinicId);
+        }
+      }, 10 * 60 * 1000); // every 10 minutes
+    }
   } catch (err) {
     // Log and continue without crash if restore fails.
     logger.error({ error: err }, 'Failed to fetch existing WhatsApp sessions');
@@ -785,8 +824,19 @@ const backfillChatHistory = async ({ clinicId, socket, jid }) => {
       console.info('[backfill] complete', { clinicId, jid, fetched });
     }
   } finally {
-    backfillInFlight.delete(backfillKey);
+  backfillInFlight.delete(backfillKey);
   }
+};
+
+const triggerBackfill = async (clinicId) => {
+  const key = String(clinicId);
+  const active = activeSessions.get(key);
+  if (!active?.socket) {
+    throw new Error('WhatsApp session is not active for this clinic');
+  }
+  const queued = Array.from(seenJids.get(key) || []);
+  queueBackfillForClinic(key);
+  return { queued: queued.length };
 };
 
 module.exports = {
@@ -794,5 +844,6 @@ module.exports = {
   getSessionStatus,
   disconnectSession,
   sendMessage,
-  restoreExistingSessions
+  restoreExistingSessions,
+  triggerBackfill
 };

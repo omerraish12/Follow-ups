@@ -13,7 +13,8 @@ const {
   getSessionStatus,
   disconnectSession,
   sendMessage,
-  restoreExistingSessions
+  restoreExistingSessions,
+  triggerBackfill
 } = require('./manager');
 
 const app = express();
@@ -133,6 +134,16 @@ app.post('/sessions/:clinicId/disconnect', async (req, res) => {
     res.json(response);
   } catch (error) {
     sendError(res, 500, error.message || 'Unable to disconnect WhatsApp session');
+  }
+});
+
+app.post('/sessions/:clinicId/backfill', async (req, res) => {
+  console.log("_____/sessions/:clinicId/backfill____");
+  try {
+    const response = await triggerBackfill(req.params.clinicId);
+    res.json({ success: true, ...response });
+  } catch (error) {
+    sendError(res, 500, error.message || 'Unable to trigger backfill');
   }
 });
 

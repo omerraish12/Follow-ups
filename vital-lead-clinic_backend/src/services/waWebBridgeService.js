@@ -77,6 +77,14 @@ const disconnectSession = async (clinicId) => {
   });
 };
 
+const triggerBackfill = async (clinicId) => {
+  return withRetry(async () => {
+    const client = createClient();
+    const response = await client.post(`/sessions/${clinicId}/backfill`);
+    return response.data;
+  });
+};
+
 const sendMessage = async (payload) => {
   return withRetry(async () => {
     const client = createClient();
@@ -89,5 +97,6 @@ module.exports = {
   connectSession,
   getSessionStatus,
   disconnectSession,
-  sendMessage
+  sendMessage,
+  triggerBackfill
 };

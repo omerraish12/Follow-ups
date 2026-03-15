@@ -42,16 +42,30 @@ module.exports = {
     runImports: async (req, res) => {
         try {
             const clinicId = req.user.clinic_id;
-            // No external pull is possible here; we mark intent and let bridge/webhooks handle actual ingestion.
+            // Trigger WhatsApp backfill via bridge
+            const { triggerBackfill } = require('../services/waWebBridgeService');
+            let backfillResult = null;
+            try {
+                backfillResult = await triggerBackfill(clinicId);
+            } catch (error) {
+                console.error('Backfill trigger failed', error.message);
+                backfillResult = { success: false, error: error.message };
+            }
+
+            // Log intent for contracts (webhook-driven)
             await query(
                 `INSERT INTO integration_logs (type, level, message, metadata, clinic_id)
                  VALUES ('manual_import_trigger', 'info', 'User requested import of contracts and whatsapp history', $1::jsonb, $2::int)`,
-                [{ userId: req.user.id }, clinicId]
+                [{ userId: req.user.id, backfillResult }, clinicId]
             );
             if (process.env.NODE_ENV !== 'production') {
-                console.info('[imports] manual trigger', { clinicId, userId: req.user.id });
+                console.info('[imports] manual trigger', { clinicId, userId: req.user.id, backfillResult });
             }
-            return res.json({ success: true, message: 'Import trigger recorded; background services will continue syncing.' });
+            return res.json({
+                success: true,
+                message: 'Import triggered: WhatsApp backfill kicked off; contracts will flow via webhook.',
+                backfill: backfillResult
+            });
         } catch (error) {
             console.error('Import run error:', error);
             return res.status(500).json({ message: 'Unable to trigger import' });

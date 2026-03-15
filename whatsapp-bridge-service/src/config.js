@@ -48,9 +48,9 @@ const config = Object.freeze({
   qrTimeoutMs: raw.WA_WEB_QR_TIMEOUT_MS || 180000,
   bridgeTimeoutMs: raw.WA_WEB_BRIDGE_TIMEOUT_MS || 15000,
   historyBackfillEnabled: String(raw.HISTORY_BACKFILL_ENABLED || 'true').toLowerCase() !== 'false',
-  historyBackfillMaxPerChat: raw.HISTORY_BACKFILL_MAX_PER_CHAT || 500,
-  historyBackfillBatchSize: raw.HISTORY_BACKFILL_BATCH_SIZE || 50,
-  historyBackfillDelayMs: raw.HISTORY_BACKFILL_DELAY_MS || 250
+  historyBackfillMaxPerChat: raw.HISTORY_BACKFILL_MAX_PER_CHAT || 2000,
+  historyBackfillBatchSize: raw.HISTORY_BACKFILL_BATCH_SIZE || 100,
+  historyBackfillDelayMs: raw.HISTORY_BACKFILL_DELAY_MS || 100
 });
 
 module.exports = { config };
